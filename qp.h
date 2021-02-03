@@ -25,6 +25,12 @@
 //#include "dict.h"
 #include "qp_common.h"
 
+//#define N_THREAD_PREALLOCATE_QP	(1)
+#define N_THREAD_PREALLOCATE_QP	(16)
+#define N_THREAD_ADD_PREALLOCATE_QP	(4)
+
+#define NUM_QP_PREALLOCATED		(512)
+#define NUM_QP_TRIGGER_PREALLOCATED		(256)	// a half of NUM_QP_PREALLOCATED
 
 #define DEFAULT_REM_BUFF_SIZE	(4096)
 
@@ -36,6 +42,7 @@
 #define CTX_POLL_BATCH		(16)
 
 extern int mpi_rank, nFSServer;	// rank and size of MPI
+pthread_mutex_t lock_preallocate_qp;
 
 //typedef void (*org_sighandler)(int sig, siginfo_t *siginfo, void *ptr);
 //static org_sighandler org_segv=NULL, org_term=NULL, org_int=NULL;
@@ -43,8 +50,29 @@ extern int mpi_rank, nFSServer;	// rank and size of MPI
 QPAIR_EXCH_DATA qp_my_data, qp_pal_data;
 
 typedef	struct	{
+	int ready;
+	unsigned int psn;
 	struct ibv_qp *queue_pair;
 	struct ibv_cq *send_complete_queue, *recv_complete_queue;
+}QUEUE_PAIR_PREALLOCATED, *PQUEUE_PAIR_PREALLOCATED;
+
+char Is_PreAllocated_QP_Ready[NUM_QP_PREALLOCATED];
+int nQueuePairPreAllocated=0;
+QUEUE_PAIR_PREALLOCATED List_of_QueuePair_PreAllocated[NUM_QP_PREALLOCATED];
+pthread_t pthread_preallocate[N_THREAD_PREALLOCATE_QP];
+
+
+void Init_PreAllocated_QueuePair_List(void);
+void* Func_thread_PreAllocate_QueuePair(void *pParam);
+void CreateQueuePair(struct ibv_context* context, struct ibv_pd* pd, struct ibv_cq **pSend_complete_queue, struct ibv_cq **pRecv_complete_queue, struct ibv_qp **pQueue_pair, unsigned int *pPsn);
+
+
+typedef	struct	{
+	struct ibv_qp *queue_pair;
+	struct ibv_cq *send_complete_queue, *recv_complete_queue;
+
+	int nPut_Get, nPut_Get_Done;
+	int jobid, idx_queue;	// jobid and the index of queue that handles this jobid
 
 	// These are only needed between file servers. Not needed for the pairs with regular compute node (file server clients). 
 	uint64_t remote_addr_new_msg;	// the address of remote buffer to notify a new message
@@ -64,8 +92,6 @@ typedef	struct	{
 	unsigned int		tag_mem;
 	int					rem_key;
 	unsigned long int	rem_addr;
-
-	int nPut_Get, nPut_Get_Done;
 }QP_DATA, *PQP_DATA;
 
 typedef	struct	{
@@ -130,6 +156,7 @@ public:
 	void Init_Server_IB_Env(int remote_buff_size);
 	void Clean_IB_Env(void);
 	void IB_CreateQueuePair(int idx);
+	void Get_A_PreAllocated_QueuePair(int idx);
 	void IB_Modify_QP(struct ibv_qp* qp, uint32_t src_psn, uint16_t dest_lid, uint32_t dest_pqn, uint32_t dest_psn);
 	struct ibv_mr* IB_RegisterBuf_RW_Local_Remote(void* buf, size_t len);
 	void IB_Put(int idx, void* loc_buf, uint32_t lkey, void* rem_buf, uint32_t rkey, size_t len);
@@ -139,7 +166,79 @@ public:
 	void ScanLostQueuePairs(void);
 	void ScanNewMsg(void);
 	void Destroy_A_QueuePair(int idx);
+	void Refill_PreAllocated_QP_Pool(void);
 };
+
+typedef struct	{
+	SERVER_QUEUEPAIR *pServer_qp;
+	int t_rank, nthread;
+}PARAM_PREALLOCATE_QP;
+
+PARAM_PREALLOCATE_QP pParam_PreAllocate[N_THREAD_PREALLOCATE_QP];
+
+void* Func_thread_PreAllocate_QueuePair(void *pParam)
+{
+	PARAM_PREALLOCATE_QP *pParamPreAlloccate;
+	SERVER_QUEUEPAIR *pServer_qp;
+	QUEUE_PAIR_PREALLOCATED *pPreAllocateQP;
+	int i, t_rank, nthread;	// thread rank
+	
+	pParamPreAlloccate = (PARAM_PREALLOCATE_QP *)pParam;
+	pServer_qp = pParamPreAlloccate->pServer_qp;
+	t_rank = pParamPreAlloccate->t_rank;
+	nthread = pParamPreAlloccate->nthread;
+
+	if(t_rank == 0)	{
+		printf("DBG> nthread = %d\n", nthread);
+	}
+
+	for(i=t_rank; i<NUM_QP_PREALLOCATED; i+= nthread)	{
+		pPreAllocateQP = &(List_of_QueuePair_PreAllocated[i]);
+
+		pthread_mutex_lock(&lock_preallocate_qp);
+		if(Is_PreAllocated_QP_Ready[i] == 0)	{
+			pthread_mutex_unlock(&lock_preallocate_qp);
+
+			CreateQueuePair(pServer_qp->context_, pServer_qp->pd_, &(pPreAllocateQP->send_complete_queue), &(pPreAllocateQP->recv_complete_queue), &(pPreAllocateQP->queue_pair), &(pPreAllocateQP->psn));
+			pPreAllocateQP->ready = 1;
+			pthread_mutex_lock(&lock_preallocate_qp);
+			Is_PreAllocated_QP_Ready[i] = 1;
+			nQueuePairPreAllocated++;
+			pthread_mutex_unlock(&lock_preallocate_qp);
+		}
+		else	pthread_mutex_unlock(&lock_preallocate_qp);
+	}
+
+	return NULL;
+}
+
+void SERVER_QUEUEPAIR::Refill_PreAllocated_QP_Pool(void)
+{
+	int i;
+
+	for(i=0; i<N_THREAD_PREALLOCATE_QP; i++)	{
+//		pParam_PreAllocate[i].pServer_qp = pServer_qp;
+//		pParam_PreAllocate[i].t_rank = i;
+		pParam_PreAllocate[i].nthread = N_THREAD_ADD_PREALLOCATE_QP;	// smaller number of threads for refilling
+		if(pthread_create(&(pthread_preallocate[i]), NULL, Func_thread_PreAllocate_QueuePair, &(pParam_PreAllocate[i]))) {
+			fprintf(stderr, "Error creating thread\n");
+			return;
+		}
+	}
+}
+
+
+void Init_PreAllocated_QueuePair_List(void)
+{
+	nQueuePairPreAllocated=0;
+	memset(List_of_QueuePair_PreAllocated, 0, sizeof(QUEUE_PAIR_PREALLOCATED)*NUM_QP_PREALLOCATED);
+	memset(Is_PreAllocated_QP_Ready, 0, sizeof(char)*NUM_QP_PREALLOCATED);
+
+    if(pthread_mutex_init(&lock_preallocate_qp, NULL) != 0) { 
+        printf("\n mutex lock_preallocate_qp init failed\n"); 
+        exit(1);
+    }
+}
 
 void SERVER_QUEUEPAIR::Destroy_A_QueuePair(int idx)
 {
@@ -167,12 +266,21 @@ void SERVER_QUEUEPAIR::Destroy_A_QueuePair(int idx)
 		IdxLastQP_Save = IdxLastQP;
 		IdxLastQP = -1;
 
-		for(j=IdxLastQP_Save-1; j>=0; j--)	{
+		for(j=IdxLastQP_Save-1; j>mpi_rank; j--)	{
 			if(pQP_Data[j].queue_pair)	{	// a valid queue pair
 				IdxLastQP = j;
 				break;
 			}
 		}
+		if(IdxLastQP == -1)	{
+			for(j=mpi_rank-1; j>=0; j--)	{	// skip itself. mpi_rank
+				if(pQP_Data[j].queue_pair)	{	// a valid queue pair
+					IdxLastQP = j;
+					break;
+				}
+			}
+		}
+
 		IdxLastQP64 = Align64_Int(IdxLastQP+1);	// +1 is needed since IdxLastQP is included!
 	}
 	pthread_mutex_unlock(&process_lock);
@@ -185,7 +293,8 @@ void SERVER_QUEUEPAIR::ScanLostQueuePairs(void)
 
 	gettimeofday(&tm1, NULL);
 
-	for(j=0; j<=IdxLastQP; j++)	{
+	for(j=nFSServer; j<=IdxLastQP; j++)	{	// skip the clients on other servers
+//	for(j=0; j<=IdxLastQP; j++)	{
 		if(p_shm_TimeHeartBeat[j])	{
 			if( (tm1.tv_sec - p_shm_TimeHeartBeat[j]) > (T_FREQ_ALARM_HB + 3) )	{	// out of dated heart beat. Lost connection??? Destroy the queue pair. 
 				Destroy_A_QueuePair(j);
@@ -206,6 +315,7 @@ SERVER_QUEUEPAIR::SERVER_QUEUEPAIR(void)
 SERVER_QUEUEPAIR::~SERVER_QUEUEPAIR(void)
 {
 	pthread_mutex_destroy(&process_lock);
+	pthread_mutex_destroy(&lock_preallocate_qp);
 }
 
 void SERVER_QUEUEPAIR::ScanNewMsg(void)	// scan all queue pairs for make a list of queue pairs with new msg
@@ -406,6 +516,39 @@ int SERVER_QUEUEPAIR::Setup_Listener(void)
 	return rc;
 }
 
+void SERVER_QUEUEPAIR::Get_A_PreAllocated_QueuePair(int idx)
+{
+	int i;
+	QP_DATA *pQP;
+	QUEUE_PAIR_PREALLOCATED *pPreAllocatedQP;
+
+	pQP = &(pQP_Data[idx]);
+
+	pthread_mutex_lock(&lock_preallocate_qp);
+	for(i=0; i<NUM_QP_PREALLOCATED; i++)	{
+		if(Is_PreAllocated_QP_Ready[i])	{
+			pPreAllocatedQP = &(List_of_QueuePair_PreAllocated[i]);
+			pQP->send_complete_queue = pPreAllocatedQP->send_complete_queue;
+			pQP->recv_complete_queue = pPreAllocatedQP->recv_complete_queue;
+			pQP->queue_pair = pPreAllocatedQP->queue_pair;
+			pQP->ib_my_psn = pPreAllocatedQP->psn;
+			pQP->ib_my_lid = port_attr_.lid;
+			pQP->ib_my_qpn = pQP->queue_pair->qp_num;
+			Is_PreAllocated_QP_Ready[i] = 0;
+			nQueuePairPreAllocated--;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&lock_preallocate_qp);
+	if(i >= NUM_QP_PREALLOCATED)	{	// no free queue pair available. Create one now!!!
+		printf("Warning> No preallocated queue pair available. Create a new queue pair now!\n");
+		IB_CreateQueuePair(idx);
+	}
+	else if(i>= NUM_QP_TRIGGER_PREALLOCATED)	{	// The number of available queue pair is running low. Need to preallocate more queuepairs!!!
+		Refill_PreAllocated_QP_Pool();
+	}
+}
+
 //extern int new_socket;
 int SERVER_QUEUEPAIR::Accept_Client()
 {
@@ -445,7 +588,11 @@ int SERVER_QUEUEPAIR::Accept_Client()
 		}
 		pthread_mutex_unlock(&process_lock);
 
-		IB_CreateQueuePair(idx);
+		Get_A_PreAllocated_QueuePair(idx);
+//		IB_CreateQueuePair(idx);	// DBG> IB_CreateQueuePair() 3345 us. Slow process! We can do pre-allocation to save time. When the number of pre-allocated QP is 
+		// Get a queue pair from preallocated list of qps
+
+		// not large enough, start a thread and do pre-allocation! 
 		pQP_Data[idx].ib_pal_lid = p_token[1];
 		pQP_Data[idx].ib_pal_qpn = p_token[2];
 		pQP_Data[idx].ib_pal_psn = p_token[3];
@@ -458,6 +605,7 @@ int SERVER_QUEUEPAIR::Accept_Client()
 		pQP_Data[idx].tag_ib_me = TAG_EXCH_QP_INFO;
 		write(fd, &(pQP_Data[idx].tag_ib_me), 4*sizeof(int));
 //		write(fd, &(pQP_Data[idx].ib_my_lid), 4*sizeof(int));
+		// DBG> IB_Modify_QP() 1273 us
 		IB_Modify_QP(pQP_Data[idx].queue_pair, pQP_Data[idx].ib_my_psn, (uint16_t)(pQP_Data[idx].ib_pal_lid), pQP_Data[idx].ib_pal_qpn, pQP_Data[idx].ib_pal_psn);
 
 		nBytes = read(fd, &(pQP_Data[idx].tag_mem), 2*sizeof(int)+sizeof(long int));
@@ -776,31 +924,27 @@ void SERVER_QUEUEPAIR::IB_Modify_QP(struct ibv_qp* qp, uint32_t src_psn, uint16_
   }
 }
 
-void SERVER_QUEUEPAIR::IB_CreateQueuePair(int idx)
+void CreateQueuePair(struct ibv_context* context, struct ibv_pd* pd, struct ibv_cq **pSend_complete_queue, struct ibv_cq **pRecv_complete_queue, struct ibv_qp **pQueue_pair, unsigned int *pPsn)
 {
-	QP_DATA *pQP;
+	*pSend_complete_queue = ibv_create_cq(context, IB_QUEUE_SIZE, NULL, NULL, 0);
+	*pRecv_complete_queue = ibv_create_cq(context, IB_QUEUE_SIZE, NULL, NULL, 0);
 	
-	pQP = &(pQP_Data[idx]);
-	
-	pQP->send_complete_queue = ibv_create_cq(context_, IB_QUEUE_SIZE, NULL, NULL, 0);
-	pQP->recv_complete_queue = ibv_create_cq(context_, IB_QUEUE_SIZE, NULL, NULL, 0);
-	
-	if (!pQP->send_complete_queue) {
+	if (!pSend_complete_queue) {
 		fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_create_cq of send cq.\n", __FILE__, __LINE__);
 		exit(1);
 	}
 	
-	if (!pQP->recv_complete_queue) {
+	if (!pRecv_complete_queue) {
 		fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_create_cq of recv cq.\n", __FILE__, __LINE__);
 		exit(1);
 	}
 	
-	uint32_t my_psn = random() % 0xFFFFFF;
+	*pPsn = random() % 0xFFFFFF;
 	
 	struct ibv_qp_init_attr qp_init_attr = {};
 	qp_init_attr.qp_type = IBV_QPT_RC;
-	qp_init_attr.send_cq = pQP->send_complete_queue;
-	qp_init_attr.recv_cq = pQP->recv_complete_queue;
+	qp_init_attr.send_cq = *pSend_complete_queue;
+	qp_init_attr.recv_cq = *pRecv_complete_queue;
 	
 	qp_init_attr.cap.max_send_wr = IB_QUEUE_SIZE;
 	qp_init_attr.cap.max_recv_wr = 8192;
@@ -813,16 +957,24 @@ void SERVER_QUEUEPAIR::IB_CreateQueuePair(int idx)
 	// 1 - All Work Requests that will be submitted to the Send Queue will always generate a Work Completion !!!!!!!!!!
 	qp_init_attr.cap.max_inline_data = 0;
 	
-	pQP->queue_pair = ibv_create_qp(pd_, &qp_init_attr);
+	*pQueue_pair = ibv_create_qp(pd, &qp_init_attr);
 	
-	if (!pQP->queue_pair) {
+	if (!pQueue_pair) {
 		fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_create_qp().\n", __FILE__, __LINE__);
 		exit(1);
 	}
+}
+
+void SERVER_QUEUEPAIR::IB_CreateQueuePair(int idx)
+{
+	QP_DATA *pQP;
+	
+	pQP = &(pQP_Data[idx]);
+	
+	CreateQueuePair(context_, pd_, &(pQP->send_complete_queue), &(pQP->recv_complete_queue), &(pQP->queue_pair), &(pQP->ib_my_psn));
 	
 	pQP->ib_my_lid = port_attr_.lid;
 	pQP->ib_my_qpn = pQP->queue_pair->qp_num;
-	pQP->ib_my_psn = my_psn;
 }
 
 struct ibv_mr* SERVER_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote(void* buf, size_t len)
