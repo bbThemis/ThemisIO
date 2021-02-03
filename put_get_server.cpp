@@ -1,4 +1,5 @@
 // g++ -march=skylake-avx512 -g -O0 -o server put_get_server.cpp -libverbs -lpthread -lrt -Wunused-variable -I/opt/intel/compilers_and_libraries_2020.4.304/linux/mpi/intel64/include -L/opt/intel/compilers_and_libraries_2020.4.304/linux/mpi/intel64/lib/release -L/opt/intel/compilers_and_libraries_2020.4.304/linux/mpi/intel64/lib -lmpicxx -lmpifort -lmpi -ldl
+// gcc -g -o fsclient client/put_get_client.cpp dict.cpp xxhash.cpp -libverbs -lpthread -lrt
 
 #include <cassert>
 #include <cerrno>
@@ -58,6 +59,8 @@ SERVER_QUEUEPAIR Server_qp;
 
 void Get_Local_Server_Info(void);
 void Setup_QP_Among_Servers(void);
+
+
 
 void Setup_QP_Among_Servers(void)
 {
@@ -191,10 +194,30 @@ static void* Func_thread_Polling_New_Msg(void *pParam)
 static void* Func_thread_qp_server(void *pParam)
 {
 	SERVER_QUEUEPAIR *pServer_qp;
-	
+	int i;
+
 	pServer_qp = (SERVER_QUEUEPAIR *)pParam;
 	pServer_qp->Init_Server_IB_Env(DEFAULT_REM_BUFF_SIZE);
 	pServer_qp->Init_Server_Socket(2048, ThisNode.port);
+
+	Init_PreAllocated_QueuePair_List();
+
+	for(i=0; i<N_THREAD_PREALLOCATE_QP; i++)	{
+		pParam_PreAllocate[i].pServer_qp = pServer_qp;
+		pParam_PreAllocate[i].t_rank = i;
+		pParam_PreAllocate[i].nthread = N_THREAD_PREALLOCATE_QP;
+		if(pthread_create(&(pthread_preallocate[i]), NULL, Func_thread_PreAllocate_QueuePair, &(pParam_PreAllocate[i]))) {
+			fprintf(stderr, "Error creating thread\n");
+			return 0;
+		}
+	}
+	for(i=0; i<N_THREAD_PREALLOCATE_QP; i++)	{
+		if(pthread_join(pthread_preallocate[i], NULL)) {
+			fprintf(stderr, "Error joining thread.\n");
+			return 0;
+		}
+	}
+
 	Server_Started = 1;	// active the flag: Server started running!!!
 	pServer_qp->Socket_Server_Loop();
 	
