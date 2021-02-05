@@ -115,6 +115,7 @@ void Setup_QP_Among_Servers(void)
 			Server_qp.pQP_Data[i].nPut_Get_Done = 0;
 			Server_qp.IB_Modify_QP(Server_qp.pQP_Data[i].queue_pair, Server_qp.pQP_Data[i].ib_my_psn, (uint16_t)(Server_qp.pQP_Data[i].ib_pal_lid), Server_qp.pQP_Data[i].ib_pal_qpn, Server_qp.pQP_Data[i].ib_pal_psn);
 
+			Server_qp.pQP_Data[i].idx_queue = 0;	// the first queue is reserved for inter-server communication
 		}
 	}
 	
@@ -159,7 +160,8 @@ static void* Func_thread_Print_Data(void *pParam)
 		gettimeofday(&tm1, NULL);
 		for(int j=0; j<=pServer_qp->IdxLastQP; j++)	{
 			if(pServer_qp->p_shm_TimeHeartBeat[j])	{
-				printf("Rank %d: heart beat time stamp %ld My time %ld\n", j, pServer_qp->p_shm_TimeHeartBeat[0], tm1.tv_sec);
+//				printf("DBG> Addr pServer_qp->p_shm_TimeHeartBeat[0] = %p Index(QP) = %d\n", &(pServer_qp->p_shm_TimeHeartBeat[j]), j);
+				printf("Rank %d: heart beat time stamp %ld My time %ld\n", j, pServer_qp->p_shm_TimeHeartBeat[j], tm1.tv_sec);
 			}
 		}
 		pServer_qp->ScanLostQueuePairs();
@@ -200,6 +202,7 @@ static void* Func_thread_qp_server(void *pParam)
 	pServer_qp->Init_Server_IB_Env(DEFAULT_REM_BUFF_SIZE);
 	pServer_qp->Init_Server_Socket(2048, ThisNode.port);
 
+	Init_QueueList();
 	Init_PreAllocated_QueuePair_List();
 
 	for(i=0; i<N_THREAD_PREALLOCATE_QP; i++)	{

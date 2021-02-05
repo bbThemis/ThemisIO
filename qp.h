@@ -24,6 +24,7 @@
 #include <cstdio>
 //#include "dict.h"
 #include "qp_common.h"
+#include "io_queue.h"
 
 //#define N_THREAD_PREALLOCATE_QP	(1)
 #define N_THREAD_PREALLOCATE_QP	(16)
@@ -60,6 +61,8 @@ char Is_PreAllocated_QP_Ready[NUM_QP_PREALLOCATED];
 int nQueuePairPreAllocated=0;
 QUEUE_PAIR_PREALLOCATED List_of_QueuePair_PreAllocated[NUM_QP_PREALLOCATED];
 pthread_t pthread_preallocate[N_THREAD_PREALLOCATE_QP];
+
+extern IO_QUEUE IO_Queue_List[MAX_NUM_QUEUE];
 
 
 void Init_PreAllocated_QueuePair_List(void);
@@ -552,12 +555,13 @@ void SERVER_QUEUEPAIR::Get_A_PreAllocated_QueuePair(int idx)
 //extern int new_socket;
 int SERVER_QUEUEPAIR::Accept_Client()
 {
-	int fd, nBytes, idx;
+	int fd, nBytes, idx, idx_Queue;
 	unsigned int *p_token;
 	struct sockaddr_in in;
 	socklen_t sz = sizeof(in);
 	char szBuff[128];
 	GLOBAL_ADDR_DATA Global_Addr_Data;
+	JOB_INFO_DATA JobInfo;
 	
 	fd = accept(sock_fd,(struct sockaddr*)&in, &sz);
 	if (fd == -1) {
@@ -630,7 +634,19 @@ int SERVER_QUEUEPAIR::Accept_Client()
 //		write(fd, &rem_buff, 2*sizeof(int)+sizeof(long int));
 		write(fd, &tag_mem, 2*sizeof(int)+sizeof(long int));
 
-		read(fd, szBuff, 1);	// dummy read
+		read(fd, &JobInfo, sizeof(JOB_INFO_DATA));
+		assert(JobInfo.comm_tag == TAG_SUBMIT_JOB_INFO);
+		printf("INFO> jobid = %d nnode = %d\n", JobInfo.jobid, JobInfo.nnode);
+		idx_Queue = Query_Jobid_In_Queue(JobInfo.jobid);
+		if(idx_Queue > 0)	{	// a queue created already
+			IO_Queue_List[idx_Queue].nQP ++;
+		}
+		else	{
+			idx_Queue = Create_A_Queue(JobInfo.jobid);
+			IO_Queue_List[idx_Queue].nnode = JobInfo.nnode;
+		}
+		pQP_Data[idx].idx_queue = idx_Queue;
+
 		Global_Addr_Data.comm_tag = TAG_GLOBAL_ADDR_INFO;
 		Global_Addr_Data.addr_NewMsgFlag = (uint64_t)p_shm_NewMsgFlag + sizeof(char)*idx;
 		Global_Addr_Data.addr_TimeHeartBeat = (uint64_t)p_shm_TimeHeartBeat + sizeof(time_t)*idx;

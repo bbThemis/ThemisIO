@@ -33,7 +33,6 @@
 
 
 #define PORT 8888
-#define FS_PARAM_FILE	"myfs.param"
 
 
 #define DEF_CQ_MOD	(100)
@@ -48,7 +47,7 @@ static pthread_mutex_t ht_qp_lock;
 static CHASHTABLE_INT *pHT_qp=NULL;
 static struct elt_Int *elt_list_qp = NULL;
 static int *ht_table_qp=NULL;
-static int jobid = 0;
+static int jobid = 0, nnode_this_job=0;
 
 // file server info is stored at /dev/shm/myfs. Use bcast_dir to share this file across nodes. 
 typedef	struct	{
@@ -69,7 +68,7 @@ typedef	struct	{
 }FSSERVERLIST;
 
 FSSERVERLIST *pFileServerList, FileServerListLocal;	// pFileServerList in shared memory
-
+/*
 typedef	struct	{
 	uint32_t comm_tag;
 	uint32_t jobid;	// slurm job id
@@ -78,10 +77,12 @@ typedef	struct	{
 	uint32_t uid;	// user id
 	uint32_t gid;	// group id
 }SUBMIT_JOB_DATA;
+*/
 
 typedef void (*org_sighandler)(int sig, siginfo_t *siginfo, void *ptr);
 static org_sighandler org_segv=NULL, org_term=NULL, org_int=NULL;
 
+static JOB_INFO_DATA JobInfo;
 
 class	CLIENT_QUEUEPAIR	{
 private:
@@ -134,7 +135,6 @@ static CLIENT_QUEUEPAIR *pClient_qp_List[MAX_QP_PER_PROCESS];
 void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t size_loc_buff, char rem_buff[], size_t size_rem_buff)
 {
 	int idx;
-	char *szEnvJobID=NULL;
 	GLOBAL_ADDR_DATA Global_Addr_Data;
 	unsigned long long t;
 	struct timeval tm1, tm2;
@@ -145,15 +145,9 @@ void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t si
 	tid = gettid();
 #endif
 
-	if(jobid == 0)	{
-		szEnvJobID = getenv("SLURM_JOBID");
-		if(szEnvJobID == NULL)	{
-			printf("Waring: Fail to call getenv(\"PWD\")\n");
-		}
-		else	{
-			jobid = atoi(szEnvJobID);
-		}
-	}
+	JobInfo.comm_tag = TAG_SUBMIT_JOB_INFO;
+	JobInfo.jobid = jobid;
+	JobInfo.nnode = nnode_this_job;
 
 	Idx_fs = IdxServer;
 	
@@ -200,7 +194,8 @@ void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t si
 	read(sock, &(pal_remote_mem), 2*sizeof(int) + sizeof(long int));
 	assert(pal_remote_mem.comm_tag == TAG_EXCH_MEM_INFO);
 
-	write(sock, &(Global_Addr_Data), 1);	// dummy write
+	write(sock, &(JobInfo), sizeof(JOB_INFO_DATA));	// submit job info
+
 	read(sock, &(Global_Addr_Data), sizeof(GLOBAL_ADDR_DATA));
 	assert(Global_Addr_Data.comm_tag == TAG_GLOBAL_ADDR_INFO);
 	remote_addr_new_msg = Global_Addr_Data.addr_NewMsgFlag;
@@ -710,6 +705,7 @@ __attribute__((constructor)) void Init_Client()
 	int i, shm_fd, To_Init=0;
 	char mutex_name[]="shm_fs_param";
 	void *p_shm;
+	char *szEnvJobID=NULL, *szEnvNNode=NULL;
 	
 	pHT_qp = (CHASHTABLE_INT *)malloc(CHASHTABLE_INT::GetStorageSize(MAX_QP_PER_PROCESS));
 	pHT_qp->DictCreate(MAX_QP_PER_PROCESS, &elt_list_qp, &ht_table_qp);	// init hash table
@@ -785,6 +781,26 @@ __attribute__((constructor)) void Init_Client()
 		pFileServerList->Init_Done = 1;
 		printf("ip = %x\n", pFileServerList->myip);
 	}
+
+	if(jobid == 0)	{
+		szEnvJobID = getenv("SLURM_JOBID");
+		if(szEnvJobID == NULL)	{
+			printf("Waring: Fail to call getenv(\"SLURM_JOBID\")\n");
+		}
+		else	{
+			jobid = atoi(szEnvJobID);
+		}
+	}
+	if(nnode_this_job == 0)	{
+		szEnvNNode = getenv("SLURM_NNODES");
+		if(szEnvNNode == NULL)	{
+			printf("Waring: Fail to call getenv(\"SLURM_NNODES\")\n");
+		}
+		else	{
+			nnode_this_job = atoi(szEnvNNode);
+		}
+	}
+	printf("DBG> JobID = %d NNode = %d\n", jobid, nnode_this_job);
 	
 }
 
@@ -847,6 +863,7 @@ static void Update_Queue_Pair_HeartBeat_Time(void)
 					// update local heart beat time stamp
 					pClient_qp_List[i]->qp_heart_beat_t = t_cur;
 					// Write new heart beat!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+//					printf("DBG> Addr pClient_qp_List[i]->remote_addr_heart_beat = %p\n", (void *)(pClient_qp_List[i]->remote_addr_heart_beat));
 					printf("DBG> Write heart beat %ld\n", t_cur);
 					pClient_qp_List[i]->IB_Put(&(pClient_qp_List[i]->qp_heart_beat_t), pClient_qp_List[i]->mr_loc_qp_Obj->lkey, (void *)(pClient_qp_List[i]->remote_addr_heart_beat), pClient_qp_List[i]->pal_remote_mem.key, sizeof(time_t));
 				}
