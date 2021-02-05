@@ -1,3 +1,5 @@
+// gcc -g -o client put_get_client.cpp ../dict.cpp ../xxhash.cpp -libverbs -lpthread -lrt
+
 #include <stdlib.h>
 #include <assert.h>
 #include <stdio.h>
