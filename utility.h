@@ -1,6 +1,26 @@
 #ifndef __UTILITY_H__
 #define __UTILITY_H__
 
+//#ifndef min(a,b)
+#define min(a,b)	( ((a)<(b)) ? (a) : (b) )
+#define max(a,b)	( ((a)>(b)) ? (a) : (b) )
+//#endif
+
+#ifndef	BUDDY_PAGE_SHIFT
+#define BUDDY_PAGE_SHIFT	(12)	// assume page size is 4096
+#endif
+
+static inline unsigned long int Cal_Order(unsigned long int x)
+{
+        unsigned long int order=0, pow2=1;
+
+		x = (x & 0xFFF) ? ( (x >> BUDDY_PAGE_SHIFT) + 1) : (x >> BUDDY_PAGE_SHIFT);	// x/4096
+        while(pow2<x)   {
+                pow2 = pow2 << 1;
+                order++;
+        }
+        return order;
+}
 
 //static unsigned long int pow2roundup (unsigned long int x);
 //static int is_power_of_two(unsigned long int x);
@@ -33,6 +53,45 @@ static void Get_BaseName(char szHostName[])
 		}
 		i++;
 	}
+}
+
+/*
+ *  * Atomic compare and exchange.  Compare OLD with MEM, if identical,
+ *   * store NEW in MEM.  Return the initial value in MEM.  Success is
+ *    * indicated by comparing RETURN with OLD.
+ *     */
+
+static inline unsigned long __cmpxchg(volatile unsigned long *ptr, unsigned long old,
+                                      unsigned long new_value, int size)
+{
+        unsigned long prev;
+        switch (size) {
+        case 1:
+                __asm__ __volatile__("lock ; cmpxchgb %2,%1"
+                                     : "=a"(prev),"+m"(*ptr)
+                                     : "q"(new_value), "0"(old)
+                                     : "memory");
+                return prev;
+        case 2:
+                __asm__ __volatile__("lock ; cmpxchgw %2,%1"
+                                     : "=a"(prev),"+m"(*ptr)
+                                     : "q"(new_value), "0"(old)
+                                     : "memory");
+                return prev;
+        case 4:
+                __asm__ __volatile__("lock ; cmpxchg %2,%1"
+                                     : "=a"(prev),"+m"(*ptr)
+                                     : "q"(new_value), "0"(old)
+                                     : "memory");
+                return prev;
+         case 8:
+                __asm__ __volatile__("lock ; cmpxchgq %2,%1"
+                                     : "=a"(prev),"+m"(*ptr)
+                                     : "q"(new_value), "0"(old)
+                                     : "memory");
+                return prev;
+       }
+        return old;
 }
 
 

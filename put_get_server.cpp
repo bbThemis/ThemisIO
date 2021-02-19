@@ -4,7 +4,6 @@
 #include <cassert>
 #include <cerrno>
 #include <cstdio>
-#include "qp.h"
 
 #include <unistd.h>
 #include <sys/time.h>
@@ -21,7 +20,14 @@
 
 #include <mpi.h> 
 
+#include "qp.h"
+#include "myfs.h"
+
 #define PORT 8888
+
+extern PARAM_PREALLOCATE_QP pParam_PreAllocate[N_THREAD_PREALLOCATE_QP];
+extern pthread_t pthread_preallocate[N_THREAD_PREALLOCATE_QP];
+extern pthread_t pthread_IO_Worker[NUM_THREAD_IO_WORKER];
 
 typedef	struct	{
 	uint32_t lid;
@@ -197,6 +203,7 @@ static void* Func_thread_qp_server(void *pParam)
 {
 	SERVER_QUEUEPAIR *pServer_qp;
 	int i;
+	int IO_Worker_tid_List[NUM_THREAD_IO_WORKER];
 
 	pServer_qp = (SERVER_QUEUEPAIR *)pParam;
 	pServer_qp->Init_Server_IB_Env(DEFAULT_REM_BUFF_SIZE);
@@ -221,6 +228,14 @@ static void* Func_thread_qp_server(void *pParam)
 		}
 	}
 
+	for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
+		IO_Worker_tid_List[i] = i;
+		if(pthread_create(&(pthread_IO_Worker[i]), NULL, Func_thread_IO_Worker, &(IO_Worker_tid_List[i]))) {
+			fprintf(stderr, "Error creating thread\n");
+			return 0;
+		}
+	}
+
 	Server_Started = 1;	// active the flag: Server started running!!!
 	pServer_qp->Socket_Server_Loop();
 	
@@ -238,6 +253,9 @@ int main(int argc, char **argv)
     MPI_Init(NULL, NULL);
     MPI_Comm_size(MPI_COMM_WORLD, &nFSServer);
     MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
+
+	Init_Memory();
+	Test_File_System_Local();
 
 	Get_Local_Server_Info();
 	MPI_Allgather(&ThisNode, sizeof(FS_SEVER_INFO), MPI_CHAR, AllFSNodes, sizeof(FS_SEVER_INFO), MPI_CHAR, MPI_COMM_WORLD);
