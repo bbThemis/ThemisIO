@@ -19,6 +19,12 @@
 
 typedef	struct	{
 	uint32_t comm_tag;
+	uint32_t jobid;
+	uint32_t nnode;
+}JOB_INFO_DATA;
+
+typedef	struct	{
+	uint32_t comm_tag;
 	uint32_t key;
 	unsigned long int addr;
 }IB_MEM_DATA, *PIB_MEM_DATA;

@@ -1,7 +1,7 @@
 CXX=g++
 CXXFLAGS=-march=skylake-avx512 -g -O0 -I/opt/intel/compilers_and_libraries_2020.4.304/linux/mpi/intel64/include
-OBJS=put_get_server.o dict.o xxhash.o put_get_client.o io_queue.o
-HEADERS=dict.h qp_common.h qp.h io_queue.h utility.h xxhash.h client/qp_client.h
+OBJS=put_get_server.o qp.o dict.o xxhash.o put_get_client.o io_queue.o myfs.o io_ops.o buddy.o ncx_slab.o
+HEADERS=dict.h qp_common.h qp.h io_queue.h utility.h xxhash.h list.h buddy.h myfs.h io_ops_common.h io_ops.h ncx_slab.h ncx_core.h ncx_log.h client/qp_client.h
 RM=rm -rf
 
 # in cmd of windows
@@ -12,13 +12,16 @@ endif
 all: server fsclient
 
 server: $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $@ put_get_server.o io_queue.o -libverbs -lpthread -lrt -Wunused-variable -L/opt/intel/compilers_and_libraries_2020.4.304/linux/mpi/intel64/lib/release -L/opt/intel/compilers_and_libraries_2020.4.304/linux/mpi/intel64/lib -lmpicxx -lmpifort -lmpi -ldl
+	$(CXX) $(CXXFLAGS) -o $@ put_get_server.o qp.o io_queue.o buddy.o myfs.o io_ops.o dict.o xxhash.o ncx_slab.o -libverbs -lpthread -lrt -Wunused-variable -L/opt/intel/compilers_and_libraries_2020.4.304/linux/mpi/intel64/lib/release -L/opt/intel/compilers_and_libraries_2020.4.304/linux/mpi/intel64/lib -lmpicxx -lmpifort -lmpi -ldl
 #	$(CXX) $(CXXFLAGS) -o $@ put_get_server.o io_queue.o dict.o xxhash.o -libverbs -lpthread -lrt -Wunused-variable -L/opt/intel/compilers_and_libraries_2020.4.304/linux/mpi/intel64/lib/release -L/opt/intel/compilers_and_libraries_2020.4.304/linux/mpi/intel64/lib -lmpicxx -lmpifort -lmpi -ldl
 
 fsclient: $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ put_get_client.o dict.o xxhash.o -libverbs -lpthread -lrt
 
 put_get_server.o: put_get_server.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) -c $<
+
+qp.o: qp.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -c $<
 
 dict.o: dict.cpp $(HEADERS)
@@ -28,7 +31,19 @@ xxhash.o: xxhash.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -c $<
 
 io_queue.o: io_queue.cpp $(HEADERS)
+	$(CXX) -g -O3 -c $<
+
+buddy.o: buddy.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -c $<
+myfs.o: myfs.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) -c $<
+
+io_ops.o: io_ops.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) -c $<
+
+ncx_slab.o: ncx_slab.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) -c $<
+
 
 put_get_client.o: client/put_get_client.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -c $<
