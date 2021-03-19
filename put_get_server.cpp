@@ -22,12 +22,18 @@
 
 #include "qp.h"
 #include "myfs.h"
+#include "corebinding.h"
+#include "unique_thread.h"
 
+#define T_FREQ_REPORT_RESULT (1)
 #define PORT 8888
+
+CORE_BINDING CoreBinding;
 
 extern PARAM_PREALLOCATE_QP pParam_PreAllocate[N_THREAD_PREALLOCATE_QP];
 extern pthread_t pthread_preallocate[N_THREAD_PREALLOCATE_QP];
 extern pthread_t pthread_IO_Worker[NUM_THREAD_IO_WORKER];
+extern CCreatedUniqueThread Unique_Thread;
 
 typedef	struct	{
 	uint32_t lid;
@@ -59,9 +65,10 @@ FS_SEVER_INFO AllFSNodes[MAX_FS_SERVER];
 QPAIR_DATA *pQPair_Inter_FS=NULL;
 
 int mpi_rank, nFSServer=0;	// rank and size of MPI
-int nNUMAPerNode=2;	// number of numa nodes per compute node
+int nNUMAPerNode=1;	// number of numa nodes per compute node
 
 SERVER_QUEUEPAIR Server_qp;
+pthread_attr_t thread_attr;
 
 void Get_Local_Server_Info(void);
 void Setup_QP_Among_Servers(void);
@@ -167,7 +174,7 @@ static void* Func_thread_Print_Data(void *pParam)
 		for(int j=0; j<=pServer_qp->IdxLastQP; j++)	{
 			if(pServer_qp->p_shm_TimeHeartBeat[j])	{
 //				printf("DBG> Addr pServer_qp->p_shm_TimeHeartBeat[0] = %p Index(QP) = %d\n", &(pServer_qp->p_shm_TimeHeartBeat[j]), j);
-				printf("Rank %d: heart beat time stamp %ld My time %ld\n", j, pServer_qp->p_shm_TimeHeartBeat[j], tm1.tv_sec);
+//				printf("Rank %d: heart beat time stamp %ld My time %ld\n", j, pServer_qp->p_shm_TimeHeartBeat[j], tm1.tv_sec);
 			}
 		}
 		pServer_qp->ScanLostQueuePairs();
@@ -181,6 +188,8 @@ static void* Func_thread_Polling_New_Msg(void *pParam)
 {
 	SERVER_QUEUEPAIR *pServer_qp;
 	
+	CoreBinding.Bind_This_Thread();
+
 	pServer_qp = (SERVER_QUEUEPAIR *)pParam;
 	while(1)	{
 		sleep(1);
@@ -209,6 +218,7 @@ static void* Func_thread_qp_server(void *pParam)
 	pServer_qp->Init_Server_IB_Env(DEFAULT_REM_BUFF_SIZE);
 	pServer_qp->Init_Server_Socket(2048, ThisNode.port);
 
+	Init_ActiveJobList();
 	Init_QueueList();
 	Init_PreAllocated_QueuePair_List();
 
@@ -216,6 +226,7 @@ static void* Func_thread_qp_server(void *pParam)
 		pParam_PreAllocate[i].pServer_qp = pServer_qp;
 		pParam_PreAllocate[i].t_rank = i;
 		pParam_PreAllocate[i].nthread = N_THREAD_PREALLOCATE_QP;
+		pParam_PreAllocate[i].nToken = Unique_Thread.Apply_A_Token();
 		if(pthread_create(&(pthread_preallocate[i]), NULL, Func_thread_PreAllocate_QueuePair, &(pParam_PreAllocate[i]))) {
 			fprintf(stderr, "Error creating thread\n");
 			return 0;
@@ -242,6 +253,31 @@ static void* Func_thread_qp_server(void *pParam)
 	return 0;
 }
 
+extern long int nOPs_Done[NUM_THREAD_IO_WORKER];
+static long int nOPs_Done_Sum=0;
+static int T_Cur=0;
+
+void sigalarm_handler(int signum)
+{
+	int i;
+	long int nOPs_Done_Sum_New=0;
+	double iops;
+	
+	for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
+		nOPs_Done_Sum_New += nOPs_Done[i];
+	}
+	if(T_Cur > 0)	{
+		iops = 0.000001*(nOPs_Done_Sum_New - nOPs_Done_Sum)/T_FREQ_REPORT_RESULT;
+		if(iops > 1.0)	{
+			printf("INFO> Reporting performance %5.3lf M iops T = %d\n", iops, T_Cur);
+		}
+	}
+	T_Cur += T_FREQ_REPORT_RESULT;
+	nOPs_Done_Sum = nOPs_Done_Sum_New;
+	
+	alarm(T_FREQ_REPORT_RESULT);
+}
+
 int main(int argc, char **argv)
 {
 	int i;
@@ -250,12 +286,18 @@ int main(int argc, char **argv)
 	unsigned char *pNewMsg=NULL;
 	struct ibv_mr *mr_local;
 
+	CoreBinding.Init_Core_Binding();
+	Unique_Thread.Init_UniqueThread();
+	
+	pthread_attr_init(&thread_attr);
+	pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_DETACHED);
+
     MPI_Init(NULL, NULL);
     MPI_Comm_size(MPI_COMM_WORLD, &nFSServer);
     MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
 
 	Init_Memory();
-	Test_File_System_Local();
+//	Test_File_System_Local();
 
 	Get_Local_Server_Info();
 	MPI_Allgather(&ThisNode, sizeof(FS_SEVER_INFO), MPI_CHAR, AllFSNodes, sizeof(FS_SEVER_INFO), MPI_CHAR, MPI_COMM_WORLD);
@@ -311,6 +353,9 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Error creating thread\n");
 		return 1;
 	}
+
+	signal(SIGALRM, sigalarm_handler); // Register signal handler
+	alarm(T_FREQ_REPORT_RESULT);
 
 
 	if(pthread_join(thread_polling_newmsg, NULL)) {

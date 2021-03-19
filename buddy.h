@@ -19,7 +19,7 @@ enum pageflags{
 
 #define BUDDY_PAGE_SHIFT    (12UL)
 #define BUDDY_PAGE_SIZE     (1UL << BUDDY_PAGE_SHIFT)	// 4096 bytes per page
-#define BUDDY_MAX_ORDER     (9UL)
+#define BUDDY_MAX_ORDER     (26UL)
 
 
 struct page

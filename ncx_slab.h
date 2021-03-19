@@ -15,6 +15,7 @@ struct ncx_slab_page_s {
 
 
 typedef struct {
+    size_t            size_Allocated;
     size_t            min_size;
     size_t            min_shift;
 
@@ -24,7 +25,7 @@ typedef struct {
     u_char           *start;
     u_char           *end;
 
-	  pthread_mutex_t mutex;
+	pthread_mutex_t mutex;
 
     void             *addr;
 } ncx_slab_pool_t;
@@ -32,9 +33,9 @@ typedef struct {
 typedef struct {
 	size_t 			pool_size, used_size, used_pct; 
 	size_t			pages, free_page;
-	size_t			p_small, p_exact, p_big, p_page; /* 四种slab占用的page数 */
-	size_t			b_small, b_exact, b_big, b_page; /* 四种slab占用的byte数 */
-	size_t			max_free_pages;					 /* 最大的连续可用page数 */
+	size_t			p_small, p_exact, p_big, p_page;
+	size_t			b_small, b_exact, b_big, b_page;
+	size_t			max_free_pages;
 } ncx_slab_stat_t;
 
 ncx_slab_pool_t * ncx_slab_init(size_t pool_size);

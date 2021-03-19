@@ -137,6 +137,8 @@ ncx_slab_pool_t * ncx_slab_init(size_t pool_size)
 	ncx_real_pages = (pool->end - pool->start) / ncx_pagesize;
 	pool->pages->slab = ncx_real_pages;
 
+	pool->size_Allocated = 0;
+
 	return pool;
 }
 
@@ -144,19 +146,22 @@ ncx_slab_pool_t * ncx_slab_init(size_t pool_size)
 void * ncx_slab_alloc(ncx_slab_pool_t *pool, size_t size)
 {
     void  *p;
-
-  if (pthread_mutex_lock(&(pool->mutex)) != 0) {
-    perror("mutex_lock");
-    exit(2);
-  }
-
+	
+	if (pthread_mutex_lock(&(pool->mutex)) != 0) {
+		perror("mutex_lock");
+		exit(2);
+	}
+	
     p = ncx_slab_alloc_locked(pool, size);
+	if(p)	pool->size_Allocated += size;
+	
+	if (pthread_mutex_unlock(&(pool->mutex)) != 0) {
+		perror("mutex_unlock");
+		exit(2);
+	}
 
-  if (pthread_mutex_unlock(&(pool->mutex)) != 0) {
-    perror("mutex_unlock");
-    exit(2);
-  }
-
+	assert(p != NULL);
+	
     return p;
 }
 
@@ -404,17 +409,17 @@ done:
 
 void ncx_slab_free(ncx_slab_pool_t *pool, void *p)
 {
-  if (pthread_mutex_lock(&(pool->mutex)) != 0) {
-    perror("mutex_lock");
-    exit(2);
-  }
-
+	if (pthread_mutex_lock(&(pool->mutex)) != 0) {
+		perror("mutex_lock");
+		exit(2);
+	}
+	
     ncx_slab_free_locked(pool, p);
-
-  if (pthread_mutex_unlock(&(pool->mutex)) != 0) {
-    perror("mutex_lock");
-    exit(2);
-  }
+	
+	if (pthread_mutex_unlock(&(pool->mutex)) != 0) {
+		perror("mutex_lock");
+		exit(2);
+	}
 }
 
 
@@ -742,6 +747,7 @@ void ncx_slab_dummy_init(ncx_slab_pool_t *pool)
         }
     }
 }
+*/
 
 void ncx_slab_stat(ncx_slab_pool_t *pool, ncx_slab_stat_t *stat)
 {
@@ -870,7 +876,7 @@ void ncx_slab_stat(ncx_slab_pool_t *pool, ncx_slab_stat_t *stat)
 
 	info("max free pages : %zu\n",		stat->max_free_pages);
 }
-*/
+
 static bool ncx_slab_empty(ncx_slab_pool_t *pool, ncx_slab_page_t *page)
 {
 	ncx_slab_page_t *prev;

@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <cstdint>
 #include <cstdio>
-//#include "dict.h"
+#include "dict.h"
 #include "qp_common.h"
 #include "io_queue.h"
 
@@ -30,8 +30,10 @@
 #define N_THREAD_PREALLOCATE_QP	(16)
 #define N_THREAD_ADD_PREALLOCATE_QP	(4)
 
-#define NUM_QP_PREALLOCATED		(512)
-#define NUM_QP_TRIGGER_PREALLOCATED		(256)	// a half of NUM_QP_PREALLOCATED
+//#define NUM_QP_PREALLOCATED		(512)
+//#define NUM_QP_TRIGGER_PREALLOCATED		(256)	// a half of NUM_QP_PREALLOCATED
+#define NUM_QP_PREALLOCATED		(2048)	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Important for RESNET50. It creates new QPs very frequently. 
+#define NUM_QP_TRIGGER_PREALLOCATED		(1024)	// a half of NUM_QP_PREALLOCATED. !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Important for RESNET50. It creates new QPs very frequently. 
 
 #define DEFAULT_REM_BUFF_SIZE	(4096)
 
@@ -66,6 +68,7 @@ typedef	struct	{
 
 	int nPut_Get, nPut_Get_Done;
 	int jobid, idx_queue;	// jobid and the index of queue that handles this jobid
+	int idx_JobRec, cuid, cgid, ctid, bTimeout, bClosed;
 
 	// These are only needed between file servers. Not needed for the pairs with regular compute node (file server clients). 
 	uint64_t remote_addr_new_msg;	// the address of remote buffer to notify a new message
@@ -85,6 +88,9 @@ typedef	struct	{
 	unsigned int		tag_mem;
 	int					rem_key;
 	unsigned long int	rem_addr;
+	pthread_mutex_t	qp_lock;
+	char szClientHostName[MAX_HOSTNAME_LEN];
+	char szClientExeName[MAX_EXENAME_LEN];
 }QP_DATA, *PQP_DATA;
 
 //typedef	struct	{
@@ -105,9 +111,9 @@ public:
 	int nSizeshm_Global;
 	pthread_mutex_t process_lock;	// for this process
 
-//	CHASHTABLE_INT *p_Hash_socket_fd = NULL;
-//	struct elt_Int *elt_list_socket_fd = NULL;
-//	int *ht_table_socket_fd=NULL;
+	CHASHTABLE_INT *p_Hash_socket_fd = NULL;
+	struct elt_Int *elt_list_socket_fd = NULL;
+	int *ht_table_socket_fd=NULL;
 
 	QP_DATA *pQP_Data = NULL;
 	void *p_shm_Global = NULL;	// NewMsgFlag[], Time_HeartBeat[], IO_Msg[]
@@ -156,6 +162,7 @@ public:
 typedef struct	{
 	SERVER_QUEUEPAIR *pServer_qp;
 	int t_rank, nthread;
+	int nToken;	// the token to make sure only one thread is executed. 
 }PARAM_PREALLOCATE_QP;
 
 

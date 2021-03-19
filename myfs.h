@@ -7,14 +7,18 @@
 typedef unsigned long int ULongInt;
 typedef unsigned int UInt;
 
+#define MAX_NUM_FILE_OP_LOCK	(256)
+#define MAX_NUM_FILE_OP_LOCK_M1	(MAX_NUM_FILE_OP_LOCK-1)
+
 #define NUM_DIRCT_PT	(8)
 #define DEFAULT_NUM_EXTRA_PT	(16)
-#define _NPAGES			(8192*128)
-#define MAX_NUM_FILE	(0x80000UL)	// per node
-#define MAX_NUM_DIR		(0x8000UL)	// per node
+#define _NPAGES			(8192*1024)
+#define MAX_NUM_FILE	(0x800000UL)	// per node
+#define MAX_NUM_DIR		(0x400000UL)	// per node
 
 #define MAX_FD_ACTIVE	(1024*1024)
 #define INVALID_FILE_IDX	(-1)
+#define RESERVED_FILE_IDX	(-2)
 
 //#define MAX_NUM_FILE	(10000000UL)	// per node
 //#define MAX_NUM_DIR		(500000UL)	// per node
@@ -27,11 +31,11 @@ typedef unsigned int UInt;
 #define DEFAULT_MAX_ENTRY_PER_DIR	(16)
 
 #define MAX_LEN_EXTRA_POINTERS_BUFF	(16*1024*1024)
-#define MAX_LEN_DIR_ENTRY_BUFF	(32*1024*1024)
-#define MAX_LEN_DIR_ENTRY_OFFSET_BUFF	(8*1024*1024)
-#define MAX_LEN_DIR_ENTRY_LIST_BUFF	(8*1024*1024)
+#define MAX_LEN_DIR_ENTRY_BUFF	(128*1024*1024)
+#define MAX_LEN_DIR_ENTRY_OFFSET_BUFF	(160*1024*1024)
+#define MAX_LEN_DIR_ENTRY_LIST_BUFF	(56*1024*1024)
 #define MAX_LEN_LONG_FILE_NAME_BUFF	(16*1024*1024)
-#define MAX_LEN_PER_DIR_ENTRY_BUFF	(1024*1024)
+#define MAX_LEN_PER_DIR_ENTRY_BUFF	(2*1024*1024)
 
 typedef struct	{
 	ULongInt AddressofData;	// the address of data blocks
@@ -57,7 +61,7 @@ typedef struct {
 	int nDirectPointer;
 	int nExtraPointer;
 	int nMaxExtraPointer;	// the max number of extra pointers
-	int iPad[2];
+	int iPad;
 	ULongInt nSizeAllocated;	// the allocated space
 	DirectPointer DiretData[NUM_DIRCT_PT];	// list of direct data pointers
 	DirectPointer *pExtraData;	// the extra data blocks list
@@ -97,12 +101,14 @@ typedef struct {
 
 void Init_Memory(void);
 int Query_Parent_Dir(char szDirName[], int *nLenParentDirName, int *nLenFileName);
-int my_mkdir(char szDirName[]);
+int my_mkdir(char szDirName[], int mode, int uid, int gid);
 int my_openfile(char szFileName[], int oflags, ...);
 int openfile_by_index(int idx_file, int bAppend);
 int my_close(int fd);
-size_t my_read(int fd, void *buf, size_t count);
-size_t my_write(int fd, const void *buf, size_t count);
+size_t my_read(int fd, void *buf, size_t count, off_t offset);
+size_t my_read_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset);
+size_t my_write(int fd, const void *buf, size_t count, off_t offset);
+size_t my_write_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset);
 int Find_First_Available_FD(void);
 int Truncate_File(int file_idx);
 off_t my_lseek(int fd, off_t offset, int whence);
@@ -112,6 +118,12 @@ int my_rmdir(char szDirName[]);
 int my_ls(char szDirName[]);	// list entries under a directory
 int my_AddEntryInfo(int my_file_idx, int dir_idx);
 void my_RemoveEntryInfo(int my_file_idx);
+int my_fdopendir(int fd, void *loc_buf);
+int my_opendir_by_index(int dir_idx, void *loc_buf);
+int my_opendir(char szDirName[], void *loc_buf);
+int my_chmod(char szFileName[], int mode);
+int my_setuserinfo(char szFileName[]);
+
 
 void Test_File_System_Local(void);
 static void Readin_All_Dir(void);
