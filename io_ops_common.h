@@ -1,14 +1,37 @@
 #ifndef __IO_QUEUE_COMMON
 #define __IO_QUEUE_COMMON
 
+#define MYFS_ROOT_DIR	"/myfs"
+
 #define DIR_ENT_TYPE_DIR	(4)
 #define DIR_ENT_TYPE_FILE	(8)
 
-#define FD_FILE_BASE		(100000000)
-#define FD_DIR_BASE			(200000000)
+#define FD_FILE_BASE		(0x20000000)
+#define FD_DIR_BASE			(0x40000000)
+#define DUMMY_FD_DIR		(0x50000000)
 
-#define IO_RESULT_BUFFER_SIZE		(1024*1024)	// 328 KB. (Maybe need to be measured and tuned later. Done tuning.)
+// max allowed 512 file servers
+//#define SetFSIdx(fd,idx_fs)     ( fd = ( fd | (idx_fs << 20 ) ) )
+//#define GetFileFSIdx(fd)            ( ( (fd-FD_FILE_BASE) & 0x1FF00000) >> 20  )
+//#define GetDirFSIdx(fd)            ( ( (fd-FD_DIR_BASE) & 0x1FF00000) >> 20  )
+//#define GetFileFD(fd)               ( (fd-FD_FILE_BASE) & 0xFFFFF )
+//#define GetDirFD(fd)               ( (fd-FD_DIR_BASE) & 0xFFFFF )
+
+#define GetFileFD(fd)               ( FileList[fd-FD_FILE_BASE].fd )
+#define GetFileFSIdx(fd)            ( FileList[fd-FD_FILE_BASE].idx_fs )
+
+//#define GetDirFD(fd)               ( DirList[fd-FD_DIR_BASE].fd )
+//#define GetDirFSIdx(fd)            ( DirList[fd-FD_DIR_BASE].idx_fs )
+
+//#define MAX_DEFERRED_SEEK_OP	(3)
+
+#define MAX_SIZE_MR_BLOCK	(512*1024*1024)
+//#define MAX_SIZE_MR_BLOCK	(1024*1024*1024)
+//#define IO_RESULT_BUFFER_SIZE		(1024*1024)
+#define IO_RESULT_BUFFER_SIZE		(2048*1024)
+//#define DATA_COPY_THRESHOLD_SIZE	(8*1024)	// 328 KB. (Maybe need to be measured and tuned later. Done tuning.)
 #define DATA_COPY_THRESHOLD_SIZE	(328*1024)	// 328 KB. (Maybe need to be measured and tuned later. Done tuning.)
+//#define DATA_COPY_THRESHOLD_SIZE	(1200*1024)	// 328 KB. (Maybe need to be measured and tuned later. Done tuning.)
 // Copy data if size is smaller than this threshold. RDMA if large data need to be transfered. Register destination block and pass the receiving buffer address. 
 
 #define TAG_NEW_REQUEST	(0x80)
@@ -46,6 +69,9 @@
 #define RF_RW_OP_PWRITE	(0x29)
 #define RF_RW_OP_FUTIMENS	(0x2A)
 #define RF_RW_OP_UTIMES		(0x2B)
+//#define RF_RW_OP_UTIMES		(0x2B)
+#define RF_RW_OP_PRINT_MEM		(0x4F)
+#define RF_RW_OP_DISCONNECT		(0x50)
 
 typedef struct	{
 	char szName[160];	// May need to be increased later!
@@ -64,9 +90,9 @@ typedef struct	{
 	int mode;			// open() needs mode when creating files
 	int idx_qp;			// index of queue pair
 	int nTokenNeeded;	// the number of token needed to finish this operation
-	int tid;
+	int tid;			// the index of IO worker that is handling this request
+	int idx_JobRec;		// the index of job record. It is determined by jobid which is known from QP. 
 	int tag_magic;
-	int idx_UserData;
 	int op;		// operation tag. Containing a magic tag at the end!
 }IO_CMD_MSG, *PIO_CMD_MSG;
 
@@ -77,7 +103,13 @@ typedef struct {
 	int nDataSize;	// the number of bytes of this data buffer
 	int Tag_End;		// END		tag. Check this tag to make sure data transfer is DONE! Disabled here since a length undetermined buffer before this variable. 
 }RW_FUNC_RETURN, *PRW_FUNC_RETURN;
-
+/*
+typedef struct	{
+	long int offset;
+	int whence;
+	int pad;
+}SEEK_OP_PARAM;
+*/
 
 #endif
 

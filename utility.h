@@ -61,6 +61,7 @@ static void Get_BaseName(char szHostName[])
  *    * indicated by comparing RETURN with OLD.
  *     */
 
+/*
 static inline unsigned long __cmpxchg(volatile unsigned long *ptr, unsigned long old,
                                       unsigned long new_value, int size)
 {
@@ -93,7 +94,54 @@ static inline unsigned long __cmpxchg(volatile unsigned long *ptr, unsigned long
        }
         return old;
 }
+*/
 
+static inline int __cmpxchg(volatile int *ptr, int old, int new_value, int size)
+{
+        int prev;
+        switch (size) {
+        case 1:
+                __asm__ __volatile__("lock ; cmpxchgb %2,%1"
+                                     : "=a"(prev),"+m"(*ptr)
+                                     : "q"(new_value), "0"(old)
+                                     : "memory");
+                return prev;
+        case 2:
+                __asm__ __volatile__("lock ; cmpxchgw %2,%1"
+                                     : "=a"(prev),"+m"(*ptr)
+                                     : "q"(new_value), "0"(old)
+                                     : "memory");
+                return prev;
+        case 4:
+                __asm__ __volatile__("lock ; cmpxchg %2,%1"
+                                     : "=a"(prev),"+m"(*ptr)
+                                     : "q"(new_value), "0"(old)
+                                     : "memory");
+                return prev;
+         case 8:
+                __asm__ __volatile__("lock ; cmpxchgq %2,%1"
+                                     : "=a"(prev),"+m"(*ptr)
+                                     : "q"(new_value), "0"(old)
+                                     : "memory");
+                return prev;
+       }
+        return old;
+}
+
+static inline int fetch_and_add(int* variable, int value)
+{
+    __asm__ volatile("lock; xaddl %0, %1"
+      : "+r" (value), "+m" (*variable) // input + output
+      : // No input-only
+      : "memory"
+    );
+    return value;
+}
+
+inline void clflush(volatile void *p)
+{
+        asm volatile ("clflush (%0)" :: "r"(p));
+}
 
 #endif
 

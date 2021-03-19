@@ -5,6 +5,9 @@
 #define _GNU_SOURCE
 #endif
 
+//export SLURM_JOBID="12345"
+//export SLURM_NNODES=1
+
 // SLURM_JOBID=2339541. 4 bytes
 // IP. 4 bytes
 // tid. 4 bytes
@@ -27,9 +30,12 @@
 #include <sys/syscall.h>
 #include<signal.h>
 #include <sys/time.h>
+#include <malloc.h>
+#include <netinet/tcp.h>
 
 #include "../dict.h"
 #include "../qp_common.h"
+#include "../io_ops_common.h"
 
 
 #define PORT 8888
@@ -48,6 +54,20 @@ static CHASHTABLE_INT *pHT_qp=NULL;
 static struct elt_Int *elt_list_qp = NULL;
 static int *ht_table_qp=NULL;
 static int jobid = 0, nnode_this_job=0;
+static int bDebug=0;
+
+//atic __thread unsigned char __attribute__((aligned(16))) rem_buff[DATA_COPY_THRESHOLD_SIZE + 4096], loc_buff[DATA_COPY_THRESHOLD_SIZE + 4096]; 
+static __thread unsigned char *rem_buff=NULL, *loc_buff=NULL; 
+
+inline void Allocate_loc_rem_buff(void)
+{
+	if(rem_buff == NULL)	{
+		rem_buff = (unsigned char *)memalign(64, DATA_COPY_THRESHOLD_SIZE + 4096);
+		assert(rem_buff != NULL);
+		loc_buff = (unsigned char *)memalign(64, DATA_COPY_THRESHOLD_SIZE + 4096);
+		assert(loc_buff != NULL);
+	}
+}
 
 // file server info is stored at /dev/shm/myfs. Use bcast_dir to share this file across nodes. 
 typedef	struct	{
@@ -82,8 +102,6 @@ typedef	struct	{
 typedef void (*org_sighandler)(int sig, siginfo_t *siginfo, void *ptr);
 static org_sighandler org_segv=NULL, org_term=NULL, org_int=NULL;
 
-static JOB_INFO_DATA JobInfo;
-
 class	CLIENT_QUEUEPAIR	{
 private:
 	struct ibv_cq *send_complete_queue = NULL;
@@ -101,14 +119,17 @@ private:
 	void IB_modify_qp(void);
 	void IB_CreateQueuePair(void);
 	void Setup_Socket(char szServerIP[]);
-	void Try_Closing_Socket(void);
 	
 public:
-	static struct ibv_device** dev_list_;
-	static struct ibv_context* context_;
-	static struct ibv_pd* pd_;
-	static struct ibv_port_attr port_attr_;
-	static int Done_IB_PD_Init;
+//	static struct ibv_device** dev_list_;
+//	static struct ibv_context* context_;
+//	static struct ibv_pd* pd_;
+//	static struct ibv_port_attr port_attr_;
+	struct ibv_device** dev_list_;
+	struct ibv_context* context_;
+	struct ibv_pd* pd_;
+	struct ibv_port_attr port_attr_;
+	int Done_IB_PD_Init;
 
 	IB_MEM_DATA pal_remote_mem;
 	struct ibv_mr *mr_rem = NULL, *mr_loc = NULL;
@@ -132,28 +153,76 @@ public:
 static __thread CLIENT_QUEUEPAIR *pClient_qp[MAX_FS_SERVER];
 static CLIENT_QUEUEPAIR *pClient_qp_List[MAX_QP_PER_PROCESS];
 
+extern int mpi_rank;
+
+void Take_ShortName(char szHostName[])
+{
+	int i=0;
+	
+	while(szHostName[i])    {
+		if(szHostName[i] == '.')        {
+			szHostName[i] = 0;
+			if(i >= (MAX_HOSTNAME_LEN))	printf("ERROR> ClientHostName = %s is TOO long!\n", szHostName);
+			return;
+		}
+		i++;
+	}
+}
+
+void Get_Exe_Name(char szName[])
+{
+	FILE *fIn;
+	char szPath[1024], *ReadLine;
+	
+//	sprintf(szPath, "/proc/self/cmdline", pid);
+	fIn = fopen("/proc/self/cmdline", "r");
+	if(fIn == NULL)	{
+		printf("Fail to open file: %s\nQuit\n", szPath);
+		exit(1);
+	}
+	
+	ReadLine = fgets(szName, MAX_EXENAME_LEN, fIn);
+	fclose(fIn);
+	
+	if(ReadLine == NULL)	{
+		printf("Fail to determine the executable file name.\nQuit\n");
+		exit(1);
+	}
+	szName[MAX_EXENAME_LEN-1] = 0;
+}
+
 void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t size_loc_buff, char rem_buff[], size_t size_rem_buff)
 {
 	int idx;
-	GLOBAL_ADDR_DATA Global_Addr_Data;
+//	GLOBAL_ADDR_DATA Global_Addr_Data;
 	unsigned long long t;
 	struct timeval tm1, tm2;
-	
+//	JOB_INFO_DATA JobInfo;
+	DATA_SEND_BY_SERVER data_to_recv;
+	DATA_SEND_BY_CLIENT data_to_send;
+	char szHostName[64];
+	char szExeName[64];
+
 #ifdef SYS_gettid
 	tid = syscall(SYS_gettid);
 #else
 	tid = gettid();
 #endif
+//	printf("DBG> tid = %d\n", tid);
 
-	JobInfo.comm_tag = TAG_SUBMIT_JOB_INFO;
-	JobInfo.jobid = jobid;
-	JobInfo.nnode = nnode_this_job;
+//	JobInfo.comm_tag = TAG_SUBMIT_JOB_INFO;
+//	JobInfo.nnode = nnode_this_job;
+//	JobInfo.jobid = jobid;
+//	JobInfo.cip = pFileServerList->myip;	// client IP
+//	JobInfo.ctid = tid;	// client thred id
 
 	Idx_fs = IdxServer;
 	
-//	dev_list_ = NULL;
-//	context_ = NULL;
-//	pd_ = NULL;
+	dev_list_ = NULL;
+	context_ = NULL;
+	pd_ = NULL;
+	Done_IB_PD_Init = 0;
+
 	send_complete_queue = NULL;
 	recv_complete_queue = NULL;
 	nPut = nPut_Done = 0;
@@ -163,7 +232,7 @@ void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t si
 	queue_pair = NULL;
 	qp_heart_beat_t = 0;
 	
-	gettimeofday(&tm1, NULL);
+//	gettimeofday(&tm1, NULL);
     if(pthread_mutex_init(&qp_put_get_lock, NULL) != 0) { 
         printf("\n mutex qp_put_get_lock init failed\n"); 
         exit(1);
@@ -171,39 +240,90 @@ void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t si
 	qp_put_get_locked = 0;
 
 	Setup_Socket(FileServerListLocal.FS_List[IdxServer].szIP);
+//	gettimeofday(&tm2, NULL);
+//	t = 1000000 * (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec);
+//	printf("DBG> rank = %d t(Setup_Socket) = %lld\n", mpi_rank, t);
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
 	Init_IB_Env();
 	IB_CreateQueuePair();
+
+	gethostname(szHostName, 63);
+	Take_ShortName(szHostName);
+	Get_Exe_Name(szExeName);
+	data_to_send.JobInfo.comm_tag = TAG_SUBMIT_JOB_INFO;
+	data_to_send.JobInfo.nnode = nnode_this_job;
+	data_to_send.JobInfo.jobid = jobid;
+	data_to_send.JobInfo.cip = pFileServerList->myip;
+	data_to_send.JobInfo.ctid = tid;
+	data_to_send.JobInfo.cuid = getuid();
+	data_to_send.JobInfo.cgid = getgid();
+	memcpy(data_to_send.JobInfo.szClientHostName, szHostName, MAX_HOSTNAME_LEN);
+	memcpy(data_to_send.JobInfo.szClientExeName, szExeName, MAX_EXENAME_LEN);
+
+	data_to_send.qp.comm_tag = TAG_EXCH_QP_INFO;
+	data_to_send.qp.lid = qp_my_data.lid ;
+	data_to_send.qp.psn = qp_my_data.psn;
+	data_to_send.qp.qp_n = qp_my_data.qp_n;
 	
-	qp_my_data.comm_tag = TAG_EXCH_QP_INFO;
-	write(sock, &(qp_my_data), sizeof(uint32_t)*4);
-	read(sock, &(qp_pal_data), sizeof(uint32_t)*4);
-	assert(qp_pal_data.comm_tag == TAG_EXCH_QP_INFO);
-	printf("(%d, %d, %d) (%d, %d, %d)\n", qp_my_data.lid, qp_my_data.qp_n, qp_my_data.psn, qp_pal_data.lid, qp_pal_data.qp_n, qp_pal_data.psn);
-	
-	IB_modify_qp();
+//	qp_my_data.comm_tag = TAG_EXCH_QP_INFO;
+//	write(sock, &(qp_my_data), sizeof(uint32_t)*4);
+//	read(sock, &(qp_pal_data), sizeof(uint32_t)*4);
+//	assert(qp_pal_data.comm_tag == TAG_EXCH_QP_INFO);
+//	printf("(%d, %d, %d) (%d, %d, %d)\n", qp_my_data.lid, qp_my_data.qp_n, qp_my_data.psn, qp_pal_data.lid, qp_pal_data.qp_n, qp_pal_data.psn);
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	
 	mr_loc_qp_Obj = IB_RegisterBuf_RW_Local_Remote((void*)this, sizeof(CLIENT_QUEUEPAIR));
 	mr_loc = IB_RegisterBuf_RW_Local_Remote((void*)loc_buff, size_loc_buff);
+	assert(mr_loc != NULL);
 	mr_rem = IB_RegisterBuf_RW_Local_Remote((void*)rem_buff, size_rem_buff);
+	assert(mr_rem != NULL);
 	my_remote_mem.addr = (unsigned long int)(mr_rem->addr);
 	my_remote_mem.key = mr_rem->rkey;
 
-	my_remote_mem.comm_tag = TAG_EXCH_MEM_INFO;
-	write(sock, &(my_remote_mem), 2*sizeof(int) + sizeof(long int));
+	data_to_send.ib_mem.comm_tag = TAG_EXCH_MEM_INFO;
+	data_to_send.ib_mem.addr = my_remote_mem.addr;
+	data_to_send.ib_mem.key = my_remote_mem.key;
 
-	read(sock, &(pal_remote_mem), 2*sizeof(int) + sizeof(long int));
-	assert(pal_remote_mem.comm_tag == TAG_EXCH_MEM_INFO);
+//	my_remote_mem.comm_tag = TAG_EXCH_MEM_INFO;
+//	write(sock, &(my_remote_mem), 2*sizeof(int) + sizeof(long int));
 
-	write(sock, &(JobInfo), sizeof(JOB_INFO_DATA));	// submit job info
+//	read(sock, &(pal_remote_mem), 2*sizeof(int) + sizeof(long int));
+//	assert(pal_remote_mem.comm_tag == TAG_EXCH_MEM_INFO);
 
-	read(sock, &(Global_Addr_Data), sizeof(GLOBAL_ADDR_DATA));
-	assert(Global_Addr_Data.comm_tag == TAG_GLOBAL_ADDR_INFO);
-	remote_addr_new_msg = Global_Addr_Data.addr_NewMsgFlag;
-	remote_addr_heart_beat = Global_Addr_Data.addr_TimeHeartBeat;
-	remote_addr_IO_CMD = Global_Addr_Data.addr_IO_Cmd_Msg;
+//	write(sock, &(JobInfo), sizeof(JOB_INFO_DATA));	// submit job info
 
-	Try_Closing_Socket();
-	
+	write(sock, &(data_to_send), sizeof(DATA_SEND_BY_CLIENT));	// submit job info
+	read(sock, &(data_to_recv), sizeof(DATA_SEND_BY_SERVER));
+
+	remote_addr_new_msg = data_to_recv.global_addr.addr_NewMsgFlag;
+	remote_addr_heart_beat = data_to_recv.global_addr.addr_TimeHeartBeat;
+	remote_addr_IO_CMD = data_to_recv.global_addr.addr_IO_Cmd_Msg;
+
+	qp_pal_data.comm_tag = data_to_recv.qp.comm_tag;
+	qp_pal_data.lid = data_to_recv.qp.lid;
+	qp_pal_data.psn = data_to_recv.qp.psn;
+	qp_pal_data.qp_n = data_to_recv.qp.qp_n;
+
+	pal_remote_mem.comm_tag = data_to_recv.ib_mem.comm_tag;
+	pal_remote_mem.addr = data_to_recv.ib_mem.addr;
+	pal_remote_mem.key = data_to_recv.ib_mem.key;
+
+//	printf("(%d, %d, %d) (%d, %d, %d)\n", qp_my_data.lid, qp_my_data.qp_n, qp_my_data.psn, qp_pal_data.lid, qp_pal_data.qp_n, qp_pal_data.psn);
+//	printf("(%ld, %d) (%ld, %d)\n", my_remote_mem.addr, my_remote_mem.key, pal_remote_mem.addr, pal_remote_mem.key);
+
+	if(bDebug)	printf("INFO> tid = %d Server (%d, %d, %d) Client (%d, %d, %d)\n", tid, qp_pal_data.lid, qp_pal_data.qp_n, qp_pal_data.psn, qp_my_data.lid, qp_my_data.qp_n, qp_my_data.psn);
+	IB_modify_qp();
+
+//	read(sock, &(Global_Addr_Data), sizeof(GLOBAL_ADDR_DATA));
+//	assert(Global_Addr_Data.comm_tag == TAG_GLOBAL_ADDR_INFO);
+//	remote_addr_new_msg = Global_Addr_Data.addr_NewMsgFlag;
+//	remote_addr_heart_beat = Global_Addr_Data.addr_TimeHeartBeat;
+//	remote_addr_IO_CMD = Global_Addr_Data.addr_IO_Cmd_Msg;
+
+	close(sock);
+
 	pthread_mutex_lock(&ht_qp_lock);
 
 	pthread_mutex_lock(&(pFileServerList->FS_List[IdxServer].fs_qp_lock));
@@ -214,38 +334,28 @@ void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t si
 	idx = pHT_qp->DictInsertAuto(tid, &elt_list_qp, &ht_table_qp);
 	pClient_qp_List[idx] = this;
 	pClient_qp[IdxServer] = this;
-	pthread_mutex_unlock(&ht_qp_lock);
-
-	gettimeofday(&tm2, NULL);
-	t = 1000000 * (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec);
-	printf("DBG> t1 = %lld\n", t);
-}
-
-void CLIENT_QUEUEPAIR::Try_Closing_Socket(void)
-{
-	int tag;
 	
-	tag = TAG_DONE;
-	write(sock, &tag, sizeof(int));
-	tag = 0;
-	read(sock, &tag, sizeof(int));
-	if(tag == TAG_DONE)	{
-		close(sock);
-		printf("Closed socket.\n");
-	}
-	else	{
-		printf("Error! Unexpected value = %x\n", tag);
-	}
+	nPut = 0;
+	nGet = 0;
+	nPut_Done = 0;
+	nGet_Done = 0;
+		
+	pthread_mutex_unlock(&ht_qp_lock);
 }
-
 
 void CLIENT_QUEUEPAIR::Setup_Socket(char szServerIP[])
 {
     struct sockaddr_in serv_addr; 
+	int one = 1;
+	struct timeval tm1, tm2;	// tm1.tv_sec
+	unsigned long long t;
+
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) { 
         printf("\n Socket creation error \n"); 
         return; 
     } 
+
+    if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one)) < 0)	perror("setsockopt(2) error");
 	
     serv_addr.sin_family = AF_INET; 
     serv_addr.sin_port = htons(PORT); 
@@ -254,29 +364,38 @@ void CLIENT_QUEUEPAIR::Setup_Socket(char szServerIP[])
     if(inet_pton(AF_INET, szServerIP, &serv_addr.sin_addr)<=0)  { 
         printf("\nInvalid address/ Address not supported \n"); 
         return; 
-    } 
+    }
 	
+//	gettimeofday(&tm1, NULL);
     if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) { 
         printf("\nConnection Failed \n"); 
-        return; 
-    } 
+        return;
+    }
+//	gettimeofday(&tm2, NULL);
+//	t = 1000000 * (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec);
+//	printf("DBG> Rank = %d t_connect = %lld\n", mpi_rank, t);
+
+    if (setsockopt(sock, SOL_TCP, TCP_NODELAY, &one, sizeof(one)) < 0)	perror("setsockopt(2) error");
 }
 
-struct ibv_device** CLIENT_QUEUEPAIR::dev_list_=NULL;
-struct ibv_context* CLIENT_QUEUEPAIR::context_=NULL;
-struct ibv_pd* CLIENT_QUEUEPAIR::pd_=NULL;
-struct ibv_port_attr CLIENT_QUEUEPAIR::port_attr_={};
-int CLIENT_QUEUEPAIR::Done_IB_PD_Init = 0;
+//struct ibv_device** CLIENT_QUEUEPAIR::dev_list_=NULL;
+//struct ibv_context* CLIENT_QUEUEPAIR::context_=NULL;
+//struct ibv_pd* CLIENT_QUEUEPAIR::pd_=NULL;
+//struct ibv_port_attr CLIENT_QUEUEPAIR::port_attr_={};
+//int CLIENT_QUEUEPAIR::Done_IB_PD_Init = 0;
 
 void CLIENT_QUEUEPAIR::Init_IB_Env(void)
 {
 	int ret;
 	int nDevices;
 	struct ibv_device_attr device_attr;
+	struct timeval tm1, tm2;	// tm1.tv_sec
+	unsigned long long t;
 
 	pthread_mutex_lock(&process_lock);
 	
 	if(Done_IB_PD_Init == 0)	{
+//		gettimeofday(&tm1, NULL);
 		dev_list_ = ibv_get_device_list(&nDevices);
 		
 		if (!dev_list_) {
@@ -284,6 +403,11 @@ void CLIENT_QUEUEPAIR::Init_IB_Env(void)
 			fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_get_device_list (errno=%d).\n", __FILE__, __LINE__, errno_backup);
 			exit(1);
 		}
+//		gettimeofday(&tm2, NULL);
+//		t = 1000000 * (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec);
+//		printf("DBG> rank = %d ibv_get_device_list = %lld\n", mpi_rank, t);
+
+//		gettimeofday(&tm1, NULL);
 		for (int i = 0; i < nDevices; i++) {
 			if (!dev_list_[i]) {
 				continue;
@@ -296,29 +420,44 @@ void CLIENT_QUEUEPAIR::Init_IB_Env(void)
 			fprintf(stderr, "Error occured at %s:L%d. Failure: No HCA can use.\n", __FILE__, __LINE__);
 			exit(1);
 		}
+//		gettimeofday(&tm2, NULL);
+//		t = 1000000 * (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec);
+//		printf("DBG> rank = %d t_ibv_open_device = %lld\n", mpi_rank, t);
 		
+//		gettimeofday(&tm1, NULL);
 		ret = ibv_query_device(context_, &device_attr);
-		printf("max_qp = %d max_qp_wr = %d\n", device_attr.max_qp, device_attr.max_qp_wr);
+//		printf("max_qp = %d max_qp_wr = %d\n", device_attr.max_qp, device_attr.max_qp_wr);
+//		gettimeofday(&tm2, NULL);
+//		t = 1000000 * (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec);
+//		printf("DBG> rank = %d t_ibv_query_device = %lld\n", mpi_rank, t);
 		
+//		gettimeofday(&tm1, NULL);
 		ret = ibv_query_port(context_, 1, &port_attr_);
 		if (ret != 0 || port_attr_.lid == 0) {
 			fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_query_port.\n", __FILE__, __LINE__);
 			exit(1);
 		}
+//		gettimeofday(&tm2, NULL);
+//		t = 1000000 * (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec);
+//		printf("DBG> rank = %d t_ibv_query_port = %lld\n", mpi_rank, t);
 		
+//		gettimeofday(&tm1, NULL);
 		pd_ = ibv_alloc_pd(context_);
 		if (!pd_) {
 			fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_alloc_pd.\n", __FILE__, __LINE__);
 			exit(1);
 		}
+//		gettimeofday(&tm2, NULL);
+//		t = 1000000 * (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec);
+//		printf("DBG> rank = %d t_ibv_alloc_pd = %lld\n", mpi_rank, t);
 		Done_IB_PD_Init = 1;
 	}
 	pthread_mutex_unlock(&process_lock);
 	
-	nPut = 0;
-	nGet = 0;
-	nPut_Done = 0;
-	nGet_Done = 0;
+//	nPut = 0;
+//	nGet = 0;
+//	nPut_Done = 0;
+//	nGet_Done = 0;
 }
 
 
@@ -334,7 +473,7 @@ void CLIENT_QUEUEPAIR::Close_QueuePair(void)
 	pthread_mutex_unlock(&(pFileServerList->FS_List[IdxServer].fs_qp_lock));
 
 	// release queues
-	gettimeofday(&tm1, NULL);
+//	gettimeofday(&tm1, NULL);
 	if (queue_pair)	{
 		ibv_destroy_qp(queue_pair);
 		queue_pair = NULL;
@@ -350,14 +489,15 @@ void CLIENT_QUEUEPAIR::Close_QueuePair(void)
 	// release memory region which is nonblocking-io but not freed.
 	ibv_dereg_mr(mr_rem);
 	ibv_dereg_mr(mr_loc);
+	ibv_dereg_mr(mr_loc_qp_Obj);
 
-	gettimeofday(&tm2, NULL);
-	t = 1000000 * (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec);
-	printf("DBG> t_release = %lld\n", t);
+//	gettimeofday(&tm2, NULL);
+//	t = 1000000 * (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec);
+//	printf("DBG> t_release = %lld\n", t);
 	
-//	if (pd_ != NULL) ibv_dealloc_pd(pd_);
-//	if (context_ != NULL)	ibv_close_device(context_);
-//	if (dev_list_ != NULL)	ibv_free_device_list(dev_list_);
+	if (pd_ != NULL) ibv_dealloc_pd(pd_);
+	if (context_ != NULL)	ibv_close_device(context_);
+	if (dev_list_ != NULL)	ibv_free_device_list(dev_list_);
 }
 
 void CLIENT_QUEUEPAIR::IB_modify_qp(void)
@@ -540,9 +680,11 @@ int CLIENT_QUEUEPAIR::IB_Put(void* loc_buf, uint32_t lkey, void* rem_buf, uint32
 				return 1;
 			}
 			else	{
-				fprintf(stderr, "ibv_poll_cq() return code is %d\n",ne);
-				exit(1);
-				return 1;
+//				fprintf(stderr, "ibv_poll_cq() return code is %d\n",ne);
+//				exit(1);
+//				return 1;
+				fprintf(stderr, "ibv_poll_cq() return code is %d. nPut = %ld\n",ne, nPut);
+				break;
 			}
 		}
 	}
@@ -641,15 +783,25 @@ static void Take_a_Short_Nap(int nsec)
 
 static void Read_FS_Param(void)
 {
-	char szFileName[128];
+	char szFileName[128], *szServerConf=NULL;
 	FILE *fIn;
 	int i, j, nItems;
 	
 	sprintf(szFileName, "/dev/shm/%s", FS_PARAM_FILE);
 	fIn = fopen(szFileName, "r");
 	if(fIn == NULL)	{
-		printf("ERROR> Failed to open file %s\nQuit\n", szFileName);
-		exit(1);
+		szServerConf = getenv("MYFS_CONF");
+		if(szServerConf == NULL)	{
+			printf("ERROR> Failed to open file %s and get env MYFS_CONF\nQuit\n", szFileName);
+			exit(1);
+		}
+		else	{
+			fIn = fopen(szServerConf, "r");
+			if(fIn == NULL)	{
+				printf("ERROR> Failed to open file %s and file %s\nQuit\n", szFileName, szServerConf);
+				exit(1);
+			}
+		}
 	}
 	
 	nItems = fscanf(fIn, "%d%d", &(pFileServerList->nFSServer), &(pFileServerList->nNUMAPerNode));
@@ -700,12 +852,13 @@ static int QueryLocalIP(void)
 	return *((int*)pIP);
 }
 
-__attribute__((constructor)) void Init_Client()
+//__attribute__((constructor)) void Init_Client()
+void Init_Client()
 {
 	int i, shm_fd, To_Init=0;
 	char mutex_name[]="shm_fs_param";
 	void *p_shm;
-	char *szEnvJobID=NULL, *szEnvNNode=NULL;
+	char *szEnvJobID=NULL, *szEnvNNode=NULL, *szEnvDebug=NULL;
 	
 	pHT_qp = (CHASHTABLE_INT *)malloc(CHASHTABLE_INT::GetStorageSize(MAX_QP_PER_PROCESS));
 	pHT_qp->DictCreate(MAX_QP_PER_PROCESS, &elt_list_qp, &ht_table_qp);	// init hash table
@@ -779,7 +932,7 @@ __attribute__((constructor)) void Init_Client()
 		memcpy(&(FileServerListLocal.FS_List), &(pFileServerList->FS_List), sizeof(FS_SEVER)*pFileServerList->nFSServer);
 		pFileServerList->myip = QueryLocalIP();
 		pFileServerList->Init_Done = 1;
-		printf("ip = %x\n", pFileServerList->myip);
+//		printf("ip = %x\n", pFileServerList->myip);
 	}
 
 	if(jobid == 0)	{
@@ -800,28 +953,63 @@ __attribute__((constructor)) void Init_Client()
 			nnode_this_job = atoi(szEnvNNode);
 		}
 	}
-	printf("DBG> JobID = %d NNode = %d\n", jobid, nnode_this_job);
+//	printf("DBG> JobID = %d NNode = %d\n", jobid, nnode_this_job);
 	
+	szEnvDebug = getenv("MYFS_DEBUG");
+	if(szEnvDebug)	{
+		if(atoi(szEnvDebug) == 1)	bDebug = 1;
+	}
 }
 
 __attribute__((destructor)) void Finalize_Client()
 {
 	int i;
-	
+	IO_CMD_MSG *pIO_Cmd=NULL;
+
 	pthread_mutex_lock(&ht_qp_lock);
 	
 	if(pHT_qp == NULL)	return;
+
 	for(i=0; i<MAX_QP_PER_PROCESS; i++)	{
+		if(pClient_qp_List[i])	{
+			if(pClient_qp_List[i]->queue_pair)	{	// to put a msg to let server close this associated QP
+				pIO_Cmd = (IO_CMD_MSG *)(pClient_qp_List[i]->mr_loc->addr);
+				assert(pIO_Cmd != NULL);
+//				local_mr = pClient_qp_List[i]->IB_RegisterBuf_RW_Local_Remote((void*)pIO_Cmd, sizeof(IO_CMD_MSG));
+				
+				pIO_Cmd->rem_buff = 0;	// NO need for writing back
+				pIO_Cmd->rkey = 0;
+				pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_DISCONNECT;
+//				Send_IO_Request(idx_fs);
+				// send the IO request first
+				pClient_qp_List[i]->IB_Put((void*)pIO_Cmd, pClient_qp_List[i]->mr_loc->lkey, (void*)(pClient_qp_List[i]->remote_addr_IO_CMD + sizeof(IO_CMD_MSG)*pClient_qp_List[i]->Idx_fs), pClient_qp_List[i]->pal_remote_mem.key, sizeof(IO_CMD_MSG));
+
+				// send a msg to notify that a new IO quest is coming.
+				*((unsigned char *)pIO_Cmd) = TAG_NEW_REQUEST;
+				pClient_qp_List[i]->IB_Put((void*)pIO_Cmd, pClient_qp_List[i]->mr_loc->lkey, (void*)(pClient_qp_List[i]->remote_addr_new_msg + sizeof(char)*pClient_qp_List[i]->Idx_fs), pClient_qp_List[i]->pal_remote_mem.key, 1);
+
+//				ibv_dereg_mr(local_mr);
+			}
+		}
+	}
+
+
+	for(i=0; i<MAX_QP_PER_PROCESS; i++)	{	// destroy client side QP
 		if(pClient_qp_List[i])	{
 			if(pClient_qp_List[i]->queue_pair)	{
 				pClient_qp_List[i]->Close_QueuePair();
 				pHT_qp->DictDelete(pClient_qp_List[i]->tid, &elt_list_qp, &ht_table_qp);
 
-				pthread_mutex_lock(&(pFileServerList->FS_List[pClient_qp_List[i]->Idx_fs].fs_qp_lock));
-				pFileServerList->FS_List[pClient_qp_List[i]->Idx_fs].nQP ++;
-				pthread_mutex_unlock(&(pFileServerList->FS_List[pClient_qp_List[i]->Idx_fs].fs_qp_lock));
+//				pthread_mutex_lock(&(pFileServerList->FS_List[pClient_qp_List[i]->Idx_fs].fs_qp_lock));
+//				pFileServerList->FS_List[pClient_qp_List[i]->Idx_fs].nQP --;
+//				pthread_mutex_unlock(&(pFileServerList->FS_List[pClient_qp_List[i]->Idx_fs].fs_qp_lock));
 			}
 			free(pClient_qp_List[i]);
+			if(loc_buff)	{
+				free(loc_buff);
+				free(rem_buff);
+				loc_buff = rem_buff = NULL;
+			}
 			pClient_qp_List[i] = NULL;
 		}
 	}
@@ -831,6 +1019,7 @@ __attribute__((destructor)) void Finalize_Client()
 	
 	pthread_mutex_destroy(&ht_qp_lock);
 
+/*
 	if(CLIENT_QUEUEPAIR::Done_IB_PD_Init)	{
 		pthread_mutex_lock(&process_lock);
 		if (CLIENT_QUEUEPAIR::pd_ != NULL) ibv_dealloc_pd(CLIENT_QUEUEPAIR::pd_);
@@ -839,7 +1028,7 @@ __attribute__((destructor)) void Finalize_Client()
 		CLIENT_QUEUEPAIR::Done_IB_PD_Init = 0;
 		pthread_mutex_unlock(&process_lock);
 	}
-
+*/
 	pthread_mutex_destroy(&process_lock);
 }
 
@@ -864,7 +1053,7 @@ static void Update_Queue_Pair_HeartBeat_Time(void)
 					pClient_qp_List[i]->qp_heart_beat_t = t_cur;
 					// Write new heart beat!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 //					printf("DBG> Addr pClient_qp_List[i]->remote_addr_heart_beat = %p\n", (void *)(pClient_qp_List[i]->remote_addr_heart_beat));
-					printf("DBG> Write heart beat %ld\n", t_cur);
+//					printf("DBG> Write heart beat %ld\n", t_cur);
 					pClient_qp_List[i]->IB_Put(&(pClient_qp_List[i]->qp_heart_beat_t), pClient_qp_List[i]->mr_loc_qp_Obj->lkey, (void *)(pClient_qp_List[i]->remote_addr_heart_beat), pClient_qp_List[i]->pal_remote_mem.key, sizeof(time_t));
 				}
 			}
@@ -959,8 +1148,8 @@ static void Setup_Signal_QueuePair(void)
 	
 	on_exit(Close_QP, NULL);
 
-	signal(SIGALRM, sigalarm_handler); // Register signal handler
-	alarm(T_FREQ_CHECK_ALARM_HB);  // Scheduled alarm after 2 seconds
+//	signal(SIGALRM, sigalarm_handler); // Register signal handler
+//	alarm(T_FREQ_CHECK_ALARM_HB);  // Scheduled alarm after 2 seconds
 }
 
 #endif

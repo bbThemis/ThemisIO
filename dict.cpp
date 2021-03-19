@@ -367,6 +367,8 @@ int CHASHTABLE_CHAR::DictSearch(const char *key, struct elt_Char ** p_elt_list, 
 //	*fn_hash = fast_hash(size, key);
 //	idx = (*p_ht_table)[*fn_hash];
 	*fn_hash = XXH64(key, strlen(key), 0);
+//	if( (*fn_hash) == 0)	*fn_hash = XXH64(key, strlen(key), 0);
+
 	idx = (*p_ht_table)[(*fn_hash) & size];
 	if(idx == -1)	{
 		return (-1);
