@@ -7,8 +7,8 @@
 //#define MAX_FS_SERVER	(2)
 
 //#define QP_PUT_TIMEOUT_MS	(1000)	// one second timeout
-#define QP_PUT_TIMEOUT_MS	(2000)	// two seconds timeout
-#define QP_WAIT_RESULT_TIMEOUT_MS	(2500)	// one second timeout
+#define QP_PUT_TIMEOUT_MS	(200000)	// two seconds timeout
+#define QP_WAIT_RESULT_TIMEOUT_MS	(250000)	// one second timeout
 
 #define MAX_FS_SERVER	(128)
 #define MAX_QP_PER_PROCESS	(512)	// 256. Assume half of 512 is used. 

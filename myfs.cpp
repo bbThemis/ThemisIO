@@ -373,7 +373,7 @@ int my_openfile(char szFileName[], int oflags, ...)
 		}
 		else	{	// opening existing file
 			if(bFlagTrunc)	{
-				Truncate_File(file_idx);
+				Truncate_File(file_idx, 0);
 			}
 			pthread_mutex_unlock(&(create_new_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 			return openfile_by_index(file_idx, bAppend);
@@ -497,60 +497,190 @@ int my_close(int fd)
 	return 0;
 }
 
-int Truncate_File(int file_idx)
+int Truncate_File(int file_idx, size_t size)
 {
 	long int nSize=0;
-	int i, count=0, Done = 0;
+	int i, count=0, Done = 0, idx_block;
 	DirectPointer *pDirectPointer, *pExtraPointer;
 	void *Addr_List[MAX_NUM_BLOCKS_TO_FREE];
+	META_INFO *pFileMetaInfo;
 
-	if(pMetaData[file_idx].st_size == 0)	return 0;
+	pFileMetaInfo = &(pMetaData[file_idx]);
 
-	pDirectPointer = pMetaData[file_idx].DiretData;
-	pExtraPointer = pMetaData[file_idx].pExtraData;
+	if(pFileMetaInfo->st_size == 0)	return 0;
 
-	for(i=0; i<pMetaData[file_idx].nDirectPointer; i++)	{
-		if(pDirectPointer[i].AddressofData)	{
-			Addr_List[count] = (void *)(pDirectPointer[i].AddressofData);
-			count++;
-		}
-	}
-	i = 0;
+	pDirectPointer = pFileMetaInfo->DiretData;
+	pExtraPointer = pFileMetaInfo->pExtraData;
 
-	while(Done == 0)	{
-		for(; i<pMetaData[file_idx].nExtraPointer; i++)	{
-			if(pExtraPointer[i].AddressofData)	{
-				Addr_List[count] = (void *)(pExtraPointer[i].AddressofData);
+	if(size == 0)	{
+		for(i=0; i<pMetaData[file_idx].nDirectPointer; i++)	{
+			if(pDirectPointer[i].AddressofData)	{
+				Addr_List[count] = (void *)(pDirectPointer[i].AddressofData);
 				count++;
-				if(count >= MAX_NUM_BLOCKS_TO_FREE_M1)	{
-					break;
-				}
 			}
 		}
-		Addr_List[count] = NULL;
-		pMem_Allocator->Mem_Batch_Free(Addr_List);	// free the memory pages of file content
-		if(count == MAX_NUM_BLOCKS_TO_FREE_M1)	count = 0;	// again
-		if(i>=pMetaData[file_idx].nExtraPointer)	Done = 1;
-	}
+		i = 0;
 
-	if(pMetaData[file_idx].nExtraPointer)	{
-		ncx_slab_free(sp_ExtraPointers, pExtraPointer);
-		pMetaData[file_idx].nExtraPointer = 0;
-		pMetaData[file_idx].nMaxExtraPointer = 0;
-		pMetaData[file_idx].pExtraData = NULL;
-	}
+		while(Done == 0)	{
+			for(; i<pMetaData[file_idx].nExtraPointer; i++)	{
+				if(pExtraPointer[i].AddressofData)	{
+					Addr_List[count] = (void *)(pExtraPointer[i].AddressofData);
+					count++;
+					if(count >= MAX_NUM_BLOCKS_TO_FREE_M1)	{
+						break;
+					}
+				}
+			}
+			Addr_List[count] = NULL;
+			pMem_Allocator->Mem_Batch_Free(Addr_List);	// free the memory pages of file content
+			if(count == MAX_NUM_BLOCKS_TO_FREE_M1)	count = 0;	// again
+			if(i>=pMetaData[file_idx].nExtraPointer)	Done = 1;
+		}
 
-	pMetaData[file_idx].nDirectPointer = 0;
-	pMetaData[file_idx].nSizeAllocated = 0;
-	pMetaData[file_idx].st_size = 0;
-	pMetaData[file_idx].st_blocks = 0;
+		if(pMetaData[file_idx].nExtraPointer)	{
+			ncx_slab_free(sp_ExtraPointers, pExtraPointer);
+			pFileMetaInfo->nExtraPointer = 0;
+			pFileMetaInfo->nMaxExtraPointer = 0;
+			pFileMetaInfo->pExtraData = NULL;
+		}
+
+		pFileMetaInfo->nDirectPointer = 0;
+		pFileMetaInfo->nSizeAllocated = 0;
+		pFileMetaInfo->st_size = 0;
+		pFileMetaInfo->st_blocks = 0;
+	}
+	else if(size > pFileMetaInfo->nSizeAllocated)	{	// Need to allocate a new block!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		void *pNewBuff=NULL;
+		size_t nBytesJustAllocated;
+		int nDirectPointer, nExtraPointer, nExtraPointerNewlyAllocated;
+		DirectPointer *pExtraData_Org;
+
+		pNewBuff = pMem_Allocator->Mem_Alloc(size - pFileMetaInfo->nSizeAllocated, &nBytesJustAllocated);
+		assert( (pNewBuff != NULL) && (nBytesJustAllocated > 0) );
+		nDirectPointer = pFileMetaInfo->nDirectPointer;
+
+		if(nDirectPointer < NUM_DIRCT_PT)	{	// append this pointer
+			if(pFileMetaInfo->st_size < (pFileMetaInfo->DiretData[nDirectPointer-1].FileOffset + pFileMetaInfo->DiretData[nDirectPointer-1].DataBlockSize) )	{
+				memset((void*)( pFileMetaInfo->DiretData[nDirectPointer-1].AddressofData + (pFileMetaInfo->st_size - pFileMetaInfo->DiretData[nDirectPointer-1].FileOffset) ), 0, pFileMetaInfo->DiretData[nDirectPointer-1].FileOffset + pFileMetaInfo->DiretData[nDirectPointer-1].DataBlockSize - pFileMetaInfo->st_size);
+			}
+
+			pFileMetaInfo->DiretData[nDirectPointer].AddressofData = (ULongInt)pNewBuff;
+			pFileMetaInfo->DiretData[nDirectPointer].FileOffset = (nDirectPointer > 0) ? (pFileMetaInfo->DiretData[nDirectPointer-1].FileOffset + pFileMetaInfo->DiretData[nDirectPointer-1].DataBlockSize) : (0L);
+			pFileMetaInfo->DiretData[nDirectPointer].DataBlockSize = nBytesJustAllocated;
+			memset((void*)(pFileMetaInfo->DiretData[nDirectPointer].AddressofData), 0, size-pFileMetaInfo->DiretData[nDirectPointer].FileOffset);
+			pFileMetaInfo->nDirectPointer++;
+		}
+		else	{
+			nExtraPointer = pFileMetaInfo->nExtraPointer;
+			if(pFileMetaInfo->nMaxExtraPointer <= nExtraPointer)	{	// Need to reallocate the storage for pExtraData[]
+				pExtraData_Org = pFileMetaInfo->pExtraData;
+				nExtraPointerNewlyAllocated = pFileMetaInfo->nMaxExtraPointer + max((pFileMetaInfo->nMaxExtraPointer)>>2, DEFAULT_NUM_EXTRA_PT);
+				pFileMetaInfo->pExtraData = (DirectPointer *)ncx_slab_alloc(sp_ExtraPointers, nExtraPointerNewlyAllocated*sizeof(DirectPointer));
+				if(nExtraPointer)	memcpy(pFileMetaInfo->pExtraData, pExtraData_Org, sizeof(DirectPointer)*nExtraPointer);
+				if(pExtraData_Org)	ncx_slab_free(sp_ExtraPointers, pExtraData_Org);
+				pFileMetaInfo->nMaxExtraPointer = nExtraPointerNewlyAllocated;
+			}
+			if(nExtraPointer == 0)	{
+				if(pFileMetaInfo->st_size < (pFileMetaInfo->DiretData[NUM_DIRCT_PT-1].FileOffset + pFileMetaInfo->DiretData[NUM_DIRCT_PT-1].DataBlockSize) )	{
+					memset((void*)( pFileMetaInfo->DiretData[NUM_DIRCT_PT-1].AddressofData + (pFileMetaInfo->st_size - pFileMetaInfo->DiretData[NUM_DIRCT_PT-1].FileOffset) ), 0, pFileMetaInfo->DiretData[NUM_DIRCT_PT-1].FileOffset + pFileMetaInfo->DiretData[NUM_DIRCT_PT-1].DataBlockSize - pFileMetaInfo->st_size);
+				}
+			}
+			else	{
+				if(pFileMetaInfo->st_size < (pFileMetaInfo->pExtraData[nExtraPointer-1].FileOffset + pFileMetaInfo->pExtraData[nExtraPointer-1].DataBlockSize) )	{
+					memset((void*)( pFileMetaInfo->pExtraData[nExtraPointer-1].AddressofData + (pFileMetaInfo->st_size - pFileMetaInfo->pExtraData[nExtraPointer-1].FileOffset) ), 0, pFileMetaInfo->pExtraData[nExtraPointer-1].FileOffset + pFileMetaInfo->pExtraData[nExtraPointer-1].DataBlockSize - pFileMetaInfo->st_size);
+				}
+			}
+			pFileMetaInfo->pExtraData[nExtraPointer].AddressofData = (ULongInt)pNewBuff;
+			pFileMetaInfo->pExtraData[nExtraPointer].FileOffset = (nExtraPointer > 0) ? (pFileMetaInfo->pExtraData[nExtraPointer-1].FileOffset + pFileMetaInfo->pExtraData[nExtraPointer-1].DataBlockSize) : (pFileMetaInfo->DiretData[NUM_DIRCT_PT-1].FileOffset + pFileMetaInfo->DiretData[NUM_DIRCT_PT-1].DataBlockSize);
+			pFileMetaInfo->pExtraData[nExtraPointer].DataBlockSize = nBytesJustAllocated;
+			memset((void*)(pFileMetaInfo->pExtraData[nExtraPointer].AddressofData), 0, size-pFileMetaInfo->pExtraData[nExtraPointer].FileOffset);
+
+			pFileMetaInfo->nExtraPointer++;
+		}
+		pFileMetaInfo->nSizeAllocated += nBytesJustAllocated;
+		pFileMetaInfo->st_blocks = (pFileMetaInfo->nSizeAllocated) >> 9;	// the number of blocks of 512 bytes
+		pFileMetaInfo->st_size = size;
+	}
+	else	{	// No need to allocate storae. May need to fill zero or free storage partially. 
+		idx_block = Query_Index_StorageBlock_with_Offset(file_idx, size);
+		if(idx_block < pFileMetaInfo->nDirectPointer)	{
+			memset((void*)(pFileMetaInfo->DiretData[idx_block].AddressofData + (size - pFileMetaInfo->DiretData[idx_block].FileOffset) ), 0,  pFileMetaInfo->DiretData[idx_block].FileOffset + pFileMetaInfo->DiretData[idx_block].DataBlockSize - size );
+			for(i=idx_block+1; i<pFileMetaInfo->nDirectPointer; i++)	{
+				if(pDirectPointer[i].AddressofData)	{
+					Addr_List[count] = (void *)(pDirectPointer[i].AddressofData);
+					count++;
+				}
+			}
+
+			i = 0;
+			while(Done == 0)	{
+				for(; i<pFileMetaInfo->nExtraPointer; i++)	{
+					if(pExtraPointer[i].AddressofData)	{
+						Addr_List[count] = (void *)(pExtraPointer[i].AddressofData);
+						count++;
+						if(count >= MAX_NUM_BLOCKS_TO_FREE_M1)	{
+							break;
+						}
+					}
+				}
+				Addr_List[count] = NULL;
+				pMem_Allocator->Mem_Batch_Free(Addr_List);	// free the memory pages of file content
+				if(count == MAX_NUM_BLOCKS_TO_FREE_M1)	count = 0;	// again
+				if(i >= pFileMetaInfo->nExtraPointer)	Done = 1;
+			}
+
+			if(pFileMetaInfo->nExtraPointer)	{
+				ncx_slab_free(sp_ExtraPointers, pExtraPointer);
+				pFileMetaInfo->nExtraPointer = 0;
+				pFileMetaInfo->nMaxExtraPointer = 0;
+				pFileMetaInfo->pExtraData = NULL;
+			}
+
+			pFileMetaInfo->nDirectPointer = idx_block + 1;
+			pFileMetaInfo->nSizeAllocated = pFileMetaInfo->DiretData[idx_block].FileOffset + pFileMetaInfo->DiretData[idx_block].DataBlockSize;
+			pFileMetaInfo->st_size = size;
+			pFileMetaInfo->st_blocks = (pFileMetaInfo->nSizeAllocated) >> 9;
+		}
+		else	{	// in extra data region
+			i = idx_block - NUM_DIRCT_PT + 1;
+			memset((void*)(pFileMetaInfo->pExtraData[i-1].AddressofData + (size - pFileMetaInfo->pExtraData[i-1].FileOffset) ), 0,  pFileMetaInfo->pExtraData[i-1].FileOffset + pFileMetaInfo->pExtraData[i-1].DataBlockSize - size );
+			while(Done == 0)	{
+				for(; i<pFileMetaInfo->nExtraPointer; i++)	{
+					if(pExtraPointer[i].AddressofData)	{
+						Addr_List[count] = (void *)(pExtraPointer[i].AddressofData);
+						count++;
+						if(count >= MAX_NUM_BLOCKS_TO_FREE_M1)	{
+							break;
+						}
+					}
+				}
+				Addr_List[count] = NULL;
+				pMem_Allocator->Mem_Batch_Free(Addr_List);	// free the memory pages of file content
+				if(count == MAX_NUM_BLOCKS_TO_FREE_M1)	count = 0;	// again
+				if(i >= pFileMetaInfo->nExtraPointer)	Done = 1;
+			}
+			pFileMetaInfo->nExtraPointer = idx_block - NUM_DIRCT_PT + 1;
+/*
+			if(pFileMetaInfo->nExtraPointer)	{	// maybe need to shrink pExtraPointer[] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+				ncx_slab_free(sp_ExtraPointers, pExtraPointer);
+				pFileMetaInfo->nExtraPointer = 0;
+				pFileMetaInfo->nMaxExtraPointer = 0;
+				pFileMetaInfo->pExtraData = NULL;
+			}
+			pFileMetaInfo->nDirectPointer = idx_block + 1;
+*/
+			pFileMetaInfo->nSizeAllocated = pFileMetaInfo->pExtraData[idx_block-NUM_DIRCT_PT].FileOffset + pFileMetaInfo->pExtraData[idx_block-NUM_DIRCT_PT].DataBlockSize;
+			pFileMetaInfo->st_size = size;
+			pFileMetaInfo->st_blocks = (pFileMetaInfo->nSizeAllocated) >> 9;
+		}
+	}
 
 	return 0;
 }
 
 size_t my_write(int fd, const void *buf, size_t count, off_t offset)
 {
-	int Done = 0, i, nDirectPointer, nExtraPointer, nExtraPointerNewlyAllocated;
+	int Done = 0, i, nDirectPointer, nExtraPointer, nExtraPointerNewlyAllocated, idx_file;
 	size_t nBytes_Written, nBytes_Written_OneTime, nOffsetMax, nAllocatedSize, nBytesJustAllocated, nPrevOffset, count_save;
 	META_INFO *pFileMetaInfo;
 	void *pNewBuff=NULL;
@@ -558,9 +688,11 @@ size_t my_write(int fd, const void *buf, size_t count, off_t offset)
 //	Determine_Index_StorageBlock_for_Offset(fd, fd_List[fd].Offset);
 
 	count_save = count;
-	pFileMetaInfo = &(pMetaData[fd_List[fd].idx_file]);
+	idx_file = fd_List[fd].idx_file;
+	pFileMetaInfo = &(pMetaData[idx_file]);
 
-	pthread_mutex_lock(&(file_lock[fd & MAX_NUM_FILE_OP_LOCK_M1]));
+//	pthread_mutex_lock(&(file_lock[fd & MAX_NUM_FILE_OP_LOCK_M1]));
+	pthread_mutex_lock(&(file_lock[idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
 
 	nAllocatedSize = pFileMetaInfo->nSizeAllocated;
 	nOffsetMax = offset + count;
@@ -596,7 +728,7 @@ size_t my_write(int fd, const void *buf, size_t count, off_t offset)
 	}
 	pFileMetaInfo->st_size = max(pFileMetaInfo->st_size, nOffsetMax);	// update file size
 	Determine_Index_StorageBlock_for_Offset(fd, offset);
-	pthread_mutex_unlock(&(file_lock[fd & MAX_NUM_FILE_OP_LOCK_M1]));
+	pthread_mutex_unlock(&(file_lock[idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
 
 	nBytes_Written = 0;
 
@@ -712,16 +844,18 @@ inline void my_Adaptive_Write(int idx_qp, void *loc_buf, unsigned int lkey, void
 
 size_t my_write_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset)
 {
-	int Done = 0, i, nDirectPointer, nExtraPointer, nExtraPointerNewlyAllocated;
+	int Done = 0, i, nDirectPointer, nExtraPointer, nExtraPointerNewlyAllocated, idx_file;
 	size_t nBytes_Written, nBytes_Written_OneTime, nOffsetMax, nAllocatedSize, nBytesJustAllocated, nPrevOffset, count_save;
 	META_INFO *pFileMetaInfo;
 	void *pNewBuff=NULL;
 	DirectPointer *pExtraData_Org;
 
 	count_save = count;
-	pFileMetaInfo = &(pMetaData[fd_List[fd].idx_file]);
+	idx_file = fd_List[fd].idx_file;
+	pFileMetaInfo = &(pMetaData[idx_file]);
 
-	pthread_mutex_lock(&(file_lock[fd & MAX_NUM_FILE_OP_LOCK_M1]));
+//	pthread_mutex_lock(&(file_lock[fd & MAX_NUM_FILE_OP_LOCK_M1]));
+	pthread_mutex_lock(&(file_lock[idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
 
 	nAllocatedSize = pFileMetaInfo->nSizeAllocated;
 	nOffsetMax = offset + count;
@@ -761,7 +895,7 @@ size_t my_write_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void 
 	pFileMetaInfo->st_size = max(pFileMetaInfo->st_size, nOffsetMax);	// update file size
 	Determine_Index_StorageBlock_for_Offset(fd, offset);
 
-	pthread_mutex_unlock(&(file_lock[fd & MAX_NUM_FILE_OP_LOCK_M1]));
+	pthread_mutex_unlock(&(file_lock[idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
 
 	nBytes_Written = 0;
 
@@ -822,15 +956,17 @@ size_t my_write_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void 
 
 size_t my_read(int fd, void *buf, size_t count, off_t offset)
 {
-	int Done = 0, i, nExtraPointer;
+	int Done = 0, i, nExtraPointer, idx_file;
 	size_t nBytes_Read, nBytes_Read_OneTime, nAllocatedSize, nPrevOffset, count_save, nFileSize, nBytesLeft, nBytesLeftInThisBlock;
 	META_INFO *pFileMetaInfo;
 //	Determine_Index_StorageBlock_for_Offset(fd, fd_List[fd].Offset);
 
 	count_save = count;
-	pFileMetaInfo = &(pMetaData[fd_List[fd].idx_file]);
+	idx_file = fd_List[fd].idx_file;
+	pFileMetaInfo = &(pMetaData[idx_file]);
 
-	pthread_mutex_lock(&(file_lock[fd & MAX_NUM_FILE_OP_LOCK_M1]));
+//	pthread_mutex_lock(&(file_lock[fd & MAX_NUM_FILE_OP_LOCK_M1]));
+	pthread_mutex_lock(&(file_lock[idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
 	Determine_Index_StorageBlock_for_Offset(fd, offset);
 
 	nAllocatedSize = pFileMetaInfo->nSizeAllocated;
@@ -839,7 +975,7 @@ size_t my_read(int fd, void *buf, size_t count, off_t offset)
 	nBytes_Read = 0;
 	nBytesLeft = nFileSize - fd_List[fd].Offset;
 
-	pthread_mutex_unlock(&(file_lock[fd & MAX_NUM_FILE_OP_LOCK_M1]));
+	pthread_mutex_unlock(&(file_lock[idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
 
 	if(pFileMetaInfo->nDirectPointer == 0)	{	// a new file
 		return 0;	// no data available
@@ -970,15 +1106,17 @@ inline void my_Adaptive_Read(int idx_qp, void *loc_buf, unsigned int lkey, void 
 
 size_t my_read_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset)
 {
-	int Done = 0, i, nExtraPointer;
+	int Done = 0, i, nExtraPointer, idx_file;
 	size_t nBytes_Read, nBytes_Read_OneTime, nAllocatedSize, nPrevOffset, count_save, nFileSize, nBytesLeft, nBytesLeftInThisBlock;
 	META_INFO *pFileMetaInfo;
 //	Determine_Index_StorageBlock_for_Offset(fd, fd_List[fd].Offset);
 
 	count_save = count;
-	pFileMetaInfo = &(pMetaData[fd_List[fd].idx_file]);
+	idx_file = fd_List[fd].idx_file;
+	pFileMetaInfo = &(pMetaData[idx_file]);
 
-	pthread_mutex_lock(&(file_lock[fd & MAX_NUM_FILE_OP_LOCK_M1]));
+//	pthread_mutex_lock(&(file_lock[fd & MAX_NUM_FILE_OP_LOCK_M1]));
+	pthread_mutex_lock(&(file_lock[idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
 	Determine_Index_StorageBlock_for_Offset(fd, offset);
 
 	nAllocatedSize = pFileMetaInfo->nSizeAllocated;
@@ -986,7 +1124,7 @@ size_t my_read_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void *
 	
 	nBytesLeft = nFileSize - fd_List[fd].Offset;
 
-	pthread_mutex_unlock(&(file_lock[fd & MAX_NUM_FILE_OP_LOCK_M1]));
+	pthread_mutex_unlock(&(file_lock[idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
 
 	nBytes_Read = 0;
 
@@ -1140,6 +1278,66 @@ void Determine_Index_StorageBlock_for_Offset(int fd, off_t offset)
 	}
 }
 
+int Query_Index_StorageBlock_with_Offset(int idx_file, off_t offset)	// return idx_block
+{
+	int i, nDirectPointer, nExtraPointer, left, mid, right, Done = 0;
+	long int nAllocatedSize, nFileSize;
+	META_INFO *pFileMetaInfo;
+
+	pFileMetaInfo = &(pMetaData[idx_file]);
+	nDirectPointer = pFileMetaInfo->nDirectPointer;
+	nExtraPointer = pFileMetaInfo->nExtraPointer;
+	nAllocatedSize = pFileMetaInfo->nSizeAllocated;
+	nFileSize = pFileMetaInfo->st_size;
+
+	if(nDirectPointer == 0)	{	// empty file! 
+		return 0;	// New size is larger than zero since zero size has been handled already. 
+	}
+
+	if(offset > nAllocatedSize)	{	// Set after the last index
+		return ( pFileMetaInfo->nExtraPointer + pFileMetaInfo->nDirectPointer );	// need to allocate storage and fill with zero!!!
+	}
+	else if(offset == nAllocatedSize)	{	// the last index
+		return ( pFileMetaInfo->nExtraPointer + pFileMetaInfo->nDirectPointer - 1 );
+	}
+	else if(offset > ( pFileMetaInfo->DiretData[nDirectPointer-1].FileOffset + pFileMetaInfo->DiretData[nDirectPointer-1].DataBlockSize ) )	{	// in extra data region
+		left = 0;
+		right = nExtraPointer - 1;
+		mid = (left + right) >> 1;	// (left + right)/2
+		Done = 0;
+		while(1)	{
+			if(offset < pFileMetaInfo->pExtraData[mid].FileOffset)	{
+				right = mid;
+			}
+			else	{
+				left = mid;
+			}
+			mid = (left + right) >> 1;
+			if( (left + 1) >= right )	{
+				if( (offset>pFileMetaInfo->pExtraData[left].FileOffset) && ( offset <= (pFileMetaInfo->pExtraData[left].FileOffset + pFileMetaInfo->pExtraData[left].DataBlockSize) ) )	{
+					Done = 1;
+					return (left + NUM_DIRCT_PT);
+				}
+				else if( (offset>pFileMetaInfo->pExtraData[right].FileOffset) && ( offset <= (pFileMetaInfo->pExtraData[right].FileOffset + pFileMetaInfo->pExtraData[right].DataBlockSize) ) )	{
+					Done = 1;
+					return (right + NUM_DIRCT_PT);
+				}
+				if(! Done)	{
+					printf("ERROR> Fail to determine the index of data block! (file_idx = %d, %td)\n", idx_file, offset);
+				}
+				break;
+			}
+		}
+	}
+	else	{	// in direct data region
+		for(i=0; i<nDirectPointer; i++)	{	// ordered search from front to end
+			if( (offset > pFileMetaInfo->DiretData[i].FileOffset) && (offset <= (pFileMetaInfo->DiretData[i].FileOffset + pFileMetaInfo->DiretData[i].DataBlockSize ) ) )	{
+				return i;
+			}
+		}
+	}
+}
+
 off_t my_lseek(int fd, off_t offset, int whence)
 {
 	int i;
@@ -1169,9 +1367,9 @@ off_t my_lseek(int fd, off_t offset, int whence)
 		return new_offset;
 	}
 	else	{
-		pthread_mutex_lock(&(file_lock[fd & MAX_NUM_FILE_OP_LOCK_M1]));
+		pthread_mutex_lock(&(file_lock[fd_List[fd].idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
 		Determine_Index_StorageBlock_for_Offset(fd, new_offset);
-		pthread_mutex_unlock(&(file_lock[fd & MAX_NUM_FILE_OP_LOCK_M1]));
+		pthread_mutex_unlock(&(file_lock[fd_List[fd].idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
 		return new_offset;
 	}
 }
@@ -1274,7 +1472,7 @@ int my_unlink(char szFileName[])	// remove a regular file!
 	}
 	else	{
 //		printf("DBG> unlink(%s)\n", szFileName);
-		Truncate_File(file_idx);	// Release storage.
+		Truncate_File(file_idx, 0);	// Release storage.
 		my_RemoveEntryInfo(file_idx);
 
 		pthread_mutex_lock(&ht_lock);

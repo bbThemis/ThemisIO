@@ -66,6 +66,7 @@ static unsigned long int img_mylib_base=0, img_libc_base=0, img_libpthread_base=
 
 static unsigned long page_size, filter;
 
+int Get_Fd_Redirected(int fd);
 void Send_IO_Request(int idx_fs);
 int Wait_For_IO_Request_Result(int Tag_Magic);
 
@@ -147,6 +148,7 @@ typedef struct	{
 	int OpenFlag;	// the flag used in open()
 	int nSeekOpToDo;	// the number of delayed seek() operations that will be done together with read()/write(). Set as 0 when open(), read(), write(), pread(), pwrite()
 	off_t offset;
+	char szFileName[MAX_FILE_NAME_LEN];
 //	SEEK_OP_PARAM SeekList[MAX_DEFERRED_SEEK_OP];		// current status
 }FILESTATUS, *PFILESTATUS;
 
@@ -227,6 +229,9 @@ long int FirstBlockSize=0;
 static char szFunc_List[NHOOK][MAX_LEN_FUNC_NAME]={"my_open", "my_close_nocancel", "my_read", "my_write", "my_lseek", "my_unlink", "my_fxstat", "my_xstat"};	// C 
 static char szOrgFunc_List[NHOOK][MAX_LEN_FUNC_NAME]={"open64", "__close_nocancel", "__read", "__write", "lseek64", "unlink", "__fxstat", "__xstat64"};
 
+
+typedef int (*org_system)(const char *command);
+static org_system real_system=NULL;
 
 typedef int (*org_open)(const char *pathname, int oflags,...);
 static org_open real_open=NULL;
@@ -420,6 +425,30 @@ inline void Send_IO_Request(int idx_fs)
 }
 */
 
+inline int Get_Fd_Redirected(int fd)
+{
+	if(fd >= 3)	{
+		return fd;
+	}
+	else if(fd == 0)	{
+		if(fd_stdin > 0)	{
+			return fd_stdin;
+		}
+	}
+	else if(fd == 1)	{
+		if(fd_stdout > 0)	{
+			return fd_stdout;
+		}
+	}
+	else if(fd == 2)	{
+		if(fd_stderr > 0)	{
+			return fd_stderr;
+		}
+	}
+
+	return fd;
+}
+
 inline void Send_IO_Request(int idx_fs)
 {
 	IO_CMD_MSG *pIO_Cmd = (IO_CMD_MSG *)loc_buff;
@@ -603,7 +632,7 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 //			strcpy(DirList[idx_fd].szPath, szFullPath);
 //			return (idx_fd+FD_DIR_BASE);
 //		}
-		else	{	// regular file
+//		else	{	// regular file
 			idx_fd = Find_Next_Available_fd();
 			assert(idx_fd >= 0);
 			FileList[idx_fd].fd = fd;
@@ -611,8 +640,9 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 			FileList[idx_fd].OpenFlag = oflags;
 			FileList[idx_fd].nSeekOpToDo = 0;
 			FileList[idx_fd].offset = 0;	// NEED to set at the end of file if O_APPEND!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			strcpy(FileList[idx_fd].szFileName, szFullPath);
 			return (idx_fd+FD_FILE_BASE);
-		}
+//		}
 	}
 
 	// orginal open() for non-listed file
@@ -626,37 +656,70 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 	return fd;
 }
 
+extern "C" int system(const char *command)
+{
+	if(real_system==NULL)	{
+		real_system = (org_system)dlsym(RTLD_NEXT, "__libc_system");
+		assert(real_system != NULL);
+	}
+
+	printf("INFO> MPI_RANK = %d system(%s)\n", mpi_rank, command);
+
+	return real_system(command);
+}
+//extern "C" int __libc_system(const char *command) __attribute__ ( (alias ("system")) );
+
+typedef int (*org_mkostemp)(char *name_template, int flags);
+org_mkostemp real_mkostemp=NULL;
+
+extern "C" int mkostemp(char *name_template, int flags)
+{
+	char szMyTemplate[]="/dev/shm/mkostemp_XXXXXX";
+	printf("INFO> mkostemp(%s, %d)\n", name_template, flags);
+	if(real_mkostemp==NULL)   {
+		real_mkostemp = (org_mkostemp)dlsym(RTLD_NEXT, "mkostemp64");
+		assert(real_mkostemp != NULL);
+	}
+	
+	if(strncmp(name_template, "/myfs/", 6)==0)      {
+		return real_mkostemp(szMyTemplate, flags);
+	}
+	
+	return real_mkostemp(name_template, flags);
+}
+extern "C" int mkostemp64(char *name_template, int flags) __attribute__ ( (alias ("mkostemp")) );
+
 extern "C" int close(int fd)
 {
 	IO_CMD_MSG *pIO_Cmd;
 	RW_FUNC_RETURN *pResult;
 	int ret, fd_real, idx_fs;
-
-	if(real_close==NULL)	{
+	
+	if(real_close==NULL)    {
 		real_close = (org_close)dlsym(RTLD_NEXT, "close");
 		assert(real_close != NULL);
 	}
-
+	
 	if(Inited == 0) {       // init() not finished yet
 		return real_close(fd);
 	}
-
-	if(fd >= FD_DIR_BASE)	{	// directory
-		if(fd == DUMMY_FD_DIR)	{
+	
+	if(fd >= FD_DIR_BASE)   {       // directory
+		if(fd == DUMMY_FD_DIR)  {
 			printf("ERROR> Unexpected fd == DUMMY_FD_DIR in close().\n");
 			return 0;
 		}
 		Free_dirfd(fd-FD_DIR_BASE);
 		return 0;
 	}
-	else if(fd >= FD_FILE_BASE)	{	// regular file
+	else if(fd >= FD_FILE_BASE)     {       // regular file
 		fd_real = GetFileFD(fd);
 		assert(fd_real >= 0);
 		idx_fs = GetFileFSIdx(fd);
 		
 		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 		pResult = (RW_FUNC_RETURN *)rem_buff;
-		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
+		pResult->nDataSize = 0; // init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data.
 		
 		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
@@ -667,11 +730,11 @@ extern "C" int close(int fd)
 		Send_IO_Request(idx_fs);
 		
 		ret = (pResult->ret_value) & 0xFFFFFFFF;
-		if(ret < 0)	errno = pResult->myerrno;
+		if(ret < 0)     errno = pResult->myerrno;
 		Free_fd(fd-FD_FILE_BASE);
 		return ret;
 	}
-
+	
 	return real_close(fd);
 }
 extern "C" int __close(int fd) __attribute__ ( (alias ("close")) );
@@ -807,11 +870,13 @@ extern "C" ssize_t my_read(int fd, void *buf, size_t size)
 	RW_FUNC_RETURN *pResult;
 	struct ibv_mr *mr_loc_buf=NULL;
 	size_t nBytesRead;
-	int fd_real, idx_fs;
+	int fd_real, fd_Directed, idx_fs;
 
-	if(fd >= FD_FILE_BASE)	{	// regular file
-		fd_real = GetFileFD(fd);
-		idx_fs = GetFileFSIdx(fd);
+	fd_Directed = Get_Fd_Redirected(fd);
+
+	if(fd_Directed >= FD_FILE_BASE)	{	// regular file
+		fd_real = GetFileFD(fd_Directed);
+		idx_fs = GetFileFSIdx(fd_Directed);
 		
 		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 		pResult = (RW_FUNC_RETURN *)rem_buff;
@@ -828,7 +893,7 @@ extern "C" ssize_t my_read(int fd, void *buf, size_t size)
 		
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->offset = FileList[fd-FD_FILE_BASE].offset;	// always put offset parameter here!!! Same as pread() now. 
+		pIO_Cmd->offset = FileList[fd_Directed-FD_FILE_BASE].offset;	// always put offset parameter here!!! Same as pread() now. 
 		pIO_Cmd->nLen = size;
 		pIO_Cmd->fd = fd_real;
 		pIO_Cmd->nTokenNeeded = 0;
@@ -838,7 +903,7 @@ extern "C" ssize_t my_read(int fd, void *buf, size_t size)
 		
 		nBytesRead = pResult->ret_value;
 		if(nBytesRead < 0)	errno = pResult->myerrno;
-		else	FileList[fd-FD_FILE_BASE].offset += nBytesRead;	// update offset
+		else	FileList[fd_Directed-FD_FILE_BASE].offset += nBytesRead;	// update offset
 		
 		if(mr_loc_buf)	ibv_dereg_mr(mr_loc_buf);	// data were written to buf already
 		else	memcpy(buf, (char*)pResult+sizeof(RW_FUNC_RETURN)-sizeof(int), nBytesRead);
@@ -854,8 +919,8 @@ extern "C" ssize_t pread(int fd, void *buf, size_t size, off_t offset)
 	RW_FUNC_RETURN *pResult;
 	struct ibv_mr *mr_loc_buf=NULL;
 	size_t nBytesRead;
-	int fd_real, idx_fs;
-
+	int fd_real, fd_Directed, idx_fs;
+	
 	if(real_pread==NULL)	{
 		real_pread = (org_pread)dlsym(RTLD_NEXT, "pread64");
 	}
@@ -863,10 +928,11 @@ extern "C" ssize_t pread(int fd, void *buf, size_t size, off_t offset)
 	if(Inited == 0) {       // init() not finished yet
 		return real_pread(fd, buf, size, offset);
 	}
+	fd_Directed = Get_Fd_Redirected(fd);
 
 	if(fd >= FD_FILE_BASE)	{	// regular file
-		fd_real = GetFileFD(fd);
-		idx_fs = GetFileFSIdx(fd);
+		fd_real = GetFileFD(fd_Directed);
+		idx_fs = GetFileFSIdx(fd_Directed);
 		
 		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 		pResult = (RW_FUNC_RETURN *)rem_buff;
@@ -893,7 +959,7 @@ extern "C" ssize_t pread(int fd, void *buf, size_t size, off_t offset)
 		
 		nBytesRead = pResult->ret_value;
 		if(nBytesRead < 0)	errno = pResult->myerrno;
-		else	FileList[fd-FD_FILE_BASE].offset += nBytesRead;	// update offset
+		else	FileList[fd_Directed-FD_FILE_BASE].offset += nBytesRead;	// update offset
 		
 		if(mr_loc_buf)	ibv_dereg_mr(mr_loc_buf);	// data were written to buf already
 		else	memcpy(buf, (char*)pResult+sizeof(RW_FUNC_RETURN)-sizeof(int), nBytesRead);
@@ -911,11 +977,13 @@ extern "C" ssize_t my_write(int fd, const void *buf, size_t size)
 	RW_FUNC_RETURN *pResult;
 	struct ibv_mr *mr_loc_buf=NULL;
 	size_t nBytesWritten;
-	int fd_real, idx_fs;
+	int fd_real, fd_Directed, idx_fs;
 
-	if(fd >= FD_FILE_BASE)	{	// regular file
-		fd_real = GetFileFD(fd);
-		idx_fs = GetFileFSIdx(fd);
+	fd_Directed = Get_Fd_Redirected(fd);
+
+	if(fd_Directed >= FD_FILE_BASE)	{	// regular file
+		fd_real = GetFileFD(fd_Directed);
+		idx_fs = GetFileFSIdx(fd_Directed);
 		
 		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 		pResult = (RW_FUNC_RETURN *)rem_buff;
@@ -933,7 +1001,7 @@ extern "C" ssize_t my_write(int fd, const void *buf, size_t size)
 		}
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->offset = FileList[fd-FD_FILE_BASE].offset;	// always put offset parameter here!!! 
+		pIO_Cmd->offset = FileList[fd_Directed-FD_FILE_BASE].offset;	// always put offset parameter here!!! 
 		pIO_Cmd->nLen = size;
 		pIO_Cmd->fd = fd_real;
 		pIO_Cmd->nTokenNeeded = 0;
@@ -943,7 +1011,7 @@ extern "C" ssize_t my_write(int fd, const void *buf, size_t size)
 		
 		nBytesWritten = pResult->ret_value;
 		if(nBytesWritten < 0)	errno = pResult->myerrno;
-		else	FileList[fd-FD_FILE_BASE].offset += nBytesWritten;	// update offset
+		else	FileList[fd_Directed-FD_FILE_BASE].offset += nBytesWritten;	// update offset
 		
 		if(mr_loc_buf)	ibv_dereg_mr(mr_loc_buf);	// data were written to buf already
 		
@@ -959,7 +1027,7 @@ extern "C" ssize_t pwrite(int fd, const void *buf, size_t size, off_t offset)
 	RW_FUNC_RETURN *pResult;
 	struct ibv_mr *mr_loc_buf=NULL;
 	size_t nBytesWritten;
-	int fd_real, idx_fs;
+	int fd_real, fd_Directed, idx_fs;
 
 	if(real_pwrite==NULL)	{
 		real_pwrite = (org_pwrite)dlsym(RTLD_NEXT, "pwrite64");
@@ -969,9 +1037,11 @@ extern "C" ssize_t pwrite(int fd, const void *buf, size_t size, off_t offset)
 		return real_pwrite(fd, buf, size, offset);
 	}
 
-	if(fd >= FD_FILE_BASE)	{	// regular file
-		fd_real = GetFileFD(fd);
-		idx_fs = GetFileFSIdx(fd);
+	fd_Directed = Get_Fd_Redirected(fd);
+
+	if(fd_Directed >= FD_FILE_BASE)	{	// regular file
+		fd_real = GetFileFD(fd_Directed);
+		idx_fs = GetFileFSIdx(fd_Directed);
 		
 		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 		pResult = (RW_FUNC_RETURN *)rem_buff;
@@ -989,7 +1059,7 @@ extern "C" ssize_t pwrite(int fd, const void *buf, size_t size, off_t offset)
 		}
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->offset = FileList[fd-FD_FILE_BASE].offset;	// always put offset parameter here!!! 
+		pIO_Cmd->offset = FileList[fd_Directed-FD_FILE_BASE].offset;	// always put offset parameter here!!! 
 		pIO_Cmd->nLen = size;
 		pIO_Cmd->fd = fd_real;
 		pIO_Cmd->nTokenNeeded = 0;
@@ -999,7 +1069,7 @@ extern "C" ssize_t pwrite(int fd, const void *buf, size_t size, off_t offset)
 		
 		nBytesWritten = pResult->ret_value;
 		if(nBytesWritten < 0)	errno = pResult->myerrno;
-		else	FileList[fd-FD_FILE_BASE].offset += nBytesWritten;	// update offset
+		else	FileList[fd_Directed-FD_FILE_BASE].offset += nBytesWritten;	// update offset
 		
 		if(mr_loc_buf)	ibv_dereg_mr(mr_loc_buf);	// data were written to buf already
 		
@@ -1015,13 +1085,15 @@ extern "C" off_t my_lseek(int fd, off_t offset, int whence)
 {
 	IO_CMD_MSG *pIO_Cmd;
 	RW_FUNC_RETURN *pResult;
-	int ret, fd_real, idx_fs, idx_fd;
+	int ret, fd_real, fd_Directed, idx_fs, idx_fd;
 	off_t new_offset;
+
+	fd_Directed = Get_Fd_Redirected(fd);
 	
-	if(fd >= FD_FILE_BASE)	{
-		fd_real = GetFileFD(fd);
-		idx_fs = GetFileFSIdx(fd);
-		idx_fd = fd-FD_FILE_BASE;
+	if(fd_Directed >= FD_FILE_BASE)	{
+		fd_real = GetFileFD(fd_Directed);
+		idx_fs = GetFileFSIdx(fd_Directed);
+		idx_fd = fd_Directed-FD_FILE_BASE;
 		
 		switch(whence)	{
 		case SEEK_SET:
@@ -1072,7 +1144,10 @@ extern "C" off_t my_lseek(int fd, off_t offset, int whence)
 
 int dup2(int oldfd, int newfd)
 {
-	int i;
+	int i, fd_Directed, idx_io_redirect, pid;
+	unsigned long long fn_hash;
+	char szExeName[64];
+
 
 	if(real_dup2==NULL)	{
 		real_dup2 = (org_dup2)dlsym(RTLD_NEXT, "__dup2");
@@ -1081,6 +1156,33 @@ int dup2(int oldfd, int newfd)
 	if(Inited == 0) {       // init() not finished yet
 		return real_dup2(oldfd, newfd);
 	}
+
+	if( (oldfd >= FD_FILE_BASE) && (newfd < 3) )	{	// 0, 1, 2
+		Get_Exe_Name(szExeName);
+		if( (strcmp(szExeName, "bash")==0) || (strcmp(szExeName, "sh")==0) || (strcmp(szExeName, "csh")==0)  || (strcmp(szExeName, "tcsh")==0) )	{	// very likely a new process created by shell!!!
+			pid = getpid();
+			idx_io_redirect = pHT_IO_Redirect->DictSearch(pid, &elt_list_IO_Redirect, &ht_table_IO_Redirect, &fn_hash);
+			if(idx_io_redirect < 0)	{	// NOT existing!
+				pthread_mutex_lock(&(pFileServerList->lock_IO_Redirect));
+				idx_io_redirect = pHT_IO_Redirect->DictInsertAuto(pid, &elt_list_IO_Redirect, &ht_table_IO_Redirect);
+				pthread_mutex_unlock(&(pFileServerList->lock_IO_Redirect));
+			}
+			assert(idx_io_redirect >= 0);
+			
+			if(newfd == 0)	{	// stdin
+				strcpy(pIO_Redirect_List[idx_io_redirect].fNameStdin, FileList[oldfd-FD_FILE_BASE].szFileName);
+			}
+			else if(newfd == 1)	{	// stdout
+				strcpy(pIO_Redirect_List[idx_io_redirect].fNameStdout, FileList[oldfd-FD_FILE_BASE].szFileName);
+			}
+			else if(newfd == 2)	{	// stdout
+				strcpy(pIO_Redirect_List[idx_io_redirect].fNameStderr, FileList[oldfd-FD_FILE_BASE].szFileName);
+			}
+		}
+	}
+
+
+	fd_Directed = Get_Fd_Redirected(oldfd);
 
 	for(i=0; i<MAX_FD_DUP2ED; i++)	{
 		if( (Fd_Dup2_List[i].fd_dest != oldfd) && (Fd_Dup2_List[i].fd_src==newfd) && (Fd_Dup2_List[i].Closed == 0) )	{	// dup2 again
@@ -1091,7 +1193,7 @@ int dup2(int oldfd, int newfd)
 		}
 	}
 
-	if( (oldfd>=FD_FILE_BASE) && (newfd<FD_FILE_BASE) )	{
+	if( (fd_Directed>=FD_FILE_BASE) && (newfd<FD_FILE_BASE) )	{
 		if(nFD_Dup2ed >= MAX_FD_DUP2ED)	{
 			printf("ERROR: nFD_Dup2ed >= MAX_FD_DUP2ED\n");
 			errno = EBADF;
@@ -1101,7 +1203,7 @@ int dup2(int oldfd, int newfd)
 			for(i=0; i<MAX_FD_DUP2ED; i++)	{
 				if(Fd_Dup2_List[i].fd_src == -1)	{	// available
 					Fd_Dup2_List[i].fd_src = newfd;
-					Fd_Dup2_List[i].fd_dest = oldfd;
+					Fd_Dup2_List[i].fd_dest = fd_Directed;
 					Fd_Dup2_List[i].Closed = 0;
 					nFD_Dup2ed++;
 					return newfd;
@@ -1109,7 +1211,7 @@ int dup2(int oldfd, int newfd)
 			}
 		}
 	}
-	else if( (oldfd == newfd) && (oldfd>=FD_FILE_BASE) )	{
+	else if( (fd_Directed == newfd) && (fd_Directed>=FD_FILE_BASE) )	{
 		return newfd;
 	}
 	else	real_dup2(oldfd, newfd);
@@ -1290,15 +1392,17 @@ extern "C" int my_fxstat(int vers, int fd, struct stat *buf)
 {
 	IO_CMD_MSG *pIO_Cmd;
 	RW_FUNC_RETURN *pResult;
-	int ret, fd_real, idx_fs;
+	int ret, fd_real, fd_Directed, idx_fs;
 	unsigned long int ino_idx_fs;
 
-	if(fd < FD_FILE_BASE)	{	// regular file id
+	fd_Directed = Get_Fd_Redirected(fd);
+
+	if(fd_Directed < FD_FILE_BASE)	{	// regular file id
 		return real_fxstat(vers, fd, buf);
 	}
-	else if(fd < FD_DIR_BASE)	{	// my file id
-		fd_real = GetFileFD(fd);
-		idx_fs = GetFileFSIdx(fd);
+	else if(fd_Directed < FD_DIR_BASE)	{	// my file id
+		fd_real = GetFileFD(fd_Directed);
+		idx_fs = GetFileFSIdx(fd_Directed);
 
 		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 		pResult = (RW_FUNC_RETURN *)rem_buff;
@@ -1648,7 +1752,7 @@ extern "C" int fallocate(int fd, int mode, off_t offset, off_t len)
 {
 	IO_CMD_MSG *pIO_Cmd;
 	RW_FUNC_RETURN *pResult;
-	int ret, fd_real, idx_fs;
+	int ret, fd_real, fd_Directed, idx_fs;
 
 	if(real_fallocate==NULL)	{
 		real_fallocate = (org_fallocate)dlsym(RTLD_NEXT, "fallocate64");
@@ -1658,7 +1762,8 @@ extern "C" int fallocate(int fd, int mode, off_t offset, off_t len)
 		return real_fallocate(fd, mode, offset, len);
 	}
 	else	{
-		if(fd < FD_FILE_BASE)	{
+		fd_Directed = Get_Fd_Redirected(fd);
+		if(fd_Directed < FD_FILE_BASE)	{
 			return real_fallocate(fd, mode, offset, len);
 		}
 		else	{
@@ -1666,8 +1771,8 @@ extern "C" int fallocate(int fd, int mode, off_t offset, off_t len)
 			errno = ENOSYS;
 			return (-1);
 
-			fd_real = GetFileFD(fd);
-			idx_fs = GetFileFSIdx(fd);
+			fd_real = GetFileFD(fd_Directed);
+			idx_fs = GetFileFSIdx(fd_Directed);
 			
 			pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 			pResult = (RW_FUNC_RETURN *)rem_buff;
@@ -1759,6 +1864,7 @@ extern "C" int fchdir(int fd)
 
 extern "C" int fchmod(int fd, mode_t mode)
 {
+	int fd_Directed;
 	if(real_fchmod==NULL)	{
 		real_fchmod = (org_fchmod)dlsym(RTLD_NEXT, "fchmod");
 	}
@@ -1767,7 +1873,8 @@ extern "C" int fchmod(int fd, mode_t mode)
 		return real_fchmod(fd, mode);
 	}
 	else	{
-		if(fd >= FD_FILE_BASE)	{	// Always success at this moment. Need change later!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		fd_Directed = Get_Fd_Redirected(fd);
+		if(fd_Directed >= FD_FILE_BASE)	{	// Always success at this moment. Need change later!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			return 0;
 		}
 		else	{
@@ -1818,14 +1925,14 @@ extern "C" int fchmodat(int dirfd, const char *pathname, mode_t mode, int flag)
 
 extern "C" int fcntl(int fd, int cmd,...)
 {
-	int fd_save, param, OrgFunc=1, *pBuffSize, fd_dup2ed_Dest=-1, Next_Dirfd, Next_fd, nDataSize;
+	int fd_save, fd_Directed, param, OrgFunc=1, *pBuffSize, fd_dup2ed_Dest=-1, Next_Dirfd, Next_fd, nDataSize;
 	va_list arg;
 
 	if(real_fcntl == NULL)  {
 		real_fcntl = (org_fcntl)dlsym(RTLD_NEXT, "fcntl");
 	}
-	fd_save = fd;
-
+	fd_Directed = Get_Fd_Redirected(fd);
+	fd_save = fd_Directed;
 
 //	if(Inited == 0) {       // init() not finished yet
 //		if(two_args)	return real_fcntl(fd, cmd);
@@ -1854,16 +1961,16 @@ extern "C" int fcntl(int fd, int cmd,...)
       }
 
 		if(cmd == F_GETFL)	{
-			if(fd >= FD_DIR_BASE)	{
-				return DirList[fd - FD_DIR_BASE].OpenFlag;
+			if(fd_Directed >= FD_DIR_BASE)	{
+				return DirList[fd_Directed - FD_DIR_BASE].OpenFlag;
 			}
-			else if(fd >= FD_FILE_BASE)	{
-				return FileList[fd - FD_FILE_BASE].OpenFlag;
+			else if(fd_Directed >= FD_FILE_BASE)	{
+				return FileList[fd_Directed - FD_FILE_BASE].OpenFlag;
 			}
-			else	return real_fcntl(fd, cmd);
+			else	return real_fcntl(fd_Directed, cmd);
 		}
 
-		fd_dup2ed_Dest = Query_Fd_Forward_Dest(fd);
+		fd_dup2ed_Dest = Query_Fd_Forward_Dest(fd_Directed);
 		if(fd_dup2ed_Dest >= FD_FILE_BASE)	{
 			if( cmd == F_SETFD )	{
 				return 0;
@@ -1873,12 +1980,12 @@ extern "C" int fcntl(int fd, int cmd,...)
 			}
 		}
 
-		if(fd >= FD_DIR_BASE)	{
-			fd -= FD_DIR_BASE;
+		if(fd_Directed >= FD_DIR_BASE)	{
+			fd_Directed -= FD_DIR_BASE;
 			OrgFunc=0;
 		}
-		else if(fd >= FD_FILE_BASE)	{
-			fd -= FD_FILE_BASE;
+		else if(fd_Directed >= FD_FILE_BASE)	{
+			fd_Directed -= FD_FILE_BASE;
 			OrgFunc=0;
 		}
 
@@ -1889,20 +1996,20 @@ extern "C" int fcntl(int fd, int cmd,...)
 					return (-1);
 				}
 
-				nDataSize = ((MYDIR*)(DirList[fd].pDir))->size_of_Data;
+				nDataSize = ((MYDIR*)(DirList[fd_Directed].pDir))->size_of_Data;
 				MYDIR *pDir = (MYDIR *)malloc(sizeof(MYDIR) + nDataSize);
 				assert(pDir != NULL);
-				memcpy(pDir, DirList[fd].pDir, sizeof(MYDIR) + nDataSize);
+				memcpy(pDir, DirList[fd_Directed].pDir, sizeof(MYDIR) + nDataSize);
 
 				Next_Dirfd = Find_Next_Available_dirfd();
-				memcpy(&(DirList[Next_Dirfd]), &(DirList[fd]), sizeof(DIRSTATUS));
+				memcpy(&(DirList[Next_Dirfd]), &(DirList[fd_Directed]), sizeof(DIRSTATUS));
 				DirList[Next_Dirfd].pDir = (DIR*)pDir;
 				
 				return (Next_Dirfd + FD_DIR_BASE);
 			}
 			else if(fd_save >= FD_FILE_BASE)	{
 				Next_fd = Find_Next_Available_fd();
-				memcpy(&(FileList[Next_fd]), &(FileList[fd]), sizeof(FILESTATUS));
+				memcpy(&(FileList[Next_fd]), &(FileList[fd_Directed]), sizeof(FILESTATUS));
 				return (Next_fd + FD_FILE_BASE);
 			}
 		}
@@ -2008,7 +2115,7 @@ extern "C" int fsync(int fd)
 {
 	IO_CMD_MSG *pIO_Cmd;
 	RW_FUNC_RETURN *pResult;
-	int ret, fd_real, idx_fs;
+	int ret, fd_real, fd_Directed, idx_fs;
 
 	if(real_fsync==NULL)	{
 		real_fsync = (org_fsync)dlsym(RTLD_NEXT, "fsync");
@@ -2017,14 +2124,16 @@ extern "C" int fsync(int fd)
 	if(Inited == 0) {       // init() not finished yet
 		return real_fsync(fd);
 	}
-	if(fd < FD_FILE_BASE)	{
-		return real_fsync(fd);
+	fd_Directed = Get_Fd_Redirected(fd);
+
+	if(fd_Directed < FD_FILE_BASE)	{
+		return real_fsync(fd_Directed);
 	}
 	else	{
 		return 0;	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-		fd_real = GetFileFD(fd);
-		idx_fs = GetFileFSIdx(fd);
+		fd_real = GetFileFD(fd_Directed);
+		idx_fs = GetFileFSIdx(fd_Directed);
 		
 		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 		pResult = (RW_FUNC_RETURN *)rem_buff;
@@ -2048,7 +2157,7 @@ extern "C" int ftruncate(int fd, off_t length)
 {
 	IO_CMD_MSG *pIO_Cmd;
 	RW_FUNC_RETURN *pResult;
-	int ret, fd_real, idx_fs;
+	int ret, fd_real, fd_Directed, idx_fs;
 
 	if(real_ftruncate==NULL)	{
 		real_ftruncate = (org_ftruncate)dlsym(RTLD_NEXT, "ftruncate");
@@ -2058,12 +2167,13 @@ extern "C" int ftruncate(int fd, off_t length)
 		return real_ftruncate(fd, length);
 	}
 	else	{
-		if(fd < FD_FILE_BASE)	{
-			return real_ftruncate(fd, length);
+		fd_Directed = Get_Fd_Redirected(fd);
+		if(fd_Directed < FD_FILE_BASE)	{
+			return real_ftruncate(fd_Directed, length);
 		}
 		else	{
-			fd_real = GetFileFD(fd);
-			idx_fs = GetFileFSIdx(fd);
+			fd_real = GetFileFD(fd_Directed);
+			idx_fs = GetFileFSIdx(fd_Directed);
 			
 			pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 			pResult = (RW_FUNC_RETURN *)rem_buff;
@@ -2143,7 +2253,7 @@ extern "C" int futimens(int fd, const struct timespec times[2])
 {
 	IO_CMD_MSG *pIO_Cmd;
 	RW_FUNC_RETURN *pResult;
-	int ret, fd_real, idx_fs;
+	int ret, fd_real, fd_Directed, idx_fs;
 	long int *pDest, *pSrc;
 	struct timespec t_spec;
 	// sizeof(struct timespec) = 16. Copy the data to &offset. 
@@ -2156,12 +2266,13 @@ extern "C" int futimens(int fd, const struct timespec times[2])
 		return real_futimens(fd, times);
 	}
 	else	{
-		if(fd < FD_FILE_BASE)	{
-			return real_futimens(fd, times);
+		fd_Directed = Get_Fd_Redirected(fd);
+		if(fd_Directed < FD_FILE_BASE)	{
+			return real_futimens(fd_Directed, times);
 		}
 		else	{
-			fd_real = GetFileFD(fd);
-			idx_fs = GetFileFSIdx(fd);
+			fd_real = GetFileFD(fd_Directed);
+			idx_fs = GetFileFSIdx(fd_Directed);
 			
 			pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 			pResult = (RW_FUNC_RETURN *)rem_buff;
@@ -2494,6 +2605,8 @@ extern "C" int unlinkat(int dirfd, const char *pathname, int flags)	// unlink or
 
 extern "C" int isatty(int fd)
 {
+	int fd_Directed;
+
 	if(real_isatty==NULL)	{
 		real_isatty = (org_isatty)dlsym(RTLD_NEXT, "isatty");
 		assert(real_isatty != NULL);
@@ -2502,7 +2615,8 @@ extern "C" int isatty(int fd)
 		return real_isatty(fd);
 	}
 
-	if(fd >= FD_FILE_BASE)	{
+	fd_Directed = Get_Fd_Redirected(fd);
+	if(fd_Directed >= FD_FILE_BASE)	{
 		return 0;	// non-terminal
 	}
 	else	{
@@ -2798,13 +2912,14 @@ extern "C" int posix_fadvise(int fd, off_t offset, off_t len, int advice)
 {
 	IO_CMD_MSG *pIO_Cmd;
 	RW_FUNC_RETURN *pResult;
-	int ret, fd_real, idx_fs;
+	int ret, fd_real, fd_Directed, idx_fs;
 
 	if(real_posix_fadvise==NULL)	{
 		real_posix_fadvise = (org_posix_fadvise)dlsym(RTLD_NEXT, "posix_fadvise");
 	}
 
-	if(fd >= FD_FILE_BASE)	{	// Do nothing!!!
+	fd_Directed = Get_Fd_Redirected(fd);
+	if(fd_Directed >= FD_FILE_BASE)	{	// Do nothing!!!
 		return 0;
 	}
 
@@ -2816,7 +2931,7 @@ extern "C" int posix_fallocate(int fd, off_t offset, off_t len)
 {
 	IO_CMD_MSG *pIO_Cmd;
 	RW_FUNC_RETURN *pResult;
-	int ret, fd_real, idx_fs;
+	int ret, fd_real, fd_Directed, idx_fs;
 
 	if(real_posix_fallocate==NULL)	{
 		real_posix_fallocate = (org_posix_fallocate)dlsym(RTLD_NEXT, "posix_fallocate64");
@@ -2826,12 +2941,14 @@ extern "C" int posix_fallocate(int fd, off_t offset, off_t len)
 		return real_posix_fallocate(fd, offset, len);
 	}
 	else	{
-		if(fd < FD_FILE_BASE)	{
+		fd_Directed = Get_Fd_Redirected(fd);
+
+		if(fd_Directed < FD_FILE_BASE)	{
 			return real_posix_fallocate(fd, offset, len);
 		}
 		else	{
-			fd_real = GetFileFD(fd);
-			idx_fs = GetFileFSIdx(fd);
+			fd_real = GetFileFD(fd_Directed);
+			idx_fs = GetFileFSIdx(fd_Directed);
 			
 			pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 			pResult = (RW_FUNC_RETURN *)rem_buff;
@@ -4020,6 +4137,122 @@ __attribute__((constructor)) void Init_FS_Client()
 	statvfs("/dev/shm", &vfs_stat_shm);
 	
 	Inited = 1;
+	
+	//start	to check stdin, stdout, stderr
+	char szFileName[512];
+	ssize_t nNameLen;
+//	szStdin[0] = 0;
+//	szStdout[0] = 0;
+//	szStderr[0] = 0;
 
+	int pid, idx_io_redirect;
+	unsigned long long fn_hash;
+	pid = getpid();
+	idx_io_redirect = pHT_IO_Redirect->DictSearch(pid, &elt_list_IO_Redirect, &ht_table_IO_Redirect, &fn_hash);
+	if(idx_io_redirect>=0)	{	// IO redirect was recorded. 
+		if(pIO_Redirect_List[idx_io_redirect].fNameStdin[0])	{	// a valid record for stdin
+			fd_stdin = my_open(pIO_Redirect_List[idx_io_redirect].fNameStdin, O_RDONLY);
+			assert(fd_stdin >= FD_FILE_BASE);
+//			printf("INFO> stdin is redirected to %s\n", pIO_Redirect_List[idx_io_redirect].fNameStdin);
+		}
+		if(pIO_Redirect_List[idx_io_redirect].fNameStdout[0])	{	// a valid record for stdout
+			fd_stdout = my_open(pIO_Redirect_List[idx_io_redirect].fNameStdout, O_WRONLY | O_CREAT | O_TRUNC);
+			assert(fd_stdout >= FD_FILE_BASE);
+//			printf("INFO> stdout is redirected to %s\n", pIO_Redirect_List[idx_io_redirect].fNameStdout);
+		}
+		if(pIO_Redirect_List[idx_io_redirect].fNameStderr[0])	{	// a valid record for stderr
+			fd_stderr = my_open(pIO_Redirect_List[idx_io_redirect].fNameStderr, O_WRONLY | O_CREAT | O_TRUNC);
+			assert(fd_stderr >= FD_FILE_BASE);
+//			printf("INFO> stderr is redirected to %s\n", pIO_Redirect_List[idx_io_redirect].fNameStderr);
+		}
+	}
+	//end	to check stdin, stdout, stderr
 }
 
+__attribute__((destructor)) void Finalize_Client()
+{
+	int i, idx_io_redirect, pid;
+	IO_CMD_MSG *pIO_Cmd=NULL;
+	unsigned long long int fn_hash;
+
+	if(fd_stdin > 0)	close(fd_stdin);
+	if(fd_stdout > 0)	close(fd_stdout);
+	if(fd_stderr > 0)	close(fd_stderr);
+	if( (fd_stdin > 0) || (fd_stdout > 0) || (fd_stderr > 0) )	{
+		pid = getpid();
+		idx_io_redirect = pHT_IO_Redirect->DictSearch(pid, &elt_list_IO_Redirect, &ht_table_IO_Redirect, &fn_hash);
+		assert(idx_io_redirect >= 0);
+		pIO_Redirect_List[idx_io_redirect].fNameStdin[0] = 0;
+		pIO_Redirect_List[idx_io_redirect].fNameStdout[0] = 0;
+		pIO_Redirect_List[idx_io_redirect].fNameStderr[0] = 0;
+		pthread_mutex_lock(&(pFileServerList->lock_IO_Redirect));
+		pHT_IO_Redirect->DictDelete(pid, &elt_list_IO_Redirect, &ht_table_IO_Redirect);
+		pthread_mutex_unlock(&(pFileServerList->lock_IO_Redirect));
+		fd_stdin = fd_stdout = fd_stderr = -1;
+	}
+
+	pthread_mutex_lock(&ht_qp_lock);
+	
+	if(pHT_qp == NULL)	return;
+
+	for(i=0; i<MAX_QP_PER_PROCESS; i++)	{
+		if(pClient_qp_List[i])	{
+			if(pClient_qp_List[i]->queue_pair)	{	// to put a msg to let server close this associated QP
+				pIO_Cmd = (IO_CMD_MSG *)(pClient_qp_List[i]->mr_loc->addr);
+				assert(pIO_Cmd != NULL);
+//				local_mr = pClient_qp_List[i]->IB_RegisterBuf_RW_Local_Remote((void*)pIO_Cmd, sizeof(IO_CMD_MSG));
+				
+				pIO_Cmd->rem_buff = 0;	// NO need for writing back
+				pIO_Cmd->rkey = 0;
+				pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_DISCONNECT;
+//				Send_IO_Request(idx_fs);
+				// send the IO request first
+				pClient_qp_List[i]->IB_Put((void*)pIO_Cmd, pClient_qp_List[i]->mr_loc->lkey, (void*)(pClient_qp_List[i]->remote_addr_IO_CMD + sizeof(IO_CMD_MSG)*pClient_qp_List[i]->Idx_fs), pClient_qp_List[i]->pal_remote_mem.key, sizeof(IO_CMD_MSG));
+
+				// send a msg to notify that a new IO quest is coming.
+				*((unsigned char *)pIO_Cmd) = TAG_NEW_REQUEST;
+				pClient_qp_List[i]->IB_Put((void*)pIO_Cmd, pClient_qp_List[i]->mr_loc->lkey, (void*)(pClient_qp_List[i]->remote_addr_new_msg + sizeof(char)*pClient_qp_List[i]->Idx_fs), pClient_qp_List[i]->pal_remote_mem.key, 1);
+
+//				ibv_dereg_mr(local_mr);
+			}
+		}
+	}
+
+
+	for(i=0; i<MAX_QP_PER_PROCESS; i++)	{	// destroy client side QP
+		if(pClient_qp_List[i])	{
+			if(pClient_qp_List[i]->queue_pair)	{
+				pClient_qp_List[i]->Close_QueuePair();
+				pHT_qp->DictDelete(pClient_qp_List[i]->tid, &elt_list_qp, &ht_table_qp);
+
+//				pthread_mutex_lock(&(pFileServerList->FS_List[pClient_qp_List[i]->Idx_fs].fs_qp_lock));
+//				pFileServerList->FS_List[pClient_qp_List[i]->Idx_fs].nQP --;
+//				pthread_mutex_unlock(&(pFileServerList->FS_List[pClient_qp_List[i]->Idx_fs].fs_qp_lock));
+			}
+			free(pClient_qp_List[i]);
+			if(loc_buff)	{
+				free(loc_buff);
+				free(rem_buff);
+				loc_buff = rem_buff = NULL;
+			}
+			pClient_qp_List[i] = NULL;
+		}
+	}
+	free(pHT_qp);
+	pHT_qp = NULL;
+	pthread_mutex_unlock(&ht_qp_lock);
+	
+	pthread_mutex_destroy(&ht_qp_lock);
+
+/*
+	if(CLIENT_QUEUEPAIR::Done_IB_PD_Init)	{
+		pthread_mutex_lock(&process_lock);
+		if (CLIENT_QUEUEPAIR::pd_ != NULL) ibv_dealloc_pd(CLIENT_QUEUEPAIR::pd_);
+		if (CLIENT_QUEUEPAIR::context_ != NULL)	ibv_close_device(CLIENT_QUEUEPAIR::context_);
+		if (CLIENT_QUEUEPAIR::dev_list_ != NULL)	ibv_free_device_list(CLIENT_QUEUEPAIR::dev_list_);
+		CLIENT_QUEUEPAIR::Done_IB_PD_Init = 0;
+		pthread_mutex_unlock(&process_lock);
+	}
+*/
+	pthread_mutex_destroy(&process_lock);
+}
