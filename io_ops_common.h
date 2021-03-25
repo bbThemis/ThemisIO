@@ -17,8 +17,8 @@
 //#define GetFileFD(fd)               ( (fd-FD_FILE_BASE) & 0xFFFFF )
 //#define GetDirFD(fd)               ( (fd-FD_DIR_BASE) & 0xFFFFF )
 
-#define GetFileFD(fd)               ( FileList[fd-FD_FILE_BASE].fd )
-#define GetFileFSIdx(fd)            ( FileList[fd-FD_FILE_BASE].idx_fs )
+#define GetFileFD(file_descriptor)               ( FileList[file_descriptor-FD_FILE_BASE].fd )
+#define GetFileFSIdx(file_descriptor)            ( FileList[file_descriptor-FD_FILE_BASE].idx_fs )
 
 //#define GetDirFD(fd)               ( DirList[fd-FD_DIR_BASE].fd )
 //#define GetDirFSIdx(fd)            ( DirList[fd-FD_DIR_BASE].idx_fs )
@@ -74,7 +74,8 @@
 #define RF_RW_OP_DISCONNECT		(0x50)
 
 typedef struct	{
-	char szName[160];	// May need to be increased later!
+	char szName[152];	// May need to be increased later!
+//	char szName[160];	// May need to be increased later!
 	void *rem_buff;// the buffer for remote memory access. For return code, errno and results sent back!
 //	void *write_buff;	// only used for read() and pread() 
 	long int offset;	// the offset of file
@@ -92,6 +93,7 @@ typedef struct	{
 	int nTokenNeeded;	// the number of token needed to finish this operation
 	int tid;			// the index of IO worker that is handling this request
 	int idx_JobRec;		// the index of job record. It is determined by jobid which is known from QP. 
+	unsigned long int T_Queued;	// time in us when this OP was queued. 
 	int tag_magic;
 	int op;		// operation tag. Containing a magic tag at the end!
 }IO_CMD_MSG, *PIO_CMD_MSG;

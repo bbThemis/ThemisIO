@@ -162,9 +162,14 @@ void RW_Read(IO_CMD_MSG *pRF_Op_Msg)
 //	Determine_Index_StorageBlock_for_Offset(pRF_Op_Msg->fd, pRF_Op_Msg->offset);
 
 	if(pRF_Op_Msg->nLen <= DATA_COPY_THRESHOLD_SIZE)	{
-		pResult->ret_value = my_read(pRF_Op_Msg->fd, (char*)pResult+sizeof(RW_FUNC_RETURN)-sizeof(int), pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
+		if(pRF_Op_Msg->offset >= pMetaData[fd_List[pRF_Op_Msg->fd].idx_file].st_size)	{	// out of range
+			pResult->ret_value = 0;
+		}
+		else	{
+			pResult->ret_value = my_read(pRF_Op_Msg->fd, (char*)pResult+sizeof(RW_FUNC_RETURN)-sizeof(int), pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
+			pResult->myerrno = errno;
+		}
 		pResult->nDataSize = (pResult->ret_value>0) ? (sizeof(RW_FUNC_RETURN) + pResult->ret_value) : (sizeof(RW_FUNC_RETURN));
-		pResult->myerrno = errno;
 
 		pResult->Tag_Ini = (int)((long int)rem_buff & 0xFFFFFFFF);
 		pTag_End = (int*)( (char*)pResult + pResult->nDataSize - sizeof(int) );
@@ -172,12 +177,17 @@ void RW_Read(IO_CMD_MSG *pRF_Op_Msg)
 		Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 	}
 	else	{
-		pResult->ret_value = my_read_RDMA(pRF_Op_Msg->fd, idx_qp, (void*)((char*)pResult+sizeof(RW_FUNC_RETURN)), mr_shm_global->lkey, rem_buff, rkey, pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
+		if(pRF_Op_Msg->offset >= pMetaData[fd_List[pRF_Op_Msg->fd].idx_file].st_size)   {       // out of range
+			pResult->ret_value = 0;
+		}
+		else    {
+			pResult->ret_value = my_read_RDMA(pRF_Op_Msg->fd, idx_qp, (void*)((char*)pResult+sizeof(RW_FUNC_RETURN)), mr_shm_global->lkey, rem_buff, rkey, pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
+			pResult->myerrno = errno;
+		}
 		
 		rem_buff = (void*)(Server_qp.pQP_Data[idx_qp].rem_addr);
 		rkey = Server_qp.pQP_Data[idx_qp].rem_key;
 		pResult->nDataSize = sizeof(RW_FUNC_RETURN);	// different!!!
-		pResult->myerrno = errno;
 
 		pResult->Tag_Ini = (int)((long int)rem_buff & 0xFFFFFFFF);
 		pTag_End = (int*)( (char*)pResult + pResult->nDataSize - sizeof(int) );
@@ -371,7 +381,7 @@ void RW_Truncate(IO_CMD_MSG *pRF_Op_Msg)
 		pResult->ret_value = -1;
 	}
 	else	{
-		pResult->ret_value = Truncate_File(file_idx);
+		pResult->ret_value = Truncate_File(file_idx, pRF_Op_Msg->nLen);
 		if(pResult->ret_value < 0)	pResult->myerrno = errno;
 	}
 
@@ -401,7 +411,7 @@ void RW_Ftruncate(IO_CMD_MSG *pRF_Op_Msg)
 
 	pResult->nDataSize = sizeof(RW_FUNC_RETURN);
 
-	pResult->ret_value = Truncate_File(fd_List[pRF_Op_Msg->fd].idx_file);
+	pResult->ret_value = Truncate_File(fd_List[pRF_Op_Msg->fd].idx_file, pRF_Op_Msg->nLen);
 	if(pResult->ret_value < 0)	pResult->myerrno = errno;
 
 	pResult->Tag_Ini = (int)((long int)rem_buff & 0xFFFFFFFF);
@@ -547,7 +557,7 @@ void* Func_thread_Disconnect_QP(void *pParam)	// close a QP
 	nToken = pParamInt[1];
 
 	if(Unique_Thread.Redeem_A_Token(nToken))	{
-		printf("DBG> Going to destroy %d QP.\n", idx_qp);
+//		printf("DBG> Going to destroy %d QP.\n", idx_qp);
 		Server_qp.Destroy_A_QueuePair(idx_qp);
 	}
 

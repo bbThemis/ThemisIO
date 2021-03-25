@@ -12,9 +12,9 @@
 
 #define N_MAX_REC	(4096)
 
-int nAdd=0, nDel=0;
-long int Rec_Add[N_MAX_REC], Rec_Del[N_MAX_REC];
-int Rec_Del_idx_queue[N_MAX_REC], Rec_Del_idx_qp[N_MAX_REC], Rec_Del_seq[N_MAX_REC];
+//int nAdd=0, nDel=0;
+//long int Rec_Add[N_MAX_REC], Rec_Del[N_MAX_REC];
+//int Rec_Del_idx_queue[N_MAX_REC], Rec_Del_idx_qp[N_MAX_REC], Rec_Del_seq[N_MAX_REC];
 
 
 long int nSizeReg=0;
@@ -32,6 +32,7 @@ extern int nActiveJob;
 extern JOBREC ActiveJobList[MAX_NUM_ACTIVE_JOB];
 
 pthread_mutex_t lock_preallocate_qp;
+pthread_mutex_t lock_Modify_ActiveJob_List;
 
 //typedef void (*org_sighandler)(int sig, siginfo_t *siginfo, void *ptr);
 //static org_sighandler org_segv=NULL, org_term=NULL, org_int=NULL;
@@ -124,6 +125,9 @@ void Init_PreAllocated_QueuePair_List(void)
 void SERVER_QUEUEPAIR::Destroy_A_QueuePair(int idx)
 {
 	int j, IdxLastQP_Save;
+
+//	printf("DBG> Just destroyed %d QP. Client hostname %s ExeName = %s tid = %d nQP = %d FirstAV_QP = %d IdxLastQP = %d\n", 
+//		idx, pQP_Data[idx].szClientHostName, pQP_Data[idx].szClientExeName, pQP_Data[idx].ctid, nQP, FirstAV_QP, IdxLastQP);
 	
 	pthread_mutex_lock(&process_lock);
 
@@ -135,13 +139,13 @@ void SERVER_QUEUEPAIR::Destroy_A_QueuePair(int idx)
     if (pQP_Data[idx].send_complete_queue != NULL)
 		ibv_destroy_cq(pQP_Data[idx].send_complete_queue);
 	if (pQP_Data[idx].queue_pair)	{
-		if(nDel < N_MAX_REC)	{
-			Rec_Del[nDel] = (long int)(pQP_Data[idx].queue_pair);
-			Rec_Del_idx_queue[nDel] = pQP_Data[idx].idx_queue;
-			Rec_Del_idx_qp[nDel] = idx;
+//		if(nDel < N_MAX_REC)	{
+//			Rec_Del[nDel] = (long int)(pQP_Data[idx].queue_pair);
+//			Rec_Del_idx_queue[nDel] = pQP_Data[idx].idx_queue;
+//			Rec_Del_idx_qp[nDel] = idx;
 //			Rec_Del_seq[nDel] = seq;
-			nDel++;
-		}
+//			nDel++;
+//		}
 
 		ibv_destroy_qp(pQP_Data[idx].queue_pair);
 		pQP_Data[idx].queue_pair = NULL;
@@ -150,6 +154,7 @@ void SERVER_QUEUEPAIR::Destroy_A_QueuePair(int idx)
 		printf("ERROR> Unexpected!\n");
 	}
 
+	fetch_and_add(&(ActiveJobList[pQP_Data[idx].idx_JobRec].nQP), -1);	// Decrese the counter by 1
 	pQP_Data[idx].bClosed = 1;	// set closed flag
 
 	// to update the first available entry!!!
@@ -179,8 +184,9 @@ void SERVER_QUEUEPAIR::Destroy_A_QueuePair(int idx)
 		IdxLastQP64 = Align64_Int(IdxLastQP+1);	// +1 is needed since IdxLastQP is included!
 	}
 
-	printf("DBG> Just destroyed %d QP. Client hostname %s ExeName = %s tid = %d nQP = %d FirstAV_QP = %d IdxLastQP = %d\n", 
-		idx, pQP_Data[idx].szClientHostName, pQP_Data[idx].szClientExeName, pQP_Data[idx].ctid, nQP, FirstAV_QP, IdxLastQP);
+	printf("DBG> Destroyed %d QP in job %d (idx %d: %d qps). Client hostname %s ExeName = %s tid = %d nQP = %d FirstAV_QP = %d IdxLastQP = %d\n", 
+		idx, pQP_Data[idx].jobid, pQP_Data[idx].idx_JobRec, ActiveJobList[pQP_Data[idx].idx_JobRec].nQP, pQP_Data[idx].szClientHostName, 
+		pQP_Data[idx].szClientExeName, pQP_Data[idx].ctid, nQP, FirstAV_QP, IdxLastQP);
 
 	if( FirstAV_QP > (nQP+1) )	{
 		printf("DBG> Something wrong!\n");
@@ -217,13 +223,14 @@ void SERVER_QUEUEPAIR::ScanLostQueuePairs(void)
 
 SERVER_QUEUEPAIR::SERVER_QUEUEPAIR(void)
 {
+/*
 	nAdd = nDel = 0;
 	memset(Rec_Add, 0, sizeof(long int)*N_MAX_REC);
 	memset(Rec_Del, 0, sizeof(long int)*N_MAX_REC);
 	memset(Rec_Del_idx_queue, 0, sizeof(int)*N_MAX_REC);
 	memset(Rec_Del_idx_qp, 0, sizeof(int)*N_MAX_REC);
 	memset(Rec_Del_seq, 0, sizeof(int)*N_MAX_REC);
-
+*/
 
     if(pthread_mutex_init(&process_lock, NULL) != 0) { 
         printf("\n mutex process_lock init failed\n"); 
@@ -241,7 +248,8 @@ void SERVER_QUEUEPAIR::ScanNewMsg(void)	// scan all queue pairs for make a list 
 {
 	int i, k, LastQPLocal, idx_queue, idx_qp;
 	__m512i Data;
-	unsigned long int cmpMask;
+	unsigned long int cmpMask, T_Queued;
+	struct timeval tm;
 
 	nNewMsg = 0;
 	if(p_shm_NewMsgFlag == NULL)	return;
@@ -295,11 +303,15 @@ void SERVER_QUEUEPAIR::ScanNewMsg(void)	// scan all queue pairs for make a list 
 		}
 	}
 
+	gettimeofday(&tm, NULL);
+	T_Queued = tm.tv_sec * 1000000 + tm.tv_usec;
+
 	for(i=0; i<nNewMsg; i++)	{
 		idx_qp = NewMsgList[i];
 		idx_queue = pQP_Data[idx_qp].idx_queue;
 		p_shm_IO_Cmd_Msg[idx_qp].idx_qp = idx_qp;	// set index of qp. Needed for communication!
 		p_shm_IO_Cmd_Msg[idx_qp].idx_JobRec = pQP_Data[idx_qp].idx_JobRec;
+		p_shm_IO_Cmd_Msg[idx_qp].T_Queued = T_Queued;
 
 		IO_Queue_List[idx_queue].Enqueue(&(p_shm_IO_Cmd_Msg[idx_qp]));
 	}
@@ -626,7 +638,8 @@ void* Func_thread_Finish_QP_Setup(void *pParam)
 	
 //	read(fd, &JobInfo, sizeof(JOB_INFO_DATA));
 //	assert(JobInfo.comm_tag == TAG_SUBMIT_JOB_INFO);
-	
+
+	pthread_mutex_lock(&lock_Modify_ActiveJob_List);
 	idx_JobRec = pHT_ActiveJobs->DictSearch(pData_to_recv->JobInfo.jobid, &elt_list_ActiveJobs, &ht_table_ActiveJobs, &jobid_hash);
 	if(idx_JobRec < 0)	{	// Do not exist. Need to insert it into hash table. 
 		idx_JobRec = pHT_ActiveJobs->DictInsertAuto(pData_to_recv->JobInfo.jobid, &elt_list_ActiveJobs, &ht_table_ActiveJobs);
@@ -635,6 +648,7 @@ void* Func_thread_Finish_QP_Setup(void *pParam)
 	else	{
 		fetch_and_add(&(ActiveJobList[idx_JobRec].nQP), 1);	// Increse the counter by 1
 	}
+	pthread_mutex_unlock(&lock_Modify_ActiveJob_List);
 
 	
 	idx_Queue = ( ((idx-1)*NUM_QUEUE_PER_WORKER + (idx-1)*NUM_QUEUE_PER_WORKER/MAX_NUM_QUEUE_M1 ) % MAX_NUM_QUEUE_M1) + 1;
@@ -665,7 +679,8 @@ void* Func_thread_Finish_QP_Setup(void *pParam)
 	pServer_QP->pQP_Data[idx].bTimeout = 0;
 	pServer_QP->pQP_Data[idx].bClosed = 0;
 
-	printf("DBG> idx_qp = %d idx_Queue = %d from %s on client %s\n", idx, idx_Queue, pData_to_recv->JobInfo.szClientExeName, pData_to_recv->JobInfo.szClientHostName);
+	printf("DBG> Creating QP: Jobid = %d idx_qp = %d idx_Queue = %d (%d qps) from %s on client %s nQP = %d FirstAV_QP = %d IdxLastQP = %d\n", 
+		pData_to_recv->JobInfo.jobid, idx, idx_Queue, ActiveJobList[idx_JobRec].nQP, pData_to_recv->JobInfo.szClientExeName, pData_to_recv->JobInfo.szClientHostName, pServer_QP->nQP, pServer_QP->FirstAV_QP, pServer_QP->IdxLastQP);
 	
 //	Global_Addr_Data.comm_tag = TAG_GLOBAL_ADDR_INFO;
 //	Global_Addr_Data.addr_NewMsgFlag = (uint64_t)pServer_QP->p_shm_NewMsgFlag + sizeof(char)*idx;
@@ -715,9 +730,9 @@ int SERVER_QUEUEPAIR::Accept_Client()
 		}
 		Get_A_PreAllocated_QueuePair(idx);
 
-		Rec_Add[nAdd] = (long int)(pQP_Data[idx].queue_pair);
-		nAdd++;
-		printf("DBG> New QP idx = %d nQP = %d FirstAV_QP = %d IdxLastQP = %d\n", idx, nQP, FirstAV_QP, IdxLastQP);
+//		Rec_Add[nAdd] = (long int)(pQP_Data[idx].queue_pair);
+//		nAdd++;
+//		printf("DBG> New QP idx = %d nQP = %d FirstAV_QP = %d IdxLastQP = %d\n", idx, nQP, FirstAV_QP, IdxLastQP);
 		if( FirstAV_QP > (nQP+1) )	{
 			printf("DBG> Something wrong!\n");
 		}

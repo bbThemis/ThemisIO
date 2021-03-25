@@ -24,16 +24,22 @@
 #include "myfs.h"
 #include "corebinding.h"
 #include "unique_thread.h"
+#include "io_queue.h"
 
 #define T_FREQ_REPORT_RESULT (1)
 #define PORT 8888
 
 CORE_BINDING CoreBinding;
 
+extern int nActiveJob;
+extern JOBREC ActiveJobList[MAX_NUM_ACTIVE_JOB];
+extern LISTJOBREC IdxJobRecList[MAX_NUM_ACTIVE_JOB];
+
 extern PARAM_PREALLOCATE_QP pParam_PreAllocate[N_THREAD_PREALLOCATE_QP];
 extern pthread_t pthread_preallocate[N_THREAD_PREALLOCATE_QP];
 extern pthread_t pthread_IO_Worker[NUM_THREAD_IO_WORKER];
 extern CCreatedUniqueThread Unique_Thread;
+extern CIO_QUEUE IO_Queue_List[MAX_NUM_QUEUE];
 
 typedef	struct	{
 	uint32_t lid;
@@ -107,7 +113,6 @@ void Setup_QP_Among_Servers(void)
 		Server_qp.IdxLastQP = nFSServer-1;
 	}
 	Server_qp.IdxLastQP64 = Align64_Int(Server_qp.IdxLastQP+1);	// +1 is needed since IdxLastQP is included!
-
 
 	MPI_Alltoall(MPI_IN_PLACE, sizeof(QPAIR_DATA), MPI_CHAR, pQPair_Inter_FS, sizeof(QPAIR_DATA), MPI_CHAR, MPI_COMM_WORLD);
 
@@ -268,13 +273,25 @@ void sigalarm_handler(int signum)
 	}
 	if(T_Cur > 0)	{
 		iops = 0.000001*(nOPs_Done_Sum_New - nOPs_Done_Sum)/T_FREQ_REPORT_RESULT;
-		if(iops > 1.0)	{
+		if(iops > 0.05)	{
 			printf("INFO> Reporting performance %5.3lf M iops T = %d\n", iops, T_Cur);
 		}
 	}
 	T_Cur += T_FREQ_REPORT_RESULT;
 	nOPs_Done_Sum = nOPs_Done_Sum_New;
-	
+
+	printf("---------------------------------- nOP_Done\n");
+	for(i=0; i<nActiveJob; i++)	{
+		printf("INFO> jobid %d  nOP_Done = %ld\n", IdxJobRecList[i].jobid, ActiveJobList[IdxJobRecList[i].idx_rec_ht].nOps_Done);
+	}
+/*
+	printf("---------------------------------- Queue info\n");
+	for(i=1; i<MAX_NUM_QUEUE; i++)	{
+		if(IO_Queue_List[i].back>=0)	{
+			printf("INFO> Queue %d (%8ld,%8ld)\n", i, IO_Queue_List[i].front, IO_Queue_List[i].back);
+		}
+	}
+*/	
 	alarm(T_FREQ_REPORT_RESULT);
 }
 

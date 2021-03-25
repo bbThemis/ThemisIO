@@ -40,11 +40,14 @@
 
 #define PORT 8888
 
+#define SIZE_IO_REDIRECT_HT	(4096)
 
 #define DEF_CQ_MOD	(100)
 //#define QUEUE_SIZE	(128)
 #define QUEUE_SIZE	(1)
 #define CTX_POLL_BATCH		(16)
+
+char szExeName[128];
 
 //__thread int _tid=0;
 static pthread_mutex_t process_lock;	// for this process
@@ -56,8 +59,25 @@ static int *ht_table_qp=NULL;
 static int jobid = 0, nnode_this_job=0;
 static int bDebug=0;
 
+typedef	struct	{
+	char fNameStdin[256], fNameStdout[256], fNameStderr[256];
+}IO_REDIRECT_REC;
+
+CHASHTABLE_INT *pHT_IO_Redirect=NULL;
+struct elt_Int *elt_list_IO_Redirect = NULL;
+int *ht_table_IO_Redirect=NULL;
+IO_REDIRECT_REC *pIO_Redirect_List=NULL;
+
+//char szStdin[256]="";
+//char szStdout[256]="";
+//char szStderr[256]="";
+int fd_stdin=-1, fd_stdout=-1, fd_stderr=-1, Is_in_shell=0;
+
+
 //atic __thread unsigned char __attribute__((aligned(16))) rem_buff[DATA_COPY_THRESHOLD_SIZE + 4096], loc_buff[DATA_COPY_THRESHOLD_SIZE + 4096]; 
 static __thread unsigned char *rem_buff=NULL, *loc_buff=NULL; 
+
+void Finalize_Client();
 
 inline void Allocate_loc_rem_buff(void)
 {
@@ -85,9 +105,12 @@ typedef	struct	{
 	int myip;
 	int pad[3];
 	FS_SEVER FS_List[MAX_FS_SERVER];
+	pthread_mutex_t lock_IO_Redirect;
 }FSSERVERLIST;
 
 FSSERVERLIST *pFileServerList, FileServerListLocal;	// pFileServerList in shared memory
+
+
 /*
 typedef	struct	{
 	uint32_t comm_tag;
@@ -173,6 +196,7 @@ void Get_Exe_Name(char szName[])
 {
 	FILE *fIn;
 	char szPath[1024], *ReadLine;
+	int i, nLen;
 	
 //	sprintf(szPath, "/proc/self/cmdline", pid);
 	fIn = fopen("/proc/self/cmdline", "r");
@@ -181,13 +205,22 @@ void Get_Exe_Name(char szName[])
 		exit(1);
 	}
 	
-	ReadLine = fgets(szName, MAX_EXENAME_LEN, fIn);
+	ReadLine = fgets(szPath, 255, fIn);
 	fclose(fIn);
 	
 	if(ReadLine == NULL)	{
 		printf("Fail to determine the executable file name.\nQuit\n");
 		exit(1);
 	}
+
+	nLen = strlen(szPath);
+	for(i=nLen-1; i>=0; i--)	{	// extract short name!!!
+		if(szPath[i] == '/')	{
+			break;
+		}
+	}
+	strcpy(szName, szPath + i + 1);
+
 	szName[MAX_EXENAME_LEN-1] = 0;
 }
 
@@ -201,7 +234,6 @@ void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t si
 	DATA_SEND_BY_SERVER data_to_recv;
 	DATA_SEND_BY_CLIENT data_to_send;
 	char szHostName[64];
-	char szExeName[64];
 
 #ifdef SYS_gettid
 	tid = syscall(SYS_gettid);
@@ -855,11 +887,12 @@ static int QueryLocalIP(void)
 //__attribute__((constructor)) void Init_Client()
 void Init_Client()
 {
-	int i, shm_fd, To_Init=0;
+	int i, shm_fd, To_Init=0, nSizeHT_IO_Redirect, nSizeofShm;
 	char mutex_name[]="shm_fs_param";
 	void *p_shm;
 	char *szEnvJobID=NULL, *szEnvNNode=NULL, *szEnvDebug=NULL;
 	
+
 	pHT_qp = (CHASHTABLE_INT *)malloc(CHASHTABLE_INT::GetStorageSize(MAX_QP_PER_PROCESS));
 	pHT_qp->DictCreate(MAX_QP_PER_PROCESS, &elt_list_qp, &ht_table_qp);	// init hash table
 	
@@ -879,6 +912,9 @@ void Init_Client()
         exit(1);
     }
 	
+	nSizeHT_IO_Redirect = CHASHTABLE_INT::GetStorageSize(SIZE_IO_REDIRECT_HT);
+	nSizeofShm = sizeof(FSSERVERLIST) + nSizeHT_IO_Redirect + sizeof(IO_REDIRECT_REC)*SIZE_IO_REDIRECT_HT;
+
 	shm_fd = shm_open(mutex_name, O_RDWR, 0664);
 	
 	if(shm_fd < 0) {	// failed
@@ -898,7 +934,7 @@ void Init_Client()
 			Take_a_Short_Nap(300);
 		}
 		else {
-			if (ftruncate(shm_fd, sizeof(FSSERVERLIST)) != 0) {
+			if (ftruncate(shm_fd, nSizeofShm) != 0) {
 				perror("ftruncate");
 			}
 			To_Init = 1;
@@ -908,12 +944,14 @@ void Init_Client()
 		Take_a_Short_Nap(300);
 	}
 	
-	p_shm = mmap(NULL, sizeof(FSSERVERLIST), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+	p_shm = mmap(NULL, nSizeofShm, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
 	if (p_shm == MAP_FAILED) {
 		perror("mmap");
 	}
 
 	pFileServerList = (FSSERVERLIST *)p_shm;
+	pHT_IO_Redirect = (CHASHTABLE_INT *)((char*)p_shm + sizeof(FSSERVERLIST));
+	pIO_Redirect_List = (IO_REDIRECT_REC *)((char*)p_shm + sizeof(FSSERVERLIST) + nSizeHT_IO_Redirect);
 	if(To_Init == 0)	{
 		while(1)	{
 			if(pFileServerList->Init_Done == 1)	{
@@ -923,6 +961,7 @@ void Init_Client()
 		}
 		memcpy(&FileServerListLocal, pFileServerList, sizeof(int)*8);
 		memcpy(&(FileServerListLocal.FS_List), &(pFileServerList->FS_List), sizeof(FS_SEVER)*pFileServerList->nFSServer);
+		pHT_IO_Redirect->DictCreate(0, &elt_list_IO_Redirect, &ht_table_IO_Redirect);	// init hash table
 	}
 	else	{
 		memset(p_shm, 0, sizeof(FSSERVERLIST));
@@ -931,6 +970,14 @@ void Init_Client()
 		memcpy(&FileServerListLocal, pFileServerList, sizeof(int)*8);
 		memcpy(&(FileServerListLocal.FS_List), &(pFileServerList->FS_List), sizeof(FS_SEVER)*pFileServerList->nFSServer);
 		pFileServerList->myip = QueryLocalIP();
+
+		if(pthread_mutex_init(&(pFileServerList->lock_IO_Redirect), NULL) != 0) { 
+			printf("\n mutex pFileServerList->lock_IO_Redirect init failed\n"); 
+			exit(1);
+		}
+		pHT_IO_Redirect->DictCreate(SIZE_IO_REDIRECT_HT, &elt_list_IO_Redirect, &ht_table_IO_Redirect);	// init hash table
+		memset(pIO_Redirect_List, 0, sizeof(IO_REDIRECT_REC)*SIZE_IO_REDIRECT_HT);
+		
 		pFileServerList->Init_Done = 1;
 //		printf("ip = %x\n", pFileServerList->myip);
 	}
@@ -961,76 +1008,6 @@ void Init_Client()
 	}
 }
 
-__attribute__((destructor)) void Finalize_Client()
-{
-	int i;
-	IO_CMD_MSG *pIO_Cmd=NULL;
-
-	pthread_mutex_lock(&ht_qp_lock);
-	
-	if(pHT_qp == NULL)	return;
-
-	for(i=0; i<MAX_QP_PER_PROCESS; i++)	{
-		if(pClient_qp_List[i])	{
-			if(pClient_qp_List[i]->queue_pair)	{	// to put a msg to let server close this associated QP
-				pIO_Cmd = (IO_CMD_MSG *)(pClient_qp_List[i]->mr_loc->addr);
-				assert(pIO_Cmd != NULL);
-//				local_mr = pClient_qp_List[i]->IB_RegisterBuf_RW_Local_Remote((void*)pIO_Cmd, sizeof(IO_CMD_MSG));
-				
-				pIO_Cmd->rem_buff = 0;	// NO need for writing back
-				pIO_Cmd->rkey = 0;
-				pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_DISCONNECT;
-//				Send_IO_Request(idx_fs);
-				// send the IO request first
-				pClient_qp_List[i]->IB_Put((void*)pIO_Cmd, pClient_qp_List[i]->mr_loc->lkey, (void*)(pClient_qp_List[i]->remote_addr_IO_CMD + sizeof(IO_CMD_MSG)*pClient_qp_List[i]->Idx_fs), pClient_qp_List[i]->pal_remote_mem.key, sizeof(IO_CMD_MSG));
-
-				// send a msg to notify that a new IO quest is coming.
-				*((unsigned char *)pIO_Cmd) = TAG_NEW_REQUEST;
-				pClient_qp_List[i]->IB_Put((void*)pIO_Cmd, pClient_qp_List[i]->mr_loc->lkey, (void*)(pClient_qp_List[i]->remote_addr_new_msg + sizeof(char)*pClient_qp_List[i]->Idx_fs), pClient_qp_List[i]->pal_remote_mem.key, 1);
-
-//				ibv_dereg_mr(local_mr);
-			}
-		}
-	}
-
-
-	for(i=0; i<MAX_QP_PER_PROCESS; i++)	{	// destroy client side QP
-		if(pClient_qp_List[i])	{
-			if(pClient_qp_List[i]->queue_pair)	{
-				pClient_qp_List[i]->Close_QueuePair();
-				pHT_qp->DictDelete(pClient_qp_List[i]->tid, &elt_list_qp, &ht_table_qp);
-
-//				pthread_mutex_lock(&(pFileServerList->FS_List[pClient_qp_List[i]->Idx_fs].fs_qp_lock));
-//				pFileServerList->FS_List[pClient_qp_List[i]->Idx_fs].nQP --;
-//				pthread_mutex_unlock(&(pFileServerList->FS_List[pClient_qp_List[i]->Idx_fs].fs_qp_lock));
-			}
-			free(pClient_qp_List[i]);
-			if(loc_buff)	{
-				free(loc_buff);
-				free(rem_buff);
-				loc_buff = rem_buff = NULL;
-			}
-			pClient_qp_List[i] = NULL;
-		}
-	}
-	free(pHT_qp);
-	pHT_qp = NULL;
-	pthread_mutex_unlock(&ht_qp_lock);
-	
-	pthread_mutex_destroy(&ht_qp_lock);
-
-/*
-	if(CLIENT_QUEUEPAIR::Done_IB_PD_Init)	{
-		pthread_mutex_lock(&process_lock);
-		if (CLIENT_QUEUEPAIR::pd_ != NULL) ibv_dealloc_pd(CLIENT_QUEUEPAIR::pd_);
-		if (CLIENT_QUEUEPAIR::context_ != NULL)	ibv_close_device(CLIENT_QUEUEPAIR::context_);
-		if (CLIENT_QUEUEPAIR::dev_list_ != NULL)	ibv_free_device_list(CLIENT_QUEUEPAIR::dev_list_);
-		CLIENT_QUEUEPAIR::Done_IB_PD_Init = 0;
-		pthread_mutex_unlock(&process_lock);
-	}
-*/
-	pthread_mutex_destroy(&process_lock);
-}
 
 static void sigsegv_handler(int sig, siginfo_t *siginfo, void *ptr);
 
