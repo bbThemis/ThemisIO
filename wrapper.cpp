@@ -38,8 +38,6 @@ All rights are reserved.
 #include <sys/statfs.h>
 #include <sys/statvfs.h>
 
-#include <stddef.h>
-
 #include "qp_client.h"
 #include "../io_ops_common.h"
 #include "../xxhash.h"
@@ -55,7 +53,6 @@ All rights are reserved.
 #define MAX_OPENED_DIR_M1	((MAX_OPENED_DIR) - 1)
 
 //pthread_mutex_t global_lock;
-static const int IO_Msg_Size_op = ( offsetof(IO_CMD_MSG,op) + sizeof(int) );
 
 struct statfs fs_stat_shm;
 struct statvfs vfs_stat_shm;
@@ -460,8 +457,7 @@ inline void Send_IO_Request(int idx_fs)
 	while(1)	{
 		// send the IO request first
 		pIO_Cmd->tag_magic = rand();
-//		pClient_qp[idx_fs]->IB_Put(loc_buff, pClient_qp[idx_fs]->mr_loc->lkey, (void*)(pClient_qp[idx_fs]->remote_addr_IO_CMD), pClient_qp[idx_fs]->pal_remote_mem.key, sizeof(IO_CMD_MSG));
-		pClient_qp[idx_fs]->IB_Put(loc_buff, pClient_qp[idx_fs]->mr_loc->lkey, (void*)(pClient_qp[idx_fs]->remote_addr_IO_CMD), pClient_qp[idx_fs]->pal_remote_mem.key, IO_Msg_Size_op);
+		pClient_qp[idx_fs]->IB_Put(loc_buff, pClient_qp[idx_fs]->mr_loc->lkey, (void*)(pClient_qp[idx_fs]->remote_addr_IO_CMD), pClient_qp[idx_fs]->pal_remote_mem.key, sizeof(IO_CMD_MSG));
 
 		// send a msg to notify that a new IO quest is coming.
 		loc_buff[0] = TAG_NEW_REQUEST;
@@ -639,6 +635,8 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 			Gather_FileName_Info(szFullPath, &(pIO_Cmd->nLen_FileName), &(pIO_Cmd->nLen_Parent_Dir_Name), &(pIO_Cmd->file_hash), NULL, &idx_fs);
 			pIO_Cmd->parent_dir_hash = 0;
 		}
+//		idx_fs = pIO_Cmd->file_hash % pFileServerList->nFSServer;	// the index of which file server holding this file
+//		printf("DBG> nFSServer = %d File %s idx_fs = %d\n", FileServerListLocal.nFSServer, szFullPath, idx_fs);
 		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
 //			CLIENT_QUEUEPAIR *pQP;
 //			pQP = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));			
@@ -652,13 +650,14 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
-		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 		strcpy(pIO_Cmd->szName, szFullPath);
+		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
+		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+		
 		pIO_Cmd->flag = oflags;
 		pIO_Cmd->mode = mode;
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_OPEN;
-//		pIO_Cmd->nTokenNeeded = 0;
 		Send_IO_Request(idx_fs);
 		
 		fd = (pResult->ret_value) & 0xFFFFFFFF;
@@ -701,7 +700,7 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 
 	return fd;
 }
-/*
+
 extern "C" int system(const char *command)
 {
 	if(real_system==NULL)	{
@@ -734,7 +733,6 @@ extern "C" int mkostemp(char *name_template, int flags)
 	return real_mkostemp(name_template, flags);
 }
 extern "C" int mkostemp64(char *name_template, int flags) __attribute__ ( (alias ("mkostemp")) );
-*/
 
 extern "C" int close(int fd)
 {
@@ -768,10 +766,11 @@ extern "C" int close(int fd)
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0; // init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data.
 		
-		pIO_Cmd->fd = fd_real;
-		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
 		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+		
+		pIO_Cmd->fd = fd_real;
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_CLOSE;
 		Send_IO_Request(idx_fs);
 		
@@ -808,11 +807,11 @@ extern "C" int my_close_nocancel(int fd)
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->fd = fd_real;
-		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
 		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
+		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
 		
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->fd = fd_real;
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_CLOSE;
 		Send_IO_Request(idx_fs);
 		
@@ -928,22 +927,23 @@ extern "C" ssize_t my_read(int fd, void *buf, size_t size)
 		
 		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 		pResult = (RW_FUNC_RETURN *)rem_buff;
-		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->fd = fd_real;
 		if(size > DATA_COPY_THRESHOLD_SIZE)	{
 			mr_loc_buf = pClient_qp[idx_fs]->IB_RegisterBuf_RW_Local_Remote(buf, size);
-			pIO_Cmd->rkey = mr_loc_buf->rkey;
 			pIO_Cmd->rem_buff = mr_loc_buf->addr;
+			pIO_Cmd->rkey = mr_loc_buf->rkey;
 		}
 		else	{
-			pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
 			pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
+			pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
 		}
-				
+		
+		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
+		
 		pIO_Cmd->offset = FileList[fd_Directed-FD_FILE_BASE].offset;	// always put offset parameter here!!! Same as pread() now. 
 		pIO_Cmd->nLen = size;
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->fd = fd_real;
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_READ;
 		
 		Send_IO_Request(idx_fs);
@@ -985,29 +985,30 @@ extern "C" ssize_t pread(int fd, void *buf, size_t size, off_t offset)
 		
 		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 		pResult = (RW_FUNC_RETURN *)rem_buff;
-		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->fd = fd_real;
 		if(size > DATA_COPY_THRESHOLD_SIZE)	{
 			mr_loc_buf = pClient_qp[idx_fs]->IB_RegisterBuf_RW_Local_Remote(buf, size);
-			pIO_Cmd->rkey = mr_loc_buf->rkey;
 			pIO_Cmd->rem_buff = mr_loc_buf->addr;
+			pIO_Cmd->rkey = mr_loc_buf->rkey;
 		}
 		else	{
-			pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
 			pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
+			pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
 		}
+		
+		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
 		pIO_Cmd->offset = offset;
 		pIO_Cmd->nLen = size;
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->fd = fd_real;
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_READ;
 		
 		Send_IO_Request(idx_fs);
 		
 		nBytesRead = pResult->ret_value;
 		if(nBytesRead < 0)	errno = pResult->myerrno;
-		else	FileList[fd_Directed-FD_FILE_BASE].offset = offset + nBytesRead;	// update offset
+		else	FileList[fd_Directed-FD_FILE_BASE].offset += nBytesRead;	// update offset
 		
 		if(mr_loc_buf)	ibv_dereg_mr(mr_loc_buf);	// data were written to buf already
 		else	memcpy(buf, (char*)pResult+sizeof(RW_FUNC_RETURN)-sizeof(int), nBytesRead);
@@ -1037,24 +1038,24 @@ extern "C" ssize_t my_write(int fd, const void *buf, size_t size)
 		
 		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 		pResult = (RW_FUNC_RETURN *)rem_buff;
-		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->fd = fd_real;
 		if(size > DATA_COPY_THRESHOLD_SIZE)	{
 			mr_loc_buf = pClient_qp[idx_fs]->IB_RegisterBuf_RW_Local_Remote((void*)buf, size);
-			pIO_Cmd->rkey = mr_loc_buf->rkey;
 			pIO_Cmd->rem_buff = mr_loc_buf->addr;
+			pIO_Cmd->rkey = mr_loc_buf->rkey;
 		}
 		else	{
-			pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
 			pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
+			pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
 			
 			memcpy((char*)pResult+sizeof(RW_FUNC_RETURN), buf, size);
 		}
+		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
 		pIO_Cmd->offset = FileList[fd_Directed-FD_FILE_BASE].offset;	// always put offset parameter here!!! 
 		pIO_Cmd->nLen = size;
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->fd = fd_real;
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_WRITE;
 		
 		Send_IO_Request(idx_fs);
@@ -1097,31 +1098,31 @@ extern "C" ssize_t pwrite(int fd, const void *buf, size_t size, off_t offset)
 		
 		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 		pResult = (RW_FUNC_RETURN *)rem_buff;
-		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->fd = fd_real;
 		if(size > DATA_COPY_THRESHOLD_SIZE)	{
 			mr_loc_buf = pClient_qp[idx_fs]->IB_RegisterBuf_RW_Local_Remote((void*)buf, size);
-			pIO_Cmd->rkey = mr_loc_buf->rkey;
 			pIO_Cmd->rem_buff = mr_loc_buf->addr;
+			pIO_Cmd->rkey = mr_loc_buf->rkey;
 		}
 		else	{
-			pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
 			pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
+			pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
 			
 			memcpy((char*)pResult+sizeof(RW_FUNC_RETURN), buf, size);
 		}
+		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->offset = offset;
+		pIO_Cmd->offset = FileList[fd_Directed-FD_FILE_BASE].offset;	// always put offset parameter here!!! 
 		pIO_Cmd->nLen = size;
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->fd = fd_real;
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_WRITE;
 		
 		Send_IO_Request(idx_fs);
 		
 		nBytesWritten = pResult->ret_value;
 		if(nBytesWritten < 0)	errno = pResult->myerrno;
-		else	FileList[fd_Directed-FD_FILE_BASE].offset = offset + nBytesWritten;	// update offset
+		else	FileList[fd_Directed-FD_FILE_BASE].offset += nBytesWritten;	// update offset
 		
 		if(mr_loc_buf)	ibv_dereg_mr(mr_loc_buf);	// data were written to buf already
 		
@@ -1158,13 +1159,14 @@ extern "C" off_t my_lseek(int fd, off_t offset, int whence)
 			pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 			pResult = (RW_FUNC_RETURN *)rem_buff;
 			pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
-
-			pIO_Cmd->fd = fd_real;
-			pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+			
 			pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
-			pIO_Cmd->flag = whence;
 			pIO_Cmd->offset = offset;
-//			pIO_Cmd->nTokenNeeded = 0;
+			pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+			pIO_Cmd->fd = fd_real;
+			pIO_Cmd->flag = whence;
+			
+			pIO_Cmd->nTokenNeeded = 0;
 			pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_SEEK;
 			Send_IO_Request(idx_fs);
 			
@@ -1199,6 +1201,7 @@ int dup2(int oldfd, int newfd)
 	unsigned long long fn_hash;
 	char szExeName[64];
 
+
 	if(real_dup2==NULL)	{
 		real_dup2 = (org_dup2)dlsym(RTLD_NEXT, "__dup2");
 	}
@@ -1230,6 +1233,7 @@ int dup2(int oldfd, int newfd)
 			}
 		}
 	}
+
 
 	fd_Directed = Get_Fd_Redirected(oldfd);
 
@@ -1296,10 +1300,11 @@ extern "C" int my_unlink(const char *pathname)
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
-		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 		strcpy(pIO_Cmd->szName, szFullPath);
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
+		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+		
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_REMOVE_FILE;
 		Send_IO_Request(idx_fs);
 		return ((pResult->ret_value) & 0xFFFFFFFF);
@@ -1317,6 +1322,11 @@ extern "C" int my_xstat(int __ver, const char *__filename, struct stat *__stat_b
 	int ret, idx_fs=0;
 	char szFullPath[MAX_FILE_NAME_LEN];
 	unsigned long int ino_idx_fs;
+
+//	if(real_xstat==NULL)	{
+//		real_xstat = (org_xstat)dlsym(RTLD_NEXT, "__xstat64");
+//		assert(real_xstat != NULL);
+//	}
 
 	if(Inited == 0) {       // init() not finished yet
 		return real_xstat(__ver, __filename, __stat_buf);
@@ -1340,10 +1350,11 @@ extern "C" int my_xstat(int __ver, const char *__filename, struct stat *__stat_b
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;		
-		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 		strcpy(pIO_Cmd->szName, szFullPath);
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
+		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+		
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_STAT;
 		Send_IO_Request(idx_fs);
 		
@@ -1363,6 +1374,8 @@ extern "C" int my_xstat(int __ver, const char *__filename, struct stat *__stat_b
 
 	return real_xstat(__ver, __filename, __stat_buf);
 }
+//extern "C" int _xstat(int __ver, const char *__filename, struct stat *__stat_buf) __attribute__ ( (alias ("xstat")) );
+//extern "C" int __xstat(int __ver, const char *__filename, struct stat *__stat_buf) __attribute__ ( (alias ("xstat")) );
 //extern "C" int __xstaT64(int __ver, const char *__filename, struct stat *__stat_buf) __attribute__ ( (alias ("xstat")) );
 
 extern "C" int lxstat(int __ver, const char *__filename, struct stat *__stat_buf)
@@ -1401,10 +1414,11 @@ extern "C" int lxstat(int __ver, const char *__filename, struct stat *__stat_buf
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
-		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 		strcpy(pIO_Cmd->szName, szFullPath);
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
+		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+		
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_LSTAT;	// NEED work on server side!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		Send_IO_Request(idx_fs);
 		
@@ -1450,10 +1464,11 @@ extern "C" int my_fxstat(int vers, int fd, struct stat *buf)
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->fd = fd_real;
-		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
 		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+		
+		pIO_Cmd->fd = fd_real;
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_FSTAT;
 		Send_IO_Request(idx_fs);
 		
@@ -1535,12 +1550,12 @@ int rename(const char *OldName, const char *NewName)
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
+		strcpy(pIO_Cmd->szName, szFullPathOld);
 		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
-		strcpy(pIO_Cmd->szName, szFullPathOld);
 		pIO_Cmd->nLen = strlen(szFullPathNew);
 		
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_OPENDIR;
 		Send_IO_Request(idx_fs);
 		
@@ -1589,10 +1604,11 @@ extern "C" DIR *opendir(const char *szDirName)
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;		
-		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 		strcpy(pIO_Cmd->szName, szFullPath);
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
+		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+		
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_OPENDIR;
 		Send_IO_Request(idx_fs);
 
@@ -1746,10 +1762,11 @@ extern "C" int access(const char *pathname, int mode)
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
-		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;		
 		strcpy(pIO_Cmd->szName, szFullPath);
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
+		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+		
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_STAT;
 		Send_IO_Request(idx_fs);
 		
@@ -1822,13 +1839,14 @@ extern "C" int fallocate(int fd, int mode, off_t offset, off_t len)
 			pResult = (RW_FUNC_RETURN *)rem_buff;
 			pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 			
-			pIO_Cmd->fd = fd_real;
-			pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
 			pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
-			pIO_Cmd->mode = mode;
 			pIO_Cmd->offset = offset;
 			pIO_Cmd->nLen = len;
-//			pIO_Cmd->nTokenNeeded = 0;
+			pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+			
+			pIO_Cmd->fd = fd_real;
+			pIO_Cmd->mode = mode;
+			pIO_Cmd->nTokenNeeded = 0;
 			pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_FILE_ALLOCATE;	// NEED server side implementation!!!!!!
 			Send_IO_Request(idx_fs);
 			
@@ -2182,10 +2200,11 @@ extern "C" int fsync(int fd)
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->fd = fd_real;
-		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
 		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+		
+		pIO_Cmd->fd = fd_real;
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_FSYNC;	// NEED server side implementation!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		Send_IO_Request(idx_fs);
 		
@@ -2221,11 +2240,12 @@ extern "C" int ftruncate(int fd, off_t length)
 			pResult = (RW_FUNC_RETURN *)rem_buff;
 			pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 			
-			pIO_Cmd->fd = fd_real;
-			pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;			
 			pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 			pIO_Cmd->nLen = length;
-//			pIO_Cmd->nTokenNeeded = 0;
+			pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+			
+			pIO_Cmd->fd = fd_real;
+			pIO_Cmd->nTokenNeeded = 0;
 			pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_FTRUNCATE;	// NEED server side implementation!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Finished. Need test!!!!!
 			Send_IO_Request(idx_fs);
 			
@@ -2270,11 +2290,12 @@ extern "C" int truncate(const char *path, off_t length)
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
-		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 		strcpy(pIO_Cmd->szName, szFullPath);
+		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 		pIO_Cmd->nLen = length;
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+		
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_TRUNCATE;	// NEED work on server side!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  Finished. Need test!!!!!
 		Send_IO_Request(idx_fs);
 		
@@ -2317,12 +2338,10 @@ extern "C" int futimens(int fd, const struct timespec times[2])
 			pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 			pResult = (RW_FUNC_RETURN *)rem_buff;
 			pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
-
-			pIO_Cmd->fd = fd_real;
-			pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+			
 			pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 
-			pDest = (long int *)(&(pIO_Cmd->nLen_FileName));
+			pDest = (long int *)(&(pIO_Cmd->offset));
 			pSrc = (long int *)times;
 
 			if(pSrc == NULL)	{	// set current time stamp
@@ -2340,7 +2359,10 @@ extern "C" int futimens(int fd, const struct timespec times[2])
 				pDest[3] = pSrc[3];
 			}
 
-//			pIO_Cmd->nTokenNeeded = 0;
+			pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+			
+			pIO_Cmd->fd = fd_real;
+			pIO_Cmd->nTokenNeeded = 0;
 			pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_FUTIMENS;	// NEED server side implementation!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			Send_IO_Request(idx_fs);
 			
@@ -2399,11 +2421,10 @@ int utimensat(int dirfd, const char *pathname, const struct timespec times[2], i
 	pResult = (RW_FUNC_RETURN *)rem_buff;
 	pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 	
-	pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
-	pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 	strcpy(pIO_Cmd->szName, szFullPath);
+	pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 	
-	pDest = (long int *)(&(pIO_Cmd->nLen_FileName));	// use this space to store times[2]
+	pDest = (long int *)(&(pIO_Cmd->offset));	// use this space to store times[2]
 	pSrc = (long int *)times;
 	if(pSrc == NULL)	{	// set current time stamp
 		clock_gettime(CLOCK_REALTIME, &t_spec);
@@ -2420,7 +2441,11 @@ int utimensat(int dirfd, const char *pathname, const struct timespec times[2], i
 		pDest[3] = pSrc[3];
 	}
 	
-//	pIO_Cmd->nTokenNeeded = 0;
+	pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+	
+//	pIO_Cmd->fd = fd_real;
+//	pIO_Cmd->flag = flag;
+	pIO_Cmd->nTokenNeeded = 0;
 	pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_UTIMES;	// NEED server side implementation!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	Send_IO_Request(idx_fs);
 	
@@ -2464,11 +2489,10 @@ int utimes(const char *pathname, const struct timeval times[2])
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
-		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 		strcpy(pIO_Cmd->szName, szFullPath);
+		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 		
-		pDest = (long int *)(&(pIO_Cmd->nLen_FileName));
+		pDest = (long int *)(&(pIO_Cmd->offset));
 		pSrc = (long int *)times;
 		if(pSrc == NULL)	{	// set current time stamp
 			clock_gettime(CLOCK_REALTIME, &t_spec);
@@ -2485,7 +2509,9 @@ int utimes(const char *pathname, const struct timeval times[2])
 			pDest[3] = pSrc[3] * 1000;	// convert from us to ns
 		}
 		
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+		
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_UTIMES;	// NEED work on server side!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		Send_IO_Request(idx_fs);
 		
@@ -2535,11 +2561,10 @@ int utime(const char *pathname, const struct utimbuf *times)
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
-		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 		strcpy(pIO_Cmd->szName, szFullPath);
+		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 		
-		pDest = (long int *)(&(pIO_Cmd->nLen_FileName));
+		pDest = (long int *)(&(pIO_Cmd->offset));
 		pSrc = (long int *)times;
 		if(pSrc == NULL)	{	// set current time stamp
 			clock_gettime(CLOCK_REALTIME, &t_spec);
@@ -2556,7 +2581,9 @@ int utime(const char *pathname, const struct utimbuf *times)
 			pDest[3] = 0;
 		}
 		
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+		
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_UTIMES;	// NEED work on server side!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		Send_IO_Request(idx_fs);
 		
@@ -2697,11 +2724,13 @@ int mkdir(const char *pathname, mode_t mode)
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+		strcpy(pIO_Cmd->szName, szFullPath);
 		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
-		strcpy(pIO_Cmd->szName, szFullPath);		
+		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+		
+//		pIO_Cmd->flag = oflags;
 		pIO_Cmd->mode = mode;
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_MKDIR;	// NEED work on server side!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		Send_IO_Request(idx_fs);
 		
@@ -2714,6 +2743,8 @@ int mkdir(const char *pathname, mode_t mode)
 	}
 	return real_mkdir(pathname, mode);
 }
+
+
 
 int mkdirat(int dirfd, const char *pathname, mode_t mode)
 {
@@ -2741,6 +2772,48 @@ int mkdirat(int dirfd, const char *pathname, mode_t mode)
 		}
 	}
 	else	return real_mkdirat(dirfd, pathname, mode);
+
+/*
+	char szFullPath[MAX_FILE_NAME_LEN];
+	IO_CMD_MSG *pIO_Cmd;
+	RW_FUNC_RETURN *pResult;
+	unsigned long long fn_hash;
+	int ret, idx_fs;
+
+	if(strncmp(szFullPath, MYFS_ROOT_DIR, 5) == 0)	{
+		if(loc_buff == NULL)	Allocate_loc_rem_buff();
+
+		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
+
+		Gather_FileName_Info(szFullPath, &(pIO_Cmd->nLen_FileName), &(pIO_Cmd->nLen_Parent_Dir_Name), &(pIO_Cmd->file_hash), &(pIO_Cmd->parent_dir_hash), &idx_fs);	// create a new file
+//		idx_fs = pIO_Cmd->file_hash % pFileServerList->nFSServer;	// the index of which file server holding this file
+		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
+			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
+			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, DATA_COPY_THRESHOLD_SIZE + 4096, (char*)rem_buff, DATA_COPY_THRESHOLD_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
+			fetch_and_add(&nQp, 1);	// atomically add the counter
+		}
+				
+		pResult = (RW_FUNC_RETURN *)rem_buff;
+		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
+		
+		strcpy(pIO_Cmd->szName, szFullPath);
+		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
+		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+		
+		pIO_Cmd->mode = mode;
+		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_MKDIR;	// NEED work on server side!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		Send_IO_Request(idx_fs);
+		
+		ret = (pResult->ret_value) & 0xFFFFFFFF;
+		if(ret < 0)	{
+			errno = pResult->myerrno;
+			return ret;
+		}
+		return ret;
+	}
+	return real_mkdirat(dirfd, pathname, mode);
+*/
 }
 
 /*
@@ -2776,7 +2849,6 @@ inline int Wait_For_IO_Request_Result(int Tag_Magic)
 		gettimeofday(&tm2, NULL);
 		t2_ms = (tm2.tv_sec * 1000) + (tm2.tv_usec / 1000);
 		if( (t2_ms - t1_ms) > QP_WAIT_RESULT_TIMEOUT_MS )	{
-			printf("DBG> Timrout.\n");
 			return 1;	// time out
 		}
 	}
@@ -2789,7 +2861,6 @@ inline int Wait_For_IO_Request_Result(int Tag_Magic)
 		gettimeofday(&tm2, NULL);
 		t2_ms = (tm2.tv_sec * 1000) + (tm2.tv_usec / 1000);
 		if( (t2_ms - t1_ms) > QP_WAIT_RESULT_TIMEOUT_MS )	{
-			printf("DBG> Timrout.\n");
 			return 1;	// time out
 		}
 	}
@@ -2946,12 +3017,13 @@ extern "C" int posix_fallocate(int fd, off_t offset, off_t len)
 			pResult = (RW_FUNC_RETURN *)rem_buff;
 			pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 			
-			pIO_Cmd->fd = fd_real;
-			pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
 			pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 			pIO_Cmd->offset = offset;
 			pIO_Cmd->nLen = len;
-//			pIO_Cmd->nTokenNeeded = 0;
+			pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+			
+			pIO_Cmd->fd = fd_real;
+			pIO_Cmd->nTokenNeeded = 0;
 			pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_FILE_ALLOCATE;	// NEED server side implementation!!!!!!
 			Send_IO_Request(idx_fs);
 			
@@ -2996,10 +3068,11 @@ extern "C" int rmdir(const char *path)
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 		
-		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
-		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
 		strcpy(pIO_Cmd->szName, szFullPath);
-//		pIO_Cmd->nTokenNeeded = 0;
+		pIO_Cmd->rem_buff = pClient_qp[idx_fs]->mr_rem->addr;
+		pIO_Cmd->rkey = pClient_qp[idx_fs]->mr_rem->rkey;
+		
+		pIO_Cmd->nTokenNeeded = 0;
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_REMOVE_DIR;	// NEED work on server side!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		Send_IO_Request(idx_fs);
 		
@@ -3037,7 +3110,7 @@ extern "C" void Print_Mem(void)
 
 	// send the IO request first
 	pIO_Cmd->tag_magic = rand();
-	pClient_qp[idx_fs]->IB_Put(loc_buff, pClient_qp[idx_fs]->mr_loc->lkey, (void*)(pClient_qp[idx_fs]->remote_addr_IO_CMD + sizeof(IO_CMD_MSG)*pClient_qp[idx_fs]->Idx_fs), pClient_qp[idx_fs]->pal_remote_mem.key, IO_Msg_Size_op);
+	pClient_qp[idx_fs]->IB_Put(loc_buff, pClient_qp[idx_fs]->mr_loc->lkey, (void*)(pClient_qp[idx_fs]->remote_addr_IO_CMD + sizeof(IO_CMD_MSG)*pClient_qp[idx_fs]->Idx_fs), pClient_qp[idx_fs]->pal_remote_mem.key, sizeof(IO_CMD_MSG));
 
 	// send a msg to notify that a new IO quest is coming.
 	loc_buff[0] = TAG_NEW_REQUEST;
@@ -3092,19 +3165,69 @@ extern "C" int statvfs(const char *pathname, struct statvfs *buf)
 }
 extern "C" int staTvfs64(const char *pathname, struct statvfs *buf) __attribute__ ( (alias ("statvfs")) );
 
+/*
+extern "C" char * realpath__GLIBC_2_3(const char *pathname, char *resolved_path)
+{
+	char szFullPath[MAX_FILE_NAME_LEN];
 
+	if(real_realpath_2_3==NULL)	{
+		real_realpath_2_3 = (org_realpath)dlsym(RTLD_NEXT, "realpath@@GLIBC_2.3");
+	}
+
+	if(Inited == 0) {       // init() not finished yet
+		return real_realpath_2_3(pathname, resolved_path);
+	}
+
+	Standardlize_Path(pathname, szFullPath);
+
+	if(strncmp(szFullPath, MYFS_ROOT_DIR, 5) == 0)	{
+		if(resolved_path == NULL)	resolved_path = (char*)malloc(strlen(szFullPath) + 1);
+		assert(resolved_path != NULL);
+		strcpy(resolved_path, szFullPath);
+		return resolved_path;
+	}
+
+	return real_realpath_2_3(pathname, resolved_path);
+}
+
+extern "C" char * realpath__GLIBC_2_2_5(const char *pathname, char *resolved_path)
+{
+	char szFullPath[MAX_FILE_NAME_LEN];
+
+	if(real_realpath_2_2_5==NULL)	{
+		real_realpath_2_2_5 = (org_realpath)dlsym(RTLD_NEXT, "realpath@@GLIBC_2.2.5");
+	}
+
+	if(Inited == 0) {       // init() not finished yet
+		return real_realpath_2_2_5(pathname, resolved_path);
+	}
+
+	Standardlize_Path(pathname, szFullPath);
+
+	if(strncmp(szFullPath, MYFS_ROOT_DIR, 5) == 0)	{
+		if(resolved_path == NULL)	resolved_path = (char*)malloc(strlen(szFullPath) + 1);
+		assert(resolved_path != NULL);
+		strcpy(resolved_path, szFullPath);
+		return resolved_path;
+	}
+
+	return real_realpath_2_2_5(pathname, resolved_path);
+}
+*/
+
+/*
 extern "C" char * realpath(const char *pathname, char *resolved_path)
 {
 	char szFullPath[MAX_FILE_NAME_LEN];
 
 	if(real_realpath==NULL)	{
-		real_realpath = (org_realpath)dlvsym(RTLD_NEXT, "realpath", "GLIBC_2.3");
+		real_realpath = (org_realpath)dlsym(RTLD_NEXT, "realpath");
 		assert(real_realpath != NULL);
 	}
 
-	if(Inited == 0) {       // init() not finished yet
+//	if(Inited == 0) {       // init() not finished yet
 		return real_realpath(pathname, resolved_path);
-	}
+//	}
 
 	Standardlize_Path(pathname, szFullPath);
 
@@ -3118,7 +3241,7 @@ extern "C" char * realpath(const char *pathname, char *resolved_path)
 	return real_realpath(pathname, resolved_path);
 
 }
-
+*/
 
 /*
 int test_open_client(char szFileName[])

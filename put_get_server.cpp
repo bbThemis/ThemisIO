@@ -83,61 +83,66 @@ void Setup_QP_Among_Servers(void);
 
 void Setup_QP_Among_Servers(void)
 {
-	int i;
+	int i, j, idx;
 
-	pQPair_Inter_FS = (QPAIR_DATA *)malloc(sizeof(QPAIR_DATA)*nFSServer);
+	pQPair_Inter_FS = (QPAIR_DATA *)malloc(sizeof(QPAIR_DATA)*nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER);
 
 	Server_qp.nQP = 0;	// the qp with other servers are always put at the beginning
 
 	for(i=0; i<nFSServer; i++)	{
 		if(i != mpi_rank)	{
-			Server_qp.nQP++;
-			Server_qp.IB_CreateQueuePair(i);
-			pQPair_Inter_FS[i].lid = Server_qp.pQP_Data[i].ib_my_lid;
-			pQPair_Inter_FS[i].qp_n = Server_qp.pQP_Data[i].ib_my_qpn;
-			pQPair_Inter_FS[i].psn = Server_qp.pQP_Data[i].ib_my_psn;
+			idx = i*NUM_THREAD_IO_WORKER_INTER_SERVER;
+			for(j=0; j<NUM_THREAD_IO_WORKER_INTER_SERVER; j++)	{
+				Server_qp.nQP++;
+				Server_qp.IB_CreateQueuePair(idx+j);
+				pQPair_Inter_FS[idx+j].lid = Server_qp.pQP_Data[idx+j].ib_my_lid;
+				pQPair_Inter_FS[idx+j].qp_n = Server_qp.pQP_Data[idx+j].ib_my_qpn;
+				pQPair_Inter_FS[idx+j].psn = Server_qp.pQP_Data[idx+j].ib_my_psn;
 
-			pQPair_Inter_FS[i].rem_key = Server_qp.mr_shm_global->rkey;
-			pQPair_Inter_FS[i].rem_addr = (uint64_t)Server_qp.mr_shm_global->addr;
+				pQPair_Inter_FS[idx+j].rem_key = Server_qp.mr_shm_global->rkey;
+				pQPair_Inter_FS[idx+j].rem_addr = (uint64_t)Server_qp.p_shm_IO_Result_Recv;
 
-			pQPair_Inter_FS[i].addr_NewMsgFlag = (uint64_t)Server_qp.p_shm_NewMsgFlag + sizeof(char)*i;
-			pQPair_Inter_FS[i].addr_TimeHeartBeat = (uint64_t)Server_qp.p_shm_TimeHeartBeat + sizeof(time_t)*i;
-			pQPair_Inter_FS[i].addr_IO_Cmd_Msg = (uint64_t)Server_qp.p_shm_IO_Cmd_Msg + sizeof(IO_CMD_MSG)*i;
+				pQPair_Inter_FS[idx+j].addr_NewMsgFlag = (uint64_t)Server_qp.p_shm_NewMsgFlag + sizeof(char)*(idx+j);
+				pQPair_Inter_FS[idx+j].addr_TimeHeartBeat = (uint64_t)Server_qp.p_shm_TimeHeartBeat + sizeof(time_t)*(idx+j);
+				pQPair_Inter_FS[idx+j].addr_IO_Cmd_Msg = (uint64_t)Server_qp.p_shm_IO_Cmd_Msg + sizeof(IO_CMD_MSG)*(idx+j);
+			}
 		}
 	}
-	Server_qp.FirstAV_QP = nFSServer;
-	if( mpi_rank == (nFSServer-1) )	{	// the last one
-		Server_qp.IdxLastQP = nFSServer-2;
-	}
-	else	{
-		Server_qp.IdxLastQP = nFSServer-1;
-	}
+	Server_qp.FirstAV_QP = nFSServer * NUM_THREAD_IO_WORKER_INTER_SERVER;
+	Server_qp.IdxLastQP = nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER - 1;
 	Server_qp.IdxLastQP64 = Align64_Int(Server_qp.IdxLastQP+1);	// +1 is needed since IdxLastQP is included!
 
-	MPI_Alltoall(MPI_IN_PLACE, sizeof(QPAIR_DATA), MPI_CHAR, pQPair_Inter_FS, sizeof(QPAIR_DATA), MPI_CHAR, MPI_COMM_WORLD);
+	MPI_Alltoall(MPI_IN_PLACE, sizeof(QPAIR_DATA)*NUM_THREAD_IO_WORKER_INTER_SERVER, MPI_CHAR, pQPair_Inter_FS, sizeof(QPAIR_DATA)*NUM_THREAD_IO_WORKER_INTER_SERVER, MPI_CHAR, MPI_COMM_WORLD);
 
 	for(i=0; i<nFSServer; i++)	{
 		if(i != mpi_rank)	{
-			Server_qp.pQP_Data[i].ib_pal_lid = pQPair_Inter_FS[i].lid;
-			Server_qp.pQP_Data[i].ib_pal_qpn = pQPair_Inter_FS[i].qp_n;
-			Server_qp.pQP_Data[i].ib_pal_psn = pQPair_Inter_FS[i].psn;
+			idx = i*NUM_THREAD_IO_WORKER_INTER_SERVER;
+			for(j=0; j<NUM_THREAD_IO_WORKER_INTER_SERVER; j++)	{
+				Server_qp.pQP_Data[idx+j].ib_pal_lid = pQPair_Inter_FS[idx+j].lid;
+				Server_qp.pQP_Data[idx+j].ib_pal_qpn = pQPair_Inter_FS[idx+j].qp_n;
+				Server_qp.pQP_Data[idx+j].ib_pal_psn = pQPair_Inter_FS[idx+j].psn;
 
-			Server_qp.pQP_Data[i].rem_key = pQPair_Inter_FS[i].rem_key;
-			Server_qp.pQP_Data[i].rem_addr = (uint64_t)(pQPair_Inter_FS[i].rem_addr);
-			
-			Server_qp.pQP_Data[i].remote_addr_new_msg = pQPair_Inter_FS[i].addr_NewMsgFlag;
-			Server_qp.pQP_Data[i].remote_addr_heart_beat = pQPair_Inter_FS[i].addr_TimeHeartBeat;
-			Server_qp.pQP_Data[i].remote_addr_IO_CMD = pQPair_Inter_FS[i].addr_IO_Cmd_Msg;
+				Server_qp.pQP_Data[idx+j].rem_key = pQPair_Inter_FS[idx+j].rem_key;
+				Server_qp.pQP_Data[idx+j].rem_addr = (uint64_t)(pQPair_Inter_FS[idx+j].rem_addr);
+				
+				Server_qp.pQP_Data[idx+j].remote_addr_new_msg = pQPair_Inter_FS[idx+j].addr_NewMsgFlag;
+				Server_qp.pQP_Data[idx+j].remote_addr_heart_beat = pQPair_Inter_FS[idx+j].addr_TimeHeartBeat;
+				Server_qp.pQP_Data[idx+j].remote_addr_IO_CMD = pQPair_Inter_FS[idx+j].addr_IO_Cmd_Msg;
 
-			Server_qp.pQP_Data[i].nPut_Get = 0;
-			Server_qp.pQP_Data[i].nPut_Get_Done = 0;
-			Server_qp.IB_Modify_QP(Server_qp.pQP_Data[i].queue_pair, Server_qp.pQP_Data[i].ib_my_psn, (uint16_t)(Server_qp.pQP_Data[i].ib_pal_lid), Server_qp.pQP_Data[i].ib_pal_qpn, Server_qp.pQP_Data[i].ib_pal_psn);
+				Server_qp.pQP_Data[idx+j].nPut_Get = 0;
+				Server_qp.pQP_Data[idx+j].nPut_Get_Done = 0;
+				Server_qp.IB_Modify_QP(Server_qp.pQP_Data[idx+j].queue_pair, Server_qp.pQP_Data[idx+j].ib_my_psn, (uint16_t)(Server_qp.pQP_Data[idx+j].ib_pal_lid), Server_qp.pQP_Data[idx+j].ib_pal_qpn, Server_qp.pQP_Data[idx+j].ib_pal_psn);
 
-			Server_qp.pQP_Data[i].idx_queue = 0;	// the first queue is reserved for inter-server communication
+				Server_qp.pQP_Data[idx+j].idx_queue = j;	// the first queue is reserved for inter-server communication
+			}
 		}
 	}
 	
 	free(pQPair_Inter_FS);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	printf("DBG> Rank = %d Finishing Setup_QP_Among_Servers().\n", mpi_rank);
 }
 
 void Get_Local_Server_Info(void)
@@ -172,9 +177,9 @@ static void* Func_thread_Print_Data(void *pParam)
 	}
 
 	sleep(1);
-	printf("DBG> Rank = %d. pServer_qp->IdxLastQP = %d\n", mpi_rank, pServer_qp->IdxLastQP);
+//	printf("DBG> Rank = %d. pServer_qp->IdxLastQP = %d\n", mpi_rank, pServer_qp->IdxLastQP);
 
-	for(int i=0; i<1000; i++)	{
+	while(1)	{
 		gettimeofday(&tm1, NULL);
 		for(int j=0; j<=pServer_qp->IdxLastQP; j++)	{
 			if(pServer_qp->p_shm_TimeHeartBeat[j])	{
@@ -225,6 +230,7 @@ static void* Func_thread_qp_server(void *pParam)
 
 	Init_ActiveJobList();
 	Init_QueueList();
+/*
 	Init_PreAllocated_QueuePair_List();
 
 	for(i=0; i<N_THREAD_PREALLOCATE_QP; i++)	{
@@ -243,7 +249,7 @@ static void* Func_thread_qp_server(void *pParam)
 			return 0;
 		}
 	}
-
+*/
 	for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
 		IO_Worker_tid_List[i] = i;
 		if(pthread_create(&(pthread_IO_Worker[i]), NULL, Func_thread_IO_Worker, &(IO_Worker_tid_List[i]))) {
@@ -280,10 +286,10 @@ void sigalarm_handler(int signum)
 	T_Cur += T_FREQ_REPORT_RESULT;
 	nOPs_Done_Sum = nOPs_Done_Sum_New;
 
-	printf("---------------------------------- nOP_Done\n");
-	for(i=0; i<nActiveJob; i++)	{
-		printf("INFO> jobid %d  nOP_Done = %ld\n", IdxJobRecList[i].jobid, ActiveJobList[IdxJobRecList[i].idx_rec_ht].nOps_Done);
-	}
+//	printf("---------------------------------- nOP_Done\n");
+//	for(i=0; i<nActiveJob; i++)	{
+//		printf("INFO> jobid %d  nOP_Done = %ld\n", IdxJobRecList[i].jobid, ActiveJobList[IdxJobRecList[i].idx_rec_ht].nOps_Done);
+//	}
 /*
 	printf("---------------------------------- Queue info\n");
 	for(i=1; i<MAX_NUM_QUEUE; i++)	{
@@ -295,13 +301,36 @@ void sigalarm_handler(int signum)
 	alarm(T_FREQ_REPORT_RESULT);
 }
 
+
+/*
+inline void Send_IO_Request(int idx_fs)
+{
+	IO_CMD_MSG *pIO_Cmd = (IO_CMD_MSG *)loc_buff;
+	int bTimeout;
+
+	while(1)	{
+		// send the IO request first
+		pIO_Cmd->tag_magic = rand();
+		pClient_qp[idx_fs]->IB_Put(loc_buff, pClient_qp[idx_fs]->mr_loc->lkey, (void*)(pClient_qp[idx_fs]->remote_addr_IO_CMD + sizeof(IO_CMD_MSG)*pClient_qp[idx_fs]->Idx_fs), pClient_qp[idx_fs]->pal_remote_mem.key, sizeof(IO_CMD_MSG));
+
+		// send a msg to notify that a new IO quest is coming.
+		loc_buff[0] = TAG_NEW_REQUEST;
+		pClient_qp[idx_fs]->IB_Put(loc_buff, pClient_qp[idx_fs]->mr_loc->lkey, (void*)(pClient_qp[idx_fs]->remote_addr_new_msg + sizeof(char)*pClient_qp[idx_fs]->Idx_fs), pClient_qp[idx_fs]->pal_remote_mem.key, 1);
+
+		bTimeout = Wait_For_IO_Request_Result(pIO_Cmd->tag_magic);
+		if(bTimeout==0)	break;
+		if(pIO_Cmd->op == RF_RW_OP_DISCONNECT)	break;	// NEVER send multiple RF_RW_OP_DISCONNECT command!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	}
+}
+*/
 int main(int argc, char **argv)
 {
 	int i;
 	FILE *fOut;
 	pthread_t thread_qp_server, thread_print_data, thread_polling_newmsg;
-	unsigned char *pNewMsg=NULL;
-	struct ibv_mr *mr_local;
+//	unsigned char *pNewMsg_ToSend=NULL;
+//	IO_CMD_MSG *pIO_Cmd_toSend;
+//	struct ibv_mr *mr_local;
 
 	CoreBinding.Init_Core_Binding();
 	Unique_Thread.Init_UniqueThread();
@@ -343,47 +372,65 @@ int main(int argc, char **argv)
 	while(1)	{
 		if(Server_Started)	break;
 	}
-	printf("Rank = %d. Server is started.\n", mpi_rank);
 
 	Setup_QP_Among_Servers();
+	printf("Rank = %d. Server is started.\n", mpi_rank);
 
-	pNewMsg = (unsigned char*)malloc(nFSServer);
-	assert(pNewMsg != NULL);
-	mr_local = Server_qp.IB_RegisterBuf_RW_Local_Remote(pNewMsg, nFSServer);
-	assert(mr_local != NULL);
-
-//	if(mpi_rank == 0)	{
-		sleep(3);
-		for(i=0; i<nFSServer; i++)	{
-			if(mpi_rank == i)	continue;
-			pNewMsg[mpi_rank] = 0x80;	// new msg!
-			Server_qp.IB_Put(i, &(pNewMsg[mpi_rank]), mr_local->lkey, (void*)(Server_qp.pQP_Data[i].remote_addr_new_msg+sizeof(char)*0), Server_qp.pQP_Data[i].rem_key, 1);
-		}
+//	if(pthread_create(&(thread_print_data), NULL, Func_thread_Print_Data, &Server_qp)) {
+//		fprintf(stderr, "Error creating thread\n");
+//		return 1;
 //	}
-
-	if(pthread_create(&(thread_print_data), NULL, Func_thread_Print_Data, &Server_qp)) {
-		fprintf(stderr, "Error creating thread\n");
-		return 1;
-	}
 
 	if(pthread_create(&(thread_polling_newmsg), NULL, Func_thread_Polling_New_Msg, &Server_qp)) {
 		fprintf(stderr, "Error creating thread\n");
 		return 1;
 	}
+	printf("DBG> Rank = %d,  started Func_thread_Polling_New_Msg().\n", mpi_rank);
 
 	signal(SIGALRM, sigalarm_handler); // Register signal handler
 	alarm(T_FREQ_REPORT_RESULT);
 
+	if(nFSServer>1)	Query_Other_Server( (mpi_rank + 1) % nFSServer );
 
+/*
+	pNewMsg_ToSend = (unsigned char*)malloc(sizeof(IO_CMD_MSG));
+	assert(pNewMsg_ToSend != NULL);
+	pIO_Cmd_toSend = (IO_CMD_MSG *)pNewMsg_ToSend;
+	mr_local = Server_qp.IB_RegisterBuf_RW_Local_Remote(pNewMsg_ToSend, sizeof(IO_CMD_MSG));
+	assert(mr_local != NULL);
+	
+	sleep(2);
+	int idx_TargetServer;
+	RW_FUNC_RETURN *pResult;
+
+	i = mpi_rank;
+	idx_TargetServer = (i+1)%nFSServer;
+	pIO_Cmd_toSend->rem_buff = (void*)(Server_qp.p_shm_IO_Result_Recv);
+	pIO_Cmd_toSend->rkey = Server_qp.mr_shm_global->rkey;
+	pIO_Cmd_toSend->tag_magic = rand();
+	pIO_Cmd_toSend->op = IO_OP_MAGIC | RF_RW_OP_HELLO;
+
+	pResult = (RW_FUNC_RETURN *)pIO_Cmd_toSend->rem_buff;
+	pResult->nDataSize = 0; // init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data.
+
+//Server_qp.IB_Put(idx_TargetServer, (void*)(&(pIO_Cmd_toSend[mpi_rank])), mr_local->lkey, (void*)(Server_qp.pQP_Data[idx_TargetServer].remote_addr_IO_CMD + sizeof(IO_CMD_MSG)*idx_TargetServer), Server_qp.pQP_Data[idx_TargetServer].rem_key, sizeof(IO_CMD_MSG));
+	Server_qp.IB_Put(idx_TargetServer, (void*)pIO_Cmd_toSend, mr_local->lkey, (void*)(Server_qp.pQP_Data[idx_TargetServer].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_TargetServer].rem_key, sizeof(IO_CMD_MSG));
+	pNewMsg_ToSend[0] = 0x80;	// new msg!
+	Server_qp.IB_Put(idx_TargetServer, (void*)pIO_Cmd_toSend, mr_local->lkey, (void*)(Server_qp.pQP_Data[idx_TargetServer].remote_addr_new_msg), Server_qp.pQP_Data[idx_TargetServer].rem_key, 1);
+
+	Wait_For_IO_Request_Result(pIO_Cmd_toSend->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_toSend->rem_buff));
+	printf("DBG> Rank = %d result = %d\n", mpi_rank, pResult->ret_value);
+*/
+	
 	if(pthread_join(thread_polling_newmsg, NULL)) {
 		fprintf(stderr, "Error joining thread.\n");
 		return 2;
 	}
 
-	if(pthread_join(thread_print_data, NULL)) {
-		fprintf(stderr, "Error joining thread.\n");
-		return 2;
-	}
+//	if(pthread_join(thread_print_data, NULL)) {
+//		fprintf(stderr, "Error joining thread.\n");
+//		return 2;
+//	}
 
 	if(pthread_join(thread_qp_server, NULL)) {
 		fprintf(stderr, "Error joining thread.\n");

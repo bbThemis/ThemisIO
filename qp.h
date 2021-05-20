@@ -30,10 +30,10 @@
 #define N_THREAD_PREALLOCATE_QP	(16)
 #define N_THREAD_ADD_PREALLOCATE_QP	(4)
 
-//#define NUM_QP_PREALLOCATED		(512)
-//#define NUM_QP_TRIGGER_PREALLOCATED		(256)	// a half of NUM_QP_PREALLOCATED
-#define NUM_QP_PREALLOCATED		(2048)	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Important for RESNET50. It creates new QPs very frequently. 
-#define NUM_QP_TRIGGER_PREALLOCATED		(1024)	// a half of NUM_QP_PREALLOCATED. !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Important for RESNET50. It creates new QPs very frequently. 
+#define NUM_QP_PREALLOCATED		(128)
+#define NUM_QP_TRIGGER_PREALLOCATED		(64)	// a half of NUM_QP_PREALLOCATED
+//#define NUM_QP_PREALLOCATED		(2048)	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Important for RESNET50. It creates new QPs very frequently. 
+//#define NUM_QP_TRIGGER_PREALLOCATED		(1024)	// a half of NUM_QP_PREALLOCATED. !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Important for RESNET50. It creates new QPs very frequently. 
 
 #define DEFAULT_REM_BUFF_SIZE	(4096)
 
@@ -68,7 +68,7 @@ typedef	struct	{
 
 	int nPut_Get, nPut_Get_Done;
 	int jobid, idx_queue;	// jobid and the index of queue that handles this jobid
-	int idx_JobRec, cuid, cgid, ctid, bTimeout, bClosed;
+	int idx_JobRec, cuid, cgid, ctid, bTimeout, bServerReady;
 
 	// These are only needed between file servers. Not needed for the pairs with regular compute node (file server clients). 
 	uint64_t remote_addr_new_msg;	// the address of remote buffer to notify a new message
@@ -121,12 +121,15 @@ public:
 	time_t *p_shm_TimeHeartBeat = NULL;
 	IO_CMD_MSG *p_shm_IO_Cmd_Msg = NULL;
 	char *p_shm_IO_Result = NULL;
+	char *p_shm_IO_Result_Recv = NULL;
+	IO_CMD_MSG *pIO_Cmd_ToSend_Other_Server=NULL;
 
 	struct ibv_device** dev_list_ = NULL;
 	struct ibv_context* context_ = NULL;
 	struct ibv_pd* pd_ = NULL;
 	struct ibv_port_attr port_attr_ = {};
 	struct ibv_mr *mr_rem, *mr_loc, *mr_shm_global = NULL;
+	struct ibv_cq *send_complete_queue[NUM_THREAD_IO_WORKER];
 
 	int					tag_mem;
 	int					rem_key;
@@ -154,9 +157,11 @@ public:
 
 	int FindFirstAvailableQP(void);
 	void ScanLostQueuePairs(void);
-	void ScanNewMsg(void);
+	void ScanNewMsg(void);				// one thread scanning new message from clients
+//	void ScanNewMsgInterServer(void);	// one thread scanning new message inter servers
 	void Destroy_A_QueuePair(int idx);
 	void Refill_PreAllocated_QP_Pool(void);
+	int Get_IO_Worker_Index_from_QP_Index(int idx_qp);
 };
 
 typedef struct	{

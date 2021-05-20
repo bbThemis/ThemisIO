@@ -138,7 +138,8 @@ static struct page *__alloc_page(unsigned long order,
 void * CMEM_ALLOCATOR::Mem_Alloc(unsigned long size, size_t *nBytesAllocated)
 {
     struct page *page = NULL;
-	unsigned long order, nPageAV;
+    unsigned long order, nPageAV;
+    void *ret;
 	
 	nPageAV = Get_Num_Free_Page();
 	order = Cal_Order(size);
@@ -153,13 +154,17 @@ void * CMEM_ALLOCATOR::Mem_Alloc(unsigned long size, size_t *nBytesAllocated)
     page = __alloc_page(order, &zone);
 //	list_add(&page->lru, &page_list);
     //TODO: unlock zone->lock
+
+	ret = Page_to_Virt(page);
+	*nBytesAllocated = page ? (BUDDY_PAGE_SIZE * (1 << order)) : (0L);
 	pthread_mutex_unlock(&lock);
 
-	*nBytesAllocated = page ? (BUDDY_PAGE_SIZE * (1 << order)) : (0L);
+//	*nBytesAllocated = page ? (BUDDY_PAGE_SIZE * (1 << order)) : (0L);
 
 //	printf("DBG> Allocated %ld. (%ld, %ld)", *nBytesAllocated, nPageAV, Get_Num_Free_Page());
 
-    return Page_to_Virt(page);
+//    return Page_to_Virt(page);
+	return ret;
 }
 
 ////////////////////////////////////////////////
