@@ -128,7 +128,7 @@ static org_sighandler org_segv=NULL, org_term=NULL, org_int=NULL;
 class	CLIENT_QUEUEPAIR	{
 private:
 	struct ibv_cq *send_complete_queue = NULL;
-	struct ibv_cq *recv_complete_queue = NULL;
+//	struct ibv_cq *recv_complete_queue = NULL;
 	
 	QPAIR_EXCH_DATA qp_my_data, qp_pal_data;
 	IB_MEM_DATA my_remote_mem;
@@ -256,7 +256,7 @@ void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t si
 	Done_IB_PD_Init = 0;
 
 	send_complete_queue = NULL;
-	recv_complete_queue = NULL;
+//	recv_complete_queue = NULL;
 	nPut = nPut_Done = 0;
 	nGet = nGet_Done = 0;
 	sock = 0;
@@ -283,7 +283,7 @@ void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t si
 
 	gethostname(szHostName, 63);
 	Take_ShortName(szHostName);
-	Get_Exe_Name(szExeName);
+//	Get_Exe_Name(szExeName);
 	data_to_send.JobInfo.comm_tag = TAG_SUBMIT_JOB_INFO;
 	data_to_send.JobInfo.nnode = nnode_this_job;
 	data_to_send.JobInfo.jobid = jobid;
@@ -513,8 +513,8 @@ void CLIENT_QUEUEPAIR::Close_QueuePair(void)
 		pthread_mutex_destroy(&qp_put_get_lock);
 		qp_put_get_locked = 0;
 	}
-    if (recv_complete_queue != NULL)
-		ibv_destroy_cq(recv_complete_queue);
+//    if (recv_complete_queue != NULL)
+//		ibv_destroy_cq(recv_complete_queue);
     if (send_complete_queue != NULL)
 		ibv_destroy_cq(send_complete_queue);
 	
@@ -555,7 +555,7 @@ void CLIENT_QUEUEPAIR::IB_modify_qp(void)
 	rtr_attr.path_mtu = IBV_MTU_4096;
 	rtr_attr.dest_qp_num = qp_pal_data.qp_n;
 	rtr_attr.rq_psn = qp_pal_data.psn;
-	rtr_attr.max_dest_rd_atomic = 16;	// Ref to ctx_set_out_reads() in simple.c!!!!!!!!!!!!!!!!
+	rtr_attr.max_dest_rd_atomic = 1;	// Ref to ctx_set_out_reads() in simple.c!!!!!!!!!!!!!!!!
 	
 	// retry_speed faster
 	rtr_attr.min_rnr_timer = 12;	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -585,7 +585,7 @@ void CLIENT_QUEUEPAIR::IB_modify_qp(void)
 	rts_attr.retry_cnt = 7;
 	rts_attr.rnr_retry = 7;
 	rts_attr.sq_psn = qp_my_data.psn;
-	rts_attr.max_rd_atomic = 16;	// Ref to ctx_set_out_reads() in simple.c!!!!!!!!!!!!!!!!
+	rts_attr.max_rd_atomic = 1;	// Ref to ctx_set_out_reads() in simple.c!!!!!!!!!!!!!!!!
 	rts_attr.ah_attr.dlid = qp_pal_data.lid; // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	
 	ret = ibv_modify_qp(queue_pair, &rts_attr,
@@ -601,27 +601,27 @@ void CLIENT_QUEUEPAIR::IB_modify_qp(void)
 void CLIENT_QUEUEPAIR::IB_CreateQueuePair(void)
 {
 	send_complete_queue = ibv_create_cq(context_, QUEUE_SIZE, NULL, NULL, 0);
-	recv_complete_queue = ibv_create_cq(context_, QUEUE_SIZE, NULL, NULL, 0);
+//	recv_complete_queue = ibv_create_cq(context_, QUEUE_SIZE, NULL, NULL, 0);
 	
 	if (!send_complete_queue) {
 		fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_create_cq of send cq.\n", __FILE__, __LINE__);
 		exit(1);
 	}
 	
-	if (!recv_complete_queue) {
-		fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_create_cq of recv cq.\n", __FILE__, __LINE__);
-		exit(1);
-	}
+//	if (!recv_complete_queue) {
+//		fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_create_cq of recv cq.\n", __FILE__, __LINE__);
+//		exit(1);
+//	}
 	
 	uint32_t my_psn = random() % 0xFFFFFF;
 	
 	struct ibv_qp_init_attr qp_init_attr = {};
 	qp_init_attr.qp_type = IBV_QPT_RC;
 	qp_init_attr.send_cq = send_complete_queue;
-	qp_init_attr.recv_cq = recv_complete_queue;
+	qp_init_attr.recv_cq = send_complete_queue;
 	
 	qp_init_attr.cap.max_send_wr = QUEUE_SIZE;
-	qp_init_attr.cap.max_recv_wr = 8192;
+	qp_init_attr.cap.max_recv_wr = 1;
 	qp_init_attr.cap.max_send_sge = 1;
 	qp_init_attr.cap.max_recv_sge = 1;
 	qp_init_attr.sq_sig_all = 1;
@@ -629,7 +629,7 @@ void CLIENT_QUEUEPAIR::IB_CreateQueuePair(void)
 	//  qp_init_attr.sq_sig_all = 1;	// 0 - In every Work Request submitted to the Send Queue, the user must decide whether to generate a Work Completion for successful 
 	//     completions or not
 	// 1 - All Work Requests that will be submitted to the Send Queue will always generate a Work Completion !!!!!!!!!!
-	qp_init_attr.cap.max_inline_data = 0;
+	qp_init_attr.cap.max_inline_data = 220;
 	
 	queue_pair = ibv_create_qp(pd_, &qp_init_attr);
 	
@@ -677,6 +677,8 @@ int CLIENT_QUEUEPAIR::IB_Put(void* loc_buf, uint32_t lkey, void* rem_buf, uint32
 	write_wr.wr.rdma.remote_addr = (uint64_t)rem_buf;
 	
 	write_wr.send_flags = 2;
+	if(len <= 220)  write_wr.send_flags |= IBV_SEND_INLINE;
+
 	struct ibv_send_wr* bad_wr;
 
 	pthread_mutex_lock(&qp_put_get_lock);
@@ -698,7 +700,8 @@ int CLIENT_QUEUEPAIR::IB_Put(void* loc_buf, uint32_t lkey, void* rem_buf, uint32
 		memset(&wc, 0, sizeof(struct ibv_wc));
 		
 		while(1)	{
-			ne = ibv_poll_cq(send_complete_queue, CTX_POLL_BATCH, &wc);
+			ne = ibv_poll_cq(send_complete_queue, 1, &wc);
+//			ne = ibv_poll_cq(send_complete_queue, CTX_POLL_BATCH, &wc);
 			if (ne == 1) {
 				nPut_Done +=1;
 				//				nPut_Done += DEF_CQ_MOD;

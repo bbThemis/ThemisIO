@@ -38,7 +38,7 @@ typedef struct {
 	size_t			max_free_pages;
 } ncx_slab_stat_t;
 
-ncx_slab_pool_t * ncx_slab_init(size_t pool_size);
+ncx_slab_pool_t * ncx_slab_init(void *pMem, size_t pool_size);
 //void ncx_slab_init(ncx_slab_pool_t *pool);
 void *ncx_slab_alloc(ncx_slab_pool_t *pool, size_t size);
 void *ncx_slab_alloc_locked(ncx_slab_pool_t *pool, size_t size);

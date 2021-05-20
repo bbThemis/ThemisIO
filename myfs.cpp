@@ -23,12 +23,16 @@
 #include "ncx_slab.h"
 
 extern long int nSizeReg;
+extern __thread uint64_t rseed[2];
+extern __thread int idx_qp_server;
 
 //#define MAX_DIR_FD	(65536)
 //#define MAX_DIR_FD_M1	((MAX_DIR_FD) - 1)
 extern SERVER_QUEUEPAIR Server_qp;
 
-static int my_uid, my_gid;
+const int IO_Msg_Size_op = ( offsetof(IO_CMD_MSG,op) + sizeof(int) );
+
+static int my_uid, my_gid, idx_fs_FSRoot=-1;
 
 int nFile=0, nDir=0;	// number of file and dir on this server
 ULongInt FSSize, HashTableFileSize, FileMetaDataSize, HashTableDirSize, DirMetaDataSize, AllocatorSize, DataAreaSize;
@@ -43,12 +47,18 @@ pthread_mutex_t file_lock[MAX_NUM_FILE_OP_LOCK];
 pthread_mutex_t dir_entry_lock[MAX_NUM_FILE_OP_LOCK];
 pthread_mutex_t fd_lock;
 pthread_mutex_t ht_lock;	// modify hashtable lock
+pthread_mutex_t *pAccess_qp0_lock;	// Only one token is available to access queue pair 0 since the target buffer on remote server is shared!!!! 
 
-ncx_slab_pool_t *sp_DirEntryName=NULL, *sp_DirEntryNameOffset=NULL, *sp_LongFileNameBuff=NULL;
+
+ncx_slab_pool_t *sp_CallReturnBuff=NULL;
+char *p_CallReturnBuff=NULL;
+
+//ncx_slab_pool_t *sp_DirEntryName=NULL, *sp_DirEntryNameOffset=NULL, *sp_LongFileNameBuff=NULL;
+ncx_slab_pool_t *sp_LongFileNameBuff=NULL, *sp_DirEntryHashTableBuff=NULL;
 ncx_slab_pool_t *sp_ExtraPointers=NULL;
 ncx_slab_pool_t *sp_DirEntryList=NULL;
-static char *p_DirEntryNameOffsetBuff=NULL;
-static char *p_DirEntryNameBuff=NULL;
+//static char *p_DirEntryNameOffsetBuff=NULL;
+//static char *p_DirEntryNameBuff=NULL;
 
 void *pMyfs=NULL;
 
@@ -73,7 +83,7 @@ int nActiveFd=0, First_Av_Fd=0, IdxLastFd=-1;
 void Init_Memory(void)
 {
 	ULongInt Offset;
-	int i;
+	int i, nQP_Server;
 	char szNameShm_Full[128];
 
 	sprintf(szNameShm_Full, "%s_%d", szNameShm, mpi_rank%nNUMAPerNode);
@@ -128,14 +138,18 @@ void Init_Memory(void)
 //	printf("%lx \n", (ULongInt)pDirMetaData);
 	Offset += DirMetaDataSize;
 
-	sp_DirEntryName = ncx_slab_init(MAX_LEN_DIR_ENTRY_BUFF);
-	p_DirEntryNameBuff = (char*)sp_DirEntryName;
-	sp_DirEntryNameOffset = ncx_slab_init(MAX_LEN_DIR_ENTRY_OFFSET_BUFF);
-	p_DirEntryNameOffsetBuff = (char*)sp_DirEntryNameOffset;
-	sp_LongFileNameBuff = ncx_slab_init(MAX_LEN_LONG_FILE_NAME_BUFF);
+//	sp_CallReturnBuff = ncx_slab_init(MAX_LEN_RETURN_BUFF);
+//	p_CallReturnBuff = (char*)sp_CallReturnBuff;
+
+//	sp_DirEntryName = ncx_slab_init(NULL, MAX_LEN_DIR_ENTRY_BUFF);
+//	p_DirEntryNameBuff = (char*)sp_DirEntryName;
+//	sp_DirEntryNameOffset = ncx_slab_init(NULL, MAX_LEN_DIR_ENTRY_OFFSET_BUFF);
+//	p_DirEntryNameOffsetBuff = (char*)sp_DirEntryNameOffset;
+	sp_LongFileNameBuff = ncx_slab_init(NULL, MAX_LEN_LONG_FILE_NAME_BUFF);
 	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	sp_ExtraPointers = ncx_slab_init(MAX_LEN_EXTRA_POINTERS_BUFF);
-	sp_DirEntryList = ncx_slab_init(MAX_LEN_DIR_ENTRY_LIST_BUFF);
+	sp_ExtraPointers = ncx_slab_init(NULL, MAX_LEN_EXTRA_POINTERS_BUFF);
+	sp_DirEntryList = ncx_slab_init(NULL, MAX_LEN_DIR_ENTRY_LIST_BUFF);
+	sp_DirEntryHashTableBuff = ncx_slab_init(NULL, MAX_LEN_DIR_ENTRY_HASHTABLE_BUFF);
 
 	// insert the record of the root directory! 
 	my_mkdir(szFSRoot, S_IRWXU | S_IRWXG | S_IRWXO, my_uid, my_gid);
@@ -173,17 +187,114 @@ void Init_Memory(void)
 		printf("\n mutex ht_lock init failed\n"); 
 		exit(1);
 	}
+
+	nQP_Server = nFSServer * NUM_THREAD_IO_WORKER_INTER_SERVER;
+	pAccess_qp0_lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t) * nQP_Server);
+	for(i=0; i<nQP_Server; i++)	{
+		if(pthread_mutex_init(&(pAccess_qp0_lock[i]), NULL) != 0) { 
+			printf("\n mutex ht_lock init failed\n"); 
+			exit(1);
+		}
+	}
+	
 	printf("INFO> Finished Init_Memory().\n");
 
 	my_uid = getuid();
 	my_gid = getgid();
+
+	unsigned long long int fn_hash;
+	fn_hash = XXH64(szFSRoot, strlen(szFSRoot), 0);
+	idx_fs_FSRoot = fn_hash % nFSServer;
 }
 
-int Query_Parent_Dir(char szDirName[], int *nLenParentDirName, int *nLenFileName)
+inline int Query_Server_Index(char szPath[], int nLen)
+{
+	unsigned long long fn_hash=0;
+	int nReadItem, Idx_Server;
+
+	if(strcmp(szPath, szFSRoot)==0)	{
+		return idx_fs_FSRoot;
+	}
+
+	if( nLen>=4 )	{	// specific tag used to choose specific server!!!!!!!!!!!!!!!!!!!!
+		if( (szPath[nLen-4] == '_') && (szPath[nLen-3] == 'S') )	{
+			nReadItem = sscanf(szPath+nLen-2, "%x", &Idx_Server);
+			if( (nReadItem == 1) && (Idx_Server < nFSServer) )	{
+				if((Idx_Server) < nFSServer)	return Idx_Server;
+			}
+		}
+		if(nLen > 10)	{
+			if( (szPath[nLen-9] == '.') && (szPath[nLen-8] == '0')  && (szPath[nLen-7] == '0') )	{
+				nReadItem = sscanf(szPath+nLen-6, "%d", &Idx_Server);
+				if( (nReadItem == 1) && (Idx_Server < nFSServer) )	{
+					if((Idx_Server) < nFSServer)	return Idx_Server;
+				}
+			}
+		}
+	}
+	fn_hash = XXH64(szPath, nLen, 0);
+	Idx_Server = fn_hash % nFSServer;
+	return Idx_Server;
+}
+
+inline int Query_Server_Index_Dir_Index(char szPath[], int nLen, int *pIdx_Server)
+{
+	unsigned long long fn_hash=0;
+	int dir_idx, nReadItem;
+
+	*pIdx_Server = -1;
+
+	if(strcmp(szPath, szFSRoot)==0)	{
+		*pIdx_Server = idx_fs_FSRoot;
+		if(idx_fs_FSRoot == mpi_rank)	{
+			return 0;	// dir_idx = 0 for szFSRoot		
+		}
+		else	return (-1);	// on other server. 
+	}
+
+	if( (nLen>=4) && (szPath[nLen-4] == '_') && (szPath[nLen-3] == 'S') )	{	// specific tag used to choose specific server!!!!!!!!!!!!!!!!!!!!
+		nReadItem = sscanf(szPath+nLen-2, "%x", pIdx_Server);
+		if(nReadItem != 1)	{
+			printf("Warning> Failed to extract server index from %s\n", szPath+nLen-4);
+		}
+		else	{
+			if((*pIdx_Server) >= nFSServer)	{
+				printf("Warning> idx_Server (%d) > nFSServer (%d) in %s\n", *pIdx_Server, nFSServer, szPath+nLen-4);
+//				exit(1);
+			}
+			else	{
+				if(mpi_rank != (*pIdx_Server) ) 	{	// on other server
+					return (-1);	// dir_idx = -1;
+				}
+			}
+		}
+	}
+	if( (nLen > 10) && (szPath[nLen-9] == '.') && (szPath[nLen-8] == '0')  && (szPath[nLen-7] == '0') )	{
+		nReadItem = sscanf(szPath+nLen-6, "%d", pIdx_Server);
+		if(nReadItem != 1)	{
+			printf("Warning> Failed to extract server index from %s\n", szPath+nLen-4);
+		}
+		else	{
+			*pIdx_Server = (*pIdx_Server) % nFSServer;
+			if(mpi_rank != (*pIdx_Server) ) 	{	// on other server
+				return (-1);	// dir_idx = -1;
+			}
+		}
+	}
+
+	dir_idx = p_Hash_Dir->DictSearch(szPath, &elt_list_dir, &ht_table_dir, &fn_hash);
+	if(dir_idx >= 0)	{
+		*pIdx_Server = mpi_rank;	// current node
+	}
+	else	{
+		*pIdx_Server = fn_hash % nFSServer;
+	}
+	return dir_idx;
+}
+
+int Query_Parent_Dir(char szDirName[], char szParentDir[], int *nLenParentDirName, int *nLenFileName, int *pIdx_Server)
 {
 	int i, dir_idx;
-	char szParentDir[512];
-	unsigned long long fn_hash=0;
 
 	if(strcmp(szFSRoot, szDirName)==0)	{
 		*nLenFileName = strlen(szDirName);
@@ -206,15 +317,238 @@ int Query_Parent_Dir(char szDirName[], int *nLenParentDirName, int *nLenFileName
 	memcpy(szParentDir, szDirName, i);
 	szParentDir[i] = 0;
 
-	dir_idx = p_Hash_Dir->DictSearch(szParentDir, &elt_list_dir, &ht_table_dir, &fn_hash);
-	return dir_idx;
+	return Query_Server_Index_Dir_Index(szParentDir, i, pIdx_Server);
 }
+
+inline int Wait_For_IO_Request_Result(int Tag_Magic, RW_FUNC_RETURN *pIO_Result)
+{
+	RW_FUNC_RETURN *pResult = pIO_Result;
+	int *pTag_End, Tag_Ini;
+	struct timeval tm1, tm2;	// tm1.tv_sec
+	long int t1_ms, t2_ms;
+
+	gettimeofday(&tm1, NULL);
+	t1_ms = (tm1.tv_sec * 1000) + (tm1.tv_usec / 1000);
+	while(1)	{
+		if(pResult->nDataSize > 0)	break;	// waiting for the size of result. 
+
+		gettimeofday(&tm2, NULL);
+		t2_ms = (tm2.tv_sec * 1000) + (tm2.tv_usec / 1000);
+		if( (t2_ms - t1_ms) > QP_WAIT_RESULT_TIMEOUT_MS )	{
+			return 1;	// time out
+		}
+	}
+	Tag_Ini = pResult->Tag_Ini;
+	pTag_End =  (int*)((char*)pIO_Result + pResult->nDataSize - sizeof(int));
+
+	while(1)	{
+		if( ( Tag_Ini ^ (*pTag_End) ) == Tag_Magic )	break;	// waiting for the ending tag. 
+
+		gettimeofday(&tm2, NULL);
+		t2_ms = (tm2.tv_sec * 1000) + (tm2.tv_usec / 1000);
+		if( (t2_ms - t1_ms) > QP_WAIT_RESULT_TIMEOUT_MS )	{
+			return 1;	// time out
+		}
+	}
+	return 0;
+}
+
+#define SIZE_FOR_NEW_MSG	(64)
+
+void Query_Other_Server(int idx_server)
+{
+	RW_FUNC_RETURN *pResult;
+	IO_CMD_MSG *pIO_Cmd_ToSend_Other_Server;
+	char *pNewMsg_ToSend, *pMemAlloc;
+	int idx_qp;
+
+	idx_qp = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_qp_server;
+	
+	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN));
+	pNewMsg_ToSend = (char*)pMemAlloc;
+	pIO_Cmd_ToSend_Other_Server = (IO_CMD_MSG *)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG);
+
+	pIO_Cmd_ToSend_Other_Server->rkey = Server_qp.mr_shm_global->rkey;
+	pIO_Cmd_ToSend_Other_Server->rem_buff = (void*)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG));
+	pIO_Cmd_ToSend_Other_Server->tag_magic = (int)(next(rseed) & 0xFFFFFFFF);
+	pIO_Cmd_ToSend_Other_Server->op = IO_OP_MAGIC | RF_RW_OP_HELLO;
+
+	pResult = (RW_FUNC_RETURN *)pIO_Cmd_ToSend_Other_Server->rem_buff;
+	pResult->nDataSize = 0; // init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data.
+
+	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+		perror("pthread_mutex_lock");
+		exit(2);
+	}
+
+	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, IO_Msg_Size_op);
+//	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, sizeof(IO_CMD_MSG));
+	pNewMsg_ToSend[0] = TAG_NEW_REQUEST;	// new msg!
+	Server_qp.IB_Put(idx_qp, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_new_msg), Server_qp.pQP_Data[idx_qp].rem_key, 1);
+
+	Wait_For_IO_Request_Result(pIO_Cmd_ToSend_Other_Server->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_ToSend_Other_Server->rem_buff));
+	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+		perror("pthread_mutex_unlock");
+		exit(2);
+	}
+	printf("DBG> Rank = %d result = %d nDataSize = %d\n", mpi_rank, pResult->ret_value, pResult->nDataSize);
+
+	ncx_slab_free(sp_CallReturnBuff, pMemAlloc);
+}
+
+int Request_Is_ParentDIr_Existing(int idx_server, char szPath[], int *pIdx_Parent_Dir)	// return 1 if existing, 0 if non-existing
+{
+	int ret;
+	RW_FUNC_RETURN *pResult;
+	IO_CMD_MSG *pIO_Cmd_ToSend_Other_Server;
+	char *pNewMsg_ToSend, *pMemAlloc;
+	PARENTDIR_FUNC_RETURN *pReturnResult_Dir_Exist;
+	int idx_qp;
+
+	idx_qp = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_qp_server;
+	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN) + 1*sizeof(int));
+	pNewMsg_ToSend = (char*)pMemAlloc;
+	pIO_Cmd_ToSend_Other_Server = (IO_CMD_MSG *)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG);
+
+	pIO_Cmd_ToSend_Other_Server->rkey = Server_qp.mr_shm_global->rkey;
+	pIO_Cmd_ToSend_Other_Server->rem_buff = (void*)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG));
+	strcpy(pIO_Cmd_ToSend_Other_Server->szName, szPath);
+	pIO_Cmd_ToSend_Other_Server->tag_magic = (int)(next(rseed) & 0xFFFFFFFF);
+	pIO_Cmd_ToSend_Other_Server->op = IO_OP_MAGIC | RF_RW_OP_DIR_EXIST;
+
+	pResult = (RW_FUNC_RETURN *)pIO_Cmd_ToSend_Other_Server->rem_buff;
+	pResult->nDataSize = 0; // init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data.
+
+	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+		perror("pthread_mutex_lock");
+		exit(2);
+	}
+//	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, sizeof(IO_CMD_MSG));
+	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, IO_Msg_Size_op);
+	pNewMsg_ToSend[0] = TAG_NEW_REQUEST;	// new msg!
+	Server_qp.IB_Put(idx_qp, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_new_msg), Server_qp.pQP_Data[idx_qp].rem_key, 1);
+
+	Wait_For_IO_Request_Result(pIO_Cmd_ToSend_Other_Server->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_ToSend_Other_Server->rem_buff));
+	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+		perror("pthread_mutex_unlock");
+		exit(2);
+	}
+	pReturnResult_Dir_Exist = (PARENTDIR_FUNC_RETURN *)((char*)pResult + sizeof(RW_FUNC_RETURN) - sizeof(int) );
+	*pIdx_Parent_Dir = pReturnResult_Dir_Exist->idx_Parent_Dir;
+
+	ret = pResult->ret_value;
+	ncx_slab_free(sp_CallReturnBuff, pMemAlloc);
+
+	return ret;
+}
+
+// return 0 if succeed, -1 if fail
+int Request_ParentDir_Add_Entry(int idx_server, char szPath[], int nLenParentDirName, int EntryType, int *pIdx_Parent_Dir)
+{
+	int ret;
+	RW_FUNC_RETURN *pResult;
+	IO_CMD_MSG *pIO_Cmd_ToSend_Other_Server;
+	char *pNewMsg_ToSend, *pMemAlloc;
+	PARENTDIR_FUNC_RETURN *pParentDir_Func_Ret;
+	int idx_qp;
+
+	idx_qp = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_qp_server;
+	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN) + 1*sizeof(int));
+	pNewMsg_ToSend = (char*)pMemAlloc;
+	pIO_Cmd_ToSend_Other_Server = (IO_CMD_MSG *)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG);
+
+	pIO_Cmd_ToSend_Other_Server->rkey = Server_qp.mr_shm_global->rkey;
+	pIO_Cmd_ToSend_Other_Server->rem_buff = (void*)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG));
+	strcpy(pIO_Cmd_ToSend_Other_Server->szName, szPath);
+	pIO_Cmd_ToSend_Other_Server->nLen_Parent_Dir_Name = nLenParentDirName;
+	pIO_Cmd_ToSend_Other_Server->flag = EntryType;
+	pIO_Cmd_ToSend_Other_Server->tag_magic = (int)(next(rseed) & 0xFFFFFFFF);
+	pIO_Cmd_ToSend_Other_Server->op = IO_OP_MAGIC | RF_RW_OP_ADDENTRY_PARENT_DIR;
+
+	pResult = (RW_FUNC_RETURN *)pIO_Cmd_ToSend_Other_Server->rem_buff;
+	pResult->nDataSize = 0; // init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data.
+
+	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+		perror("pthread_mutex_lock");
+		exit(2);
+	}
+//	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, sizeof(IO_CMD_MSG));
+	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, IO_Msg_Size_op);
+	pNewMsg_ToSend[0] = TAG_NEW_REQUEST;	// new msg!
+	Server_qp.IB_Put(idx_qp, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_new_msg), Server_qp.pQP_Data[idx_qp].rem_key, 1);
+
+	Wait_For_IO_Request_Result(pIO_Cmd_ToSend_Other_Server->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_ToSend_Other_Server->rem_buff));
+	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+		perror("pthread_mutex_unlock");
+		exit(2);
+	}
+	if(pResult->ret_value == 0)	{
+		pParentDir_Func_Ret = (PARENTDIR_FUNC_RETURN *)((char*)pResult + sizeof(RW_FUNC_RETURN) - sizeof(int));
+		*pIdx_Parent_Dir = pParentDir_Func_Ret->idx_Parent_Dir;
+	}
+	else	errno = pResult->myerrno;
+
+	ret = pResult->ret_value;
+	ncx_slab_free(sp_CallReturnBuff, pMemAlloc);
+
+	return ret;
+}
+
+void Request_ParentDir_Remove_Entry(char szEntryName_ToRemove[], int idx_server, int idx_Parent_Dir, int nLenParentDirName)
+{
+	RW_FUNC_RETURN *pResult;
+	IO_CMD_MSG *pIO_Cmd_ToSend_Other_Server;
+	char *pNewMsg_ToSend, *pMemAlloc;
+	PARENTDIR_FUNC_RETURN *pParentDir_Func_Ret;
+	int *pIntParam;
+	int idx_qp;
+
+	idx_qp = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_qp_server;
+	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN));
+	pNewMsg_ToSend = (char*)pMemAlloc;
+	pIO_Cmd_ToSend_Other_Server = (IO_CMD_MSG *)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG);
+
+	pIO_Cmd_ToSend_Other_Server->rkey = Server_qp.mr_shm_global->rkey;
+	pIO_Cmd_ToSend_Other_Server->rem_buff = (void*)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG));
+
+	pIntParam = (int*)pIO_Cmd_ToSend_Other_Server->szName;
+	pIntParam[0] = idx_Parent_Dir;
+	pIntParam[1] = nLenParentDirName;
+	strcpy((char*)(&(pIntParam[2])), szEntryName_ToRemove);
+
+	pIO_Cmd_ToSend_Other_Server->tag_magic = (int)(next(rseed) & 0xFFFFFFFF);
+	pIO_Cmd_ToSend_Other_Server->op = IO_OP_MAGIC | RF_RW_OP_REMOVEENTRY_PARENT_DIR;
+
+	pResult = (RW_FUNC_RETURN *)pIO_Cmd_ToSend_Other_Server->rem_buff;
+	pResult->nDataSize = 0; // init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data.
+
+	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+		perror("pthread_mutex_lock");
+		exit(2);
+	}
+//	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, sizeof(IO_CMD_MSG));
+	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, IO_Msg_Size_op);
+	pNewMsg_ToSend[0] = TAG_NEW_REQUEST;	// new msg!
+	Server_qp.IB_Put(idx_qp, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_new_msg), Server_qp.pQP_Data[idx_qp].rem_key, 1);
+
+	Wait_For_IO_Request_Result(pIO_Cmd_ToSend_Other_Server->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_ToSend_Other_Server->rem_buff));
+	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+		perror("pthread_mutex_unlock");
+		exit(2);
+	}
+	if(pResult->ret_value != 0)	errno = pResult->myerrno;
+
+	ncx_slab_free(sp_CallReturnBuff, pMemAlloc);
+}
+
 
 int my_mkdir(char szDirName[], int mode, int uid, int gid)
 {
-	int dir_idx, file_idx, Parent_dir_idx, nLenParentDirName, nLenFileName;
+	char szParentDir[512];
+	int dir_idx, file_idx, Parent_dir_idx, nLenParentDirName, nLenFileName, idx_server_ParentDir, bParentDirExisting;
 	unsigned long long fn_hash=0;
 	struct timespec t_spec;
+	struct stat dir_stat;
 
 //	printf("DBG> mkdir(%s)\n", szDirName);
 	clock_gettime(CLOCK_REALTIME, &t_spec);
@@ -222,8 +556,30 @@ int my_mkdir(char szDirName[], int mode, int uid, int gid)
 	pthread_mutex_lock(&(create_new_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 	dir_idx = p_Hash_Dir->DictSearch(szDirName, &elt_list_dir, &ht_table_dir, &fn_hash);
 	if(dir_idx < 0)	{
-		Parent_dir_idx = Query_Parent_Dir(szDirName, &nLenParentDirName, &nLenFileName);
-		if( Parent_dir_idx >=0 )	{	// parent dir exists. 
+		Parent_dir_idx = Query_Parent_Dir(szDirName, szParentDir, &nLenParentDirName, &nLenFileName, &idx_server_ParentDir);
+		
+		if(Parent_dir_idx >= 0)	{	// Parent dir locates on this server and exists! 
+			bParentDirExisting = 1;
+		}
+		else	{
+			if(idx_server_ParentDir == mpi_rank)	{	// Parent dir should be handled by this server, but it does NOT exists! 
+				bParentDirExisting = 0;
+			}
+			else	{
+				if(Request_ParentDir_Add_Entry(idx_server_ParentDir, szDirName, nLenParentDirName, DIR_ENT_TYPE_DIR, &Parent_dir_idx) == 0)	{	// succeed
+					bParentDirExisting = 1;
+				}
+//				if(Request_Is_ParentDIr_Existing(idx_server_ParentDir, szParentDir, &Parent_dir_idx) == 1)	{	// existing
+//				if(Request_ParentDir_Add_Entry(idx_server_ParentDir, szDirName, nLenParentDirName, DIR_ENT_TYPE_DIR, &Parent_dir_idx, &IdxEntry_in_Dir) == 0)	{	// succeed
+//					bParentDirExisting = 1;
+//				}
+				else	{
+					bParentDirExisting = 0;
+				}
+			}
+		}
+
+		if( bParentDirExisting )	{	// parent dir exists. 
 			pthread_mutex_lock(&ht_lock);
 			dir_idx = p_Hash_Dir->DictInsertAuto(szDirName, &elt_list_dir, &ht_table_dir);
 			nDir++;
@@ -231,9 +587,14 @@ int my_mkdir(char szDirName[], int mode, int uid, int gid)
 
 			strcpy(pDirMetaData[dir_idx].szDirName, szDirName);
 
+			// init dir entry list hash table!
 			pDirMetaData[dir_idx].nEntries = 0;	// init number of entries
 			pDirMetaData[dir_idx].nMaxEntry = DEFAULT_MAX_ENTRY_PER_DIR;
-			pDirMetaData[dir_idx].nOffset_To_EntryNameOffsetList = (long int)ncx_slab_alloc(sp_DirEntryNameOffset, pDirMetaData[dir_idx].nMaxEntry*sizeof(int)) - (long int)p_DirEntryNameOffsetBuff;
+			pDirMetaData[dir_idx].nEntryTriggerExpand = (int)(pDirMetaData[dir_idx].nMaxEntry * RATIO_DIRENTRY_HASHTABLE_EXPAND);
+			pDirMetaData[dir_idx].nEntryTriggerShrink = (int)(pDirMetaData[dir_idx].nMaxEntry * RATIO_DIRENTRY_HASHTABLE_SHRINK);
+			pDirMetaData[dir_idx].p_Hash_DirEntry = (CHASHTABLE_DirEntry *)ncx_slab_alloc(sp_DirEntryHashTableBuff, CHASHTABLE_DirEntry::GetStorageSize(DEFAULT_MAX_ENTRY_PER_DIR));
+			pDirMetaData[dir_idx].p_Hash_DirEntry->DictCreate(DEFAULT_MAX_ENTRY_PER_DIR, &(pDirMetaData[dir_idx].elt_list_DirEntry), &(pDirMetaData[dir_idx].ht_table_DirEntry));	// init hash table
+//			pDirMetaData[dir_idx].nOffset_To_EntryNameOffsetList = (long int)ncx_slab_alloc(sp_DirEntryNameOffset, pDirMetaData[dir_idx].nMaxEntry*sizeof(int)) - (long int)p_DirEntryNameOffsetBuff;
 			pDirMetaData[dir_idx].nLenAllEntries = 0;
 
 			// insert into file hash table too.
@@ -243,6 +604,12 @@ int my_mkdir(char szDirName[], int mode, int uid, int gid)
 			pthread_mutex_unlock(&ht_lock);
 
 			strcpy(pMetaData[file_idx].szFileName, szDirName);
+			pMetaData[file_idx].idx_Server_Parent_Dir = idx_server_ParentDir;
+			pMetaData[file_idx].idx_Parent_Dir = Parent_dir_idx;
+//			if(idx_server_ParentDir != mpi_rank)	{	// parent dir is on remote server. This is ONLY a tentertive value. 
+//				pMetaData[file_idx].IdxEntry_in_Dir = IdxEntry_in_Dir;
+//			}
+
 			pMetaData[file_idx].st_dev = 0;	// const
 			pMetaData[file_idx].st_ino = file_idx;
 			pMetaData[file_idx].st_nlink = 2;	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -260,12 +627,19 @@ int my_mkdir(char szDirName[], int mode, int uid, int gid)
 			pMetaData[file_idx].st_ctim.tv_sec = t_spec.tv_sec;
 			pMetaData[file_idx].st_ctim.tv_nsec = t_spec.tv_nsec;
 
-			if(nLenParentDirName)	{
-				my_AddEntryInfo(file_idx, Parent_dir_idx);	// only for non-root directory
-				pMetaData[file_idx].idx_Parent_Dir = Parent_dir_idx;
-			}
 			pthread_mutex_unlock(&(create_new_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 
+			if(nLenParentDirName)	{
+				if(mpi_rank == idx_server_ParentDir)	{	// the parent dir is handled by current server
+					my_AddEntryInfo(file_idx, Parent_dir_idx);	// only for non-root directory. IdxEntry_in_Dir is updated inside this call. 
+				}
+				else	{	// Need to send request to remote server. ALREADY done in Request_ParentDir_Add_Entry(). 
+					pMetaData[file_idx].idx_Parent_Dir = Parent_dir_idx;
+				}
+			}
+
+
+//			printf("DBG> Rank = %d mkdir(%s) idx_dir_entry = %d idx_server_ParentDir = %d\n", mpi_rank, pMetaData[file_idx].szFileName, pMetaData[file_idx].IdxEntry_in_Dir, idx_server_ParentDir);
 			return 0;
 		}
 		else	{
@@ -284,7 +658,8 @@ int my_mkdir(char szDirName[], int mode, int uid, int gid)
 
 int my_openfile(char szFileName[], int oflags, ...)
 {
-	int file_idx, dir_idx, bFlagCreate=0, bFlagTrunc=0, bAppend=0, nLenParentDirName, nLenFileName;
+	char szParentDir[512];
+	int file_idx, dir_idx, bFlagCreate=0, bFlagTrunc=0, bAppend=0, nLenParentDirName, nLenFileName, idx_server_ParentDir, bParentDirExisting, nEntryType;
 	unsigned long long fn_hash=0;
 	int mode = 0, two_args=1;
 //	static struct timeval tm;
@@ -303,6 +678,10 @@ int my_openfile(char szFileName[], int oflags, ...)
 	}
 	if ( (oflags & O_APPEND) && ( (oflags & O_WRONLY) || (oflags & O_RDWR) ) ) bAppend=1;
 
+//	if(strcmp(szFileName, "/myfs/mdtets_S00/test-dir.0-0/mdtest_tree.0/file.mdtest.0.1")==0)	{
+//		printf("DBG> szFileName = %s\n", szFileName);
+//	}
+
 //	file_idx = p_Hash_File->DictSearch(szFileName, &elt_list_file, &ht_table_file, &fn_hash);
 	if(bFlagCreate)	{
 		fn_hash = XXH64(szFileName, strlen(szFileName), 0);
@@ -310,14 +689,39 @@ int my_openfile(char szFileName[], int oflags, ...)
 		file_idx = p_Hash_File->DictSearch(szFileName, &elt_list_file, &ht_table_file, &fn_hash);
 
 		if(file_idx < 0)	{	// not existing. Create a new file
-			dir_idx = Query_Parent_Dir(szFileName, &nLenParentDirName, &nLenFileName);
-			if( dir_idx >= 0)	{	// parent dir exists.
+			dir_idx = Query_Parent_Dir(szFileName, szParentDir, &nLenParentDirName, &nLenFileName, &idx_server_ParentDir);
+
+			if(dir_idx >= 0)	{	// Parent dir locates on this server and exists! 
+				bParentDirExisting = 1;
+			}
+			else	{
+				if(idx_server_ParentDir == mpi_rank)	{	// Parent dir should be handled by this server, but it does NOT exists! 
+					bParentDirExisting = 0;
+				}
+				else	{
+					if(oflags & O_DIRECTORY)	nEntryType = DIR_ENT_TYPE_DIR;
+					else	nEntryType = DIR_ENT_TYPE_FILE;
+
+					if(Request_ParentDir_Add_Entry(idx_server_ParentDir, szFileName, nLenParentDirName, nEntryType, &dir_idx) == 0)	{	// succeed
+						bParentDirExisting = 1;
+					}
+//					if(Request_Is_ParentDIr_Existing(idx_server_ParentDir, szParentDir, &dir_idx) == 1)	{	// existing
+//						bParentDirExisting = 1;
+//					}
+					else	{
+						bParentDirExisting = 0;
+					}
+				}
+			}
+
+			if( bParentDirExisting )	{	// parent dir exists on current server!
 				// insert into file hash table too.
 
 				pthread_mutex_lock(&ht_lock);
 				file_idx = p_Hash_File->DictInsertAuto(szFileName, &elt_list_file, &ht_table_file);
 				nFile++;
 				pthread_mutex_unlock(&ht_lock);
+
 
 				pMetaData[file_idx].nLenName = nLenFileName;
 				pMetaData[file_idx].nLenParentDirName = nLenParentDirName;
@@ -332,6 +736,10 @@ int my_openfile(char szFileName[], int oflags, ...)
 					pMetaData[file_idx].pszFullName = NULL;
 					strcpy(pMetaData[file_idx].szFileName, szFileName);
 				}
+				pMetaData[file_idx].idx_Server_Parent_Dir = idx_server_ParentDir;
+				pMetaData[file_idx].idx_Parent_Dir = dir_idx;
+//				if(idx_server_ParentDir != mpi_rank)	pMetaData[file_idx].IdxEntry_in_Dir = IdxEntry_in_Dir;
+
 //				gettimeofday(&tm, NULL);
 				clock_gettime(CLOCK_REALTIME, &t_spec);
 				pMetaData[file_idx].idx_dir_ht = -1;	// regular file
@@ -349,7 +757,7 @@ int my_openfile(char szFileName[], int oflags, ...)
 				pMetaData[file_idx].st_gid = 25276;	// group id
 				pMetaData[file_idx].st_rdev = 0;	// const
 				pMetaData[file_idx].st_size = 0;	// zero size for a newly created file
-				pMetaData[file_idx].st_blksize = 4096;	// const
+				pMetaData[file_idx].st_blksize = DEFAULT_FILE_STAT_BLOCKSIZE;	// const. Larger size may lead to better performance!!!
 				pMetaData[file_idx].st_blocks = 0;
 				pMetaData[file_idx].st_atim.tv_sec = t_spec.tv_sec;
 				pMetaData[file_idx].st_atim.tv_nsec = t_spec.tv_nsec;
@@ -358,11 +766,17 @@ int my_openfile(char szFileName[], int oflags, ...)
 				pMetaData[file_idx].st_ctim.tv_sec = t_spec.tv_sec;
 				pMetaData[file_idx].st_ctim.tv_nsec = t_spec.tv_nsec;
 	
-				my_AddEntryInfo(file_idx, dir_idx);
-
 				pMetaData[file_idx].idx_Parent_Dir = dir_idx;
 
 				pthread_mutex_unlock(&(create_new_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+
+				if(mpi_rank == idx_server_ParentDir)	my_AddEntryInfo(file_idx, dir_idx);
+				else	{
+					pMetaData[file_idx].idx_Parent_Dir = dir_idx;
+				}
+
+//				printf("DBG> Rank = %d open(%s) idx_dir_entry = %d idx_server_ParentDir = %d\n", mpi_rank, pMetaData[file_idx].szFileName, pMetaData[file_idx].IdxEntry_in_Dir, idx_server_ParentDir);
+
 				return openfile_by_index(file_idx, bAppend);
 			}
 			else	{
@@ -734,7 +1148,7 @@ size_t my_write(int fd, const void *buf, size_t count, off_t offset)
 
 	if(nDirectPointer == 0)	{	// a new file
 //		memcpy(pNewBuff, buf, count);
-		memcpy(pNewBuff+offset, buf, count);
+		memcpy((char*)pNewBuff+offset, buf, count);
 		fd_List[fd].Offset += count;
 		nBytes_Written = count;
 		if(count == pFileMetaInfo->DiretData[0].DataBlockSize)	fd_List[fd].idx_block++;
@@ -901,7 +1315,7 @@ size_t my_write_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void 
 
 	if(nDirectPointer == 0)	{	// a new file
 //		memcpy(pNewBuff, buf, count);
-		my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, count, pNewBuff + offset);
+		my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, count, (void*)((char*)pNewBuff + offset));
 		fd_List[fd].Offset += count;
 		nBytes_Written = count;
 		if(count == pFileMetaInfo->DiretData[0].DataBlockSize)	fd_List[fd].idx_block++;
@@ -1374,53 +1788,125 @@ off_t my_lseek(int fd, off_t offset, int whence)
 	}
 }
 
-void my_RemoveEntryInfo(int my_file_idx)
+void my_RemoveEntryInfo_Remote_Request(char szEntryName_ToRemove[], int idx_Parent_dir, int nLenParentDirName)
 {
-	int idx_Parent_dir, IdxEntry_in_Dir, nEntry, *p_nEntryNameOffset, idx_file_need_update_idx_in_dir_entry, nLenEntryToRemove;
-	char *p_EntryName, szFile_ToMove[DEFAULT_FULL_FILE_NAME_LEN];
-	unsigned long long file_ToMove_hash = 0;
+	int i, nMaxEntrySave;
+	CHASHTABLE_DirEntry *pHT_DirEntrySave;
+	struct elt_CharEntry *elt_list_DirEntry_Save;
 
-	idx_Parent_dir = pMetaData[my_file_idx].idx_Parent_Dir;
 	assert(idx_Parent_dir>=0);
 
 	pthread_mutex_lock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
-
-//	if(strcmp(pDirMetaData[idx_Parent_dir].szDirName, "/myfs/mdtets/test-dir.0-0/mdtest_tree.0")==0)	printf("DBG> Del %s\n", pMetaData[my_file_idx].szFileName);
-
-	IdxEntry_in_Dir = pMetaData[my_file_idx].IdxEntry_in_Dir;
-	nEntry = pDirMetaData[idx_Parent_dir].nEntries;
-	p_nEntryNameOffset = (int *)(p_DirEntryNameOffsetBuff + pDirMetaData[idx_Parent_dir].nOffset_To_EntryNameOffsetList);
-
-	nLenEntryToRemove = strlen(p_DirEntryNameBuff + p_nEntryNameOffset[IdxEntry_in_Dir] + 1) + 2;
-	if(IdxEntry_in_Dir != (nEntry - 1) )	{	// not the last entry? Move the last entry to this spot!
-		p_EntryName = p_DirEntryNameBuff + p_nEntryNameOffset[IdxEntry_in_Dir];	// to be freed
-		p_nEntryNameOffset[IdxEntry_in_Dir] = p_nEntryNameOffset[nEntry-1];	// Move the last one here
-		memcpy(szFile_ToMove, pMetaData[my_file_idx].szFileName, pMetaData[my_file_idx].nLenParentDirName);
-		sprintf(szFile_ToMove+pMetaData[my_file_idx].nLenParentDirName, "/%s", p_DirEntryNameBuff + p_nEntryNameOffset[IdxEntry_in_Dir] + 1);	// file/dir type at the beginning of entry name;
-//		sprintf(szFile_ToMove, "%s/%s", szParentDir, p_DirEntryNameBuff + p_nEntryNameOffset[IdxEntry_in_Dir] + 1);	// file/dir type at the beginning of entry name
-		idx_file_need_update_idx_in_dir_entry = p_Hash_File->DictSearch(szFile_ToMove, &elt_list_file, &ht_table_file, &file_ToMove_hash);
-		assert(idx_file_need_update_idx_in_dir_entry >= 0);
-		pMetaData[idx_file_need_update_idx_in_dir_entry].IdxEntry_in_Dir = IdxEntry_in_Dir;	// the spot just freed!
-	}
-	else	{	// the last entry. Simply remove it!
-		p_EntryName = p_DirEntryNameBuff + p_nEntryNameOffset[IdxEntry_in_Dir];
-	}
-	pDirMetaData[idx_Parent_dir].nLenAllEntries -= nLenEntryToRemove;
+	pDirMetaData[idx_Parent_dir].p_Hash_DirEntry->DictDelete(szEntryName_ToRemove, &(pDirMetaData[idx_Parent_dir].elt_list_DirEntry), &(pDirMetaData[idx_Parent_dir].ht_table_DirEntry));
+	pDirMetaData[idx_Parent_dir].nLenAllEntries -= (strlen(szEntryName_ToRemove) + 2);
 	pDirMetaData[idx_Parent_dir].nEntries--;
 
-	pthread_mutex_unlock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
+	if( (pDirMetaData[idx_Parent_dir].nEntries < pDirMetaData[idx_Parent_dir].nEntryTriggerShrink) && (pDirMetaData[idx_Parent_dir].nMaxEntry > DEFAULT_MAX_ENTRY_PER_DIR) )	{	// NEED to shrink hashtable
+		nMaxEntrySave = pDirMetaData[idx_Parent_dir].nMaxEntry;
+		pDirMetaData[idx_Parent_dir].nMaxEntry /= 2;
+		pHT_DirEntrySave = pDirMetaData[idx_Parent_dir].p_Hash_DirEntry;	// save it. We need to free it after transfering to newly allocated hashtable
+		elt_list_DirEntry_Save = pDirMetaData[idx_Parent_dir].elt_list_DirEntry;
 
-	ncx_slab_free(sp_DirEntryName, p_EntryName);	// free in memory pool
+		pDirMetaData[idx_Parent_dir].nEntryTriggerExpand = (int)(pDirMetaData[idx_Parent_dir].nMaxEntry * RATIO_DIRENTRY_HASHTABLE_EXPAND);
+		pDirMetaData[idx_Parent_dir].nEntryTriggerShrink = (int)(pDirMetaData[idx_Parent_dir].nMaxEntry * RATIO_DIRENTRY_HASHTABLE_SHRINK);
+		pDirMetaData[idx_Parent_dir].p_Hash_DirEntry = (CHASHTABLE_DirEntry *)ncx_slab_alloc(sp_DirEntryHashTableBuff, CHASHTABLE_DirEntry::GetStorageSize(pDirMetaData[idx_Parent_dir].nMaxEntry));
+		pDirMetaData[idx_Parent_dir].p_Hash_DirEntry->DictCreate(pDirMetaData[idx_Parent_dir].nMaxEntry, &(pDirMetaData[idx_Parent_dir].elt_list_DirEntry), &(pDirMetaData[idx_Parent_dir].ht_table_DirEntry));	// init hash table
+
+		// need to transfering old ht to new ht
+		for(i=0; i<nMaxEntrySave; i++)	{	// loop all buckets in the orginal HT
+			if(elt_list_DirEntry_Save[i].key[0])	{	// a valid record
+				pDirMetaData[idx_Parent_dir].p_Hash_DirEntry->DictInsert(elt_list_DirEntry_Save[i].key, elt_list_DirEntry_Save[i].value, &(pDirMetaData[idx_Parent_dir].elt_list_DirEntry), &(pDirMetaData[idx_Parent_dir].ht_table_DirEntry) );
+			}
+		}
+		pthread_mutex_unlock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
+		ncx_slab_free(sp_DirEntryHashTableBuff, elt_list_DirEntry_Save);	// free the old HT
+	}
+	else	pthread_mutex_unlock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
+}
+
+void my_RemoveEntryInfo(int my_file_idx)
+{
+	char szParentDir[512];
+	char szEntryName_ToRemove[256];
+	int i, nMaxEntrySave, idx_Parent_dir;
+	int nLenParentDirName, nLenFileName, idx_server_ParentDir, idx_file_server_EntryToMove;
+	CHASHTABLE_DirEntry *pHT_DirEntrySave;
+	struct elt_CharEntry *elt_list_DirEntry_Save;
+
+
+	if(pMetaData[my_file_idx].idx_Server_Parent_Dir != mpi_rank)	{	// parent dir is NOT handled by this server
+		idx_Parent_dir = Query_Parent_Dir(pMetaData[my_file_idx].szFileName, szParentDir, &nLenParentDirName, &nLenFileName, &idx_server_ParentDir);	// find out where is the parent dir!!!
+		return Request_ParentDir_Remove_Entry(pMetaData[my_file_idx].szFileName+pMetaData[my_file_idx].nLenParentDirName+1, idx_server_ParentDir, pMetaData[my_file_idx].idx_Parent_Dir, nLenParentDirName);
+	}
+	strcpy(szEntryName_ToRemove, pMetaData[my_file_idx].szFileName+pMetaData[my_file_idx].nLenParentDirName+1);
+
+	idx_Parent_dir = pMetaData[my_file_idx].idx_Parent_Dir;
+
+	pthread_mutex_lock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
+	pDirMetaData[idx_Parent_dir].p_Hash_DirEntry->DictDelete(szEntryName_ToRemove, &(pDirMetaData[idx_Parent_dir].elt_list_DirEntry), &(pDirMetaData[idx_Parent_dir].ht_table_DirEntry));
+	pDirMetaData[idx_Parent_dir].nLenAllEntries -= (strlen(szEntryName_ToRemove) + 2);
+	pDirMetaData[idx_Parent_dir].nEntries--;
+
+	if( (pDirMetaData[idx_Parent_dir].nEntries < pDirMetaData[idx_Parent_dir].nEntryTriggerShrink)  && (pDirMetaData[idx_Parent_dir].nMaxEntry > DEFAULT_MAX_ENTRY_PER_DIR)  )	{	// NEED to shrink hashtable
+		nMaxEntrySave = pDirMetaData[idx_Parent_dir].nMaxEntry;
+		pDirMetaData[idx_Parent_dir].nMaxEntry /= 2;
+		pHT_DirEntrySave = pDirMetaData[idx_Parent_dir].p_Hash_DirEntry;	// save it. We need to free it after transfering to newly allocated hashtable
+		elt_list_DirEntry_Save = pDirMetaData[idx_Parent_dir].elt_list_DirEntry;
+
+		pDirMetaData[idx_Parent_dir].nEntryTriggerExpand = (int)(pDirMetaData[idx_Parent_dir].nMaxEntry * RATIO_DIRENTRY_HASHTABLE_EXPAND);
+		pDirMetaData[idx_Parent_dir].nEntryTriggerShrink = (int)(pDirMetaData[idx_Parent_dir].nMaxEntry * RATIO_DIRENTRY_HASHTABLE_SHRINK);
+		pDirMetaData[idx_Parent_dir].p_Hash_DirEntry = (CHASHTABLE_DirEntry *)ncx_slab_alloc(sp_DirEntryHashTableBuff, CHASHTABLE_DirEntry::GetStorageSize(pDirMetaData[idx_Parent_dir].nMaxEntry));
+		pDirMetaData[idx_Parent_dir].p_Hash_DirEntry->DictCreate(pDirMetaData[idx_Parent_dir].nMaxEntry, &(pDirMetaData[idx_Parent_dir].elt_list_DirEntry), &(pDirMetaData[idx_Parent_dir].ht_table_DirEntry));	// init hash table
+
+		// need to transfering old ht to new ht
+		for(i=0; i<nMaxEntrySave; i++)	{	// loop all buckets in the orginal HT
+			if(elt_list_DirEntry_Save[i].key[0])	{	// a valid record
+				pDirMetaData[idx_Parent_dir].p_Hash_DirEntry->DictInsert(elt_list_DirEntry_Save[i].key, elt_list_DirEntry_Save[i].value, &(pDirMetaData[idx_Parent_dir].elt_list_DirEntry), &(pDirMetaData[idx_Parent_dir].ht_table_DirEntry) );
+			}
+		}
+		pthread_mutex_unlock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
+		ncx_slab_free(sp_DirEntryHashTableBuff, elt_list_DirEntry_Save);	// free the old HT
+	}
+	else	pthread_mutex_unlock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
+
+
+//	pthread_mutex_unlock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
 
 	return;
 }
+/*
+void my_UpdateEntryIndex_in_ParentDir(char szPath[], int NewIdxEntry_in_Dir)
+{
+	int file_idx;
+	unsigned long long fn_hash=0;
 
+	fn_hash = XXH64(szPath, strlen(szPath), 0);
+	pthread_mutex_lock(&(create_new_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+	file_idx = p_Hash_File->DictSearch(szPath, &elt_list_file, &ht_table_file, &fn_hash);
+//	if(file_idx < 0)	{
+//		printf("DBG> Found it! file_idx = %d \n", file_idx);
+//		int flag = 1;
+//		while(flag)	{
+//			sleep(1);
+//		}
+//	}
+//	assert(file_idx >= 0);
+	if(file_idx >= 0)	pMetaData[file_idx].IdxEntry_in_Dir = NewIdxEntry_in_Dir;
+	else	{
+		printf("Warning> file_idx (%d) < 0", file_idx);
+	}
+	pthread_mutex_unlock(&(create_new_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+}
+*/
 int my_rmdir(char szDirName[])
 {
 	int dir_idx, file_idx;
 	unsigned long long fn_hash=0;
 
 //	printf("DBG> rmdir(%s)\n", szDirName);
+//	if(strcmp(szDirName, "/myfs/mdtets_S00/test-dir.0-0/mdtest_tree.0/mdtest_tree.1/dir.mdtest.0.3")==0)	{
+//		printf("DBG> Need to debug.\n");
+//	}
 
 	fn_hash = XXH64(szDirName, strlen(szDirName), 0);
 	pthread_mutex_lock(&(unlink_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
@@ -1440,9 +1926,9 @@ int my_rmdir(char szDirName[])
 
 		file_idx = p_Hash_File->DictSearch(szDirName, &elt_list_file, &ht_table_file, &fn_hash);
 		assert(file_idx>0);
+//	printf("DBG> Rank = %d rmdir(%s) idx_Server_Parent_Dir = %d idx_Parent_Dir = %d IdxEntry_in_Dir = %d\n", mpi_rank, szDirName, pMetaData[file_idx].idx_Server_Parent_Dir, pMetaData[file_idx].idx_Parent_Dir);
 		my_RemoveEntryInfo(file_idx);
-
-		ncx_slab_free(sp_DirEntryNameOffset, (void*)((long int)p_DirEntryNameOffsetBuff + pDirMetaData[dir_idx].nOffset_To_EntryNameOffsetList));
+		ncx_slab_free(sp_DirEntryHashTableBuff, (void*)(pDirMetaData[dir_idx].p_Hash_DirEntry));
 
 		pthread_mutex_lock(&ht_lock);
 		p_Hash_File->DictDelete(szDirName, &elt_list_file, &ht_table_file);	// remove hash table record
@@ -1473,6 +1959,7 @@ int my_unlink(char szFileName[])	// remove a regular file!
 	else	{
 //		printf("DBG> unlink(%s)\n", szFileName);
 		Truncate_File(file_idx, 0);	// Release storage.
+//		printf("DBG> Rank = %d unlink(%s) idx_Server_Parent_Dir = %d idx_Parent_Dir = %d IdxEntry_in_Dir = %d\n", mpi_rank, szFileName, pMetaData[file_idx].idx_Server_Parent_Dir, pMetaData[file_idx].idx_Parent_Dir, pMetaData[file_idx].IdxEntry_in_Dir);
 		my_RemoveEntryInfo(file_idx);
 
 		pthread_mutex_lock(&ht_lock);
@@ -1496,34 +1983,156 @@ inline int my_strlen(const char szEntryName[])
 
 int my_AddEntryInfo(int my_file_idx, int dir_idx)
 {
-	int nEntry, nLenEntryName;
+	int i, nMaxEntrySave, nLenEntryName, EntryType;
 	int *p_nEntryNameOffset=NULL, *p_nEntryNameOffsetNew=NULL;
 	char *pEntryName;
+	CHASHTABLE_DirEntry *pHT_DirEntrySave;
+	struct elt_CharEntry *elt_list_DirEntry_Save;
 
 	pthread_mutex_lock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
 
-//	if(strcmp(pDirMetaData[dir_idx].szDirName, "/myfs/mdtets/test-dir.0-0/mdtest_tree.0")==0)	printf("DBG> Add %s\n", pMetaData[my_file_idx].szFileName);
-	// append the new file/dir at the end of parent dir entry list
 	pEntryName = pMetaData[my_file_idx].szFileName+pMetaData[my_file_idx].nLenParentDirName + 1;
 	nLenEntryName = my_strlen(pEntryName);
-	nEntry = pDirMetaData[dir_idx].nEntries;
-	p_nEntryNameOffset = (int *)(p_DirEntryNameOffsetBuff + pDirMetaData[dir_idx].nOffset_To_EntryNameOffsetList);
-	p_nEntryNameOffset[nEntry] = (int) ( (long int)(ncx_slab_alloc(sp_DirEntryName, nLenEntryName+2)) - (long int)p_DirEntryNameBuff );	// only store offset
-	strcpy(p_DirEntryNameBuff+p_nEntryNameOffset[nEntry] + 1, pEntryName);
-	p_DirEntryNameBuff[p_nEntryNameOffset[nEntry]] = (pMetaData[my_file_idx].idx_dir_ht >= 0) ? (DIR_ENT_TYPE_DIR) : (DIR_ENT_TYPE_FILE);	// !!!!!!!!!!!!!!!!!!!!!!!!
+
+	// assume pEntryName DOES NOT exist in hashtable. This should be always true! 
+//	EntryNameAddrOffset = (int) ( (long int)(ncx_slab_alloc(sp_DirEntryName, nLenEntryName+2)) - (long int)p_DirEntryNameBuff );	// only store offset
+//	strcpy(p_DirEntryNameBuff+EntryNameAddrOffset + 1, pEntryName);
+//	p_DirEntryNameBuff[EntryNameAddrOffset] = (pMetaData[my_file_idx].idx_dir_ht >= 0) ? (DIR_ENT_TYPE_DIR) : (DIR_ENT_TYPE_FILE);	// !!!!!!!!!!!!!!!!!!!!!!!!
+	EntryType = (pMetaData[my_file_idx].idx_dir_ht >= 0) ? (DIR_ENT_TYPE_DIR) : (DIR_ENT_TYPE_FILE);	// !!!!!!!!!!!!!!!!!!!!!!!!
+	pDirMetaData[dir_idx].p_Hash_DirEntry->DictInsert(pEntryName, EntryType, &(pDirMetaData[dir_idx].elt_list_DirEntry), &(pDirMetaData[dir_idx].ht_table_DirEntry));
+
+//	p_nEntryNameOffset = (int *)(p_DirEntryNameOffsetBuff + pDirMetaData[dir_idx].nOffset_To_EntryNameOffsetList);
+//	p_nEntryNameOffset[nEntry] = (int) ( (long int)(ncx_slab_alloc(sp_DirEntryName, nLenEntryName+2)) - (long int)p_DirEntryNameBuff );	// only store offset
+//	strcpy(p_DirEntryNameBuff+p_nEntryNameOffset[nEntry] + 1, pEntryName);
+//	p_DirEntryNameBuff[p_nEntryNameOffset[nEntry]] = (pMetaData[my_file_idx].idx_dir_ht >= 0) ? (DIR_ENT_TYPE_DIR) : (DIR_ENT_TYPE_FILE);	// !!!!!!!!!!!!!!!!!!!!!!!!
 //	p_DirEntryNameBuff[p_nEntryNameOffset[nEntry]] = (char)(pRf_Op_Msg->flag & 0xFF);	// !!!!!!!!!!!!!!!!!!!!!!!!
-	pMetaData[my_file_idx].IdxEntry_in_Dir = nEntry;
+//	pMetaData[my_file_idx].IdxEntry_in_Dir = nEntry;
+
+//	printf("DBG> Rank = %d my_AddEntryInfo(), %d entries in %s\nLists: ", mpi_rank, nEntry, pDirMetaData[dir_idx].szDirName);
+//	for(int i=0; i<nEntry; i++)	{
+//		printf(" %s", p_DirEntryNameBuff + p_nEntryNameOffset[i] + 1);
+//	}
+//	printf("\nTo Add %s\n", pEntryName);
+
 	pDirMetaData[dir_idx].nEntries++;
 	pDirMetaData[dir_idx].nLenAllEntries += (nLenEntryName+2);
-	if(pDirMetaData[dir_idx].nEntries >= pDirMetaData[dir_idx].nMaxEntry)	{
+	if( pDirMetaData[dir_idx].nEntries >= pDirMetaData[dir_idx].nEntryTriggerExpand )	{	// NEED to expand hashtable
+		nMaxEntrySave = pDirMetaData[dir_idx].nMaxEntry;
 		pDirMetaData[dir_idx].nMaxEntry *= 2;
-		p_nEntryNameOffsetNew = (int *)ncx_slab_alloc(sp_DirEntryNameOffset, pDirMetaData[dir_idx].nMaxEntry*sizeof(int));
-		memcpy((void*)p_nEntryNameOffsetNew, (void*)p_nEntryNameOffset, sizeof(int)*pDirMetaData[dir_idx].nEntries);
-		pDirMetaData[dir_idx].nOffset_To_EntryNameOffsetList = (long int)p_nEntryNameOffsetNew - (long int)p_DirEntryNameOffsetBuff;
+		pHT_DirEntrySave = pDirMetaData[dir_idx].p_Hash_DirEntry;	// save it. We need to free it after transfering to newly allocated hashtable
+		elt_list_DirEntry_Save = pDirMetaData[dir_idx].elt_list_DirEntry;
+
+		pDirMetaData[dir_idx].nEntryTriggerExpand = (int)(pDirMetaData[dir_idx].nMaxEntry * RATIO_DIRENTRY_HASHTABLE_EXPAND);
+		pDirMetaData[dir_idx].nEntryTriggerShrink = (int)(pDirMetaData[dir_idx].nMaxEntry * RATIO_DIRENTRY_HASHTABLE_SHRINK);
+		pDirMetaData[dir_idx].p_Hash_DirEntry = (CHASHTABLE_DirEntry *)ncx_slab_alloc(sp_DirEntryHashTableBuff, CHASHTABLE_DirEntry::GetStorageSize(pDirMetaData[dir_idx].nMaxEntry));
+		pDirMetaData[dir_idx].p_Hash_DirEntry->DictCreate(pDirMetaData[dir_idx].nMaxEntry, &(pDirMetaData[dir_idx].elt_list_DirEntry), &(pDirMetaData[dir_idx].ht_table_DirEntry));	// init hash table
+
+		// need to transfering old ht to new ht
+		for(i=0; i<nMaxEntrySave; i++)	{	// loop all buckets in the orginal HT
+			if(elt_list_DirEntry_Save[i].key[0])	{	// a valid record
+				pDirMetaData[dir_idx].p_Hash_DirEntry->DictInsert(elt_list_DirEntry_Save[i].key, elt_list_DirEntry_Save[i].value, &(pDirMetaData[dir_idx].elt_list_DirEntry), &(pDirMetaData[dir_idx].ht_table_DirEntry) );
+			}
+		}
+//		p_nEntryNameOffsetNew = (int *)ncx_slab_alloc(sp_DirEntryNameOffset, pDirMetaData[dir_idx].nMaxEntry*sizeof(int));
+//		memcpy((void*)p_nEntryNameOffsetNew, (void*)p_nEntryNameOffset, sizeof(int)*pDirMetaData[dir_idx].nEntries);
+//		pDirMetaData[dir_idx].nOffset_To_EntryNameOffsetList = (long int)p_nEntryNameOffsetNew - (long int)p_DirEntryNameOffsetBuff;
+
 		pthread_mutex_unlock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
-		ncx_slab_free(sp_DirEntryNameOffset, (void*)p_nEntryNameOffset);	// free in memory pool
+		ncx_slab_free(sp_DirEntryHashTableBuff, elt_list_DirEntry_Save);	// free the old HT
+//		ncx_slab_free(sp_DirEntryNameOffset, (void*)p_nEntryNameOffset);	// free in memory pool
 	}
 	else	pthread_mutex_unlock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
+
+	return 0;
+}
+
+int my_AddEntryInfo_Remote_Request(char *szFullName, int nLenParentDirName, int EntryType, int *pIdx_Parent_Dir)
+{
+	int i, nLenEntryName, dir_idx, nMaxEntrySave;
+//	int *p_nEntryNameOffset=NULL, *p_nEntryNameOffsetNew=NULL;
+	char *pEntryName;
+	unsigned long long int fn_hash;
+	char szParentDirName[512];
+	CHASHTABLE_DirEntry *pHT_DirEntrySave;
+	struct elt_CharEntry *elt_list_DirEntry_Save;
+
+	memcpy(szParentDirName, szFullName, nLenParentDirName);
+	szParentDirName[nLenParentDirName] = 0;
+
+	dir_idx = p_Hash_Dir->DictSearch(szParentDirName, &elt_list_dir, &ht_table_dir, &fn_hash);
+	*pIdx_Parent_Dir = dir_idx;
+
+	if(dir_idx < 0 )	{	// Parent dir does not exist!!!
+		errno = ENOENT;
+		return (-1);
+	}
+
+	pthread_mutex_lock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
+	pEntryName = szFullName + nLenParentDirName + 1;
+	nLenEntryName = my_strlen(pEntryName);
+	// assume pEntryName DOES NOT exist in hashtable. This should be always true! 
+//	EntryNameAddrOffset = (int) ( (long int)(ncx_slab_alloc(sp_DirEntryName, nLenEntryName+2)) - (long int)p_DirEntryNameBuff );	// only store offset
+//	strcpy(p_DirEntryNameBuff+EntryNameAddrOffset + 1, pEntryName);
+//	p_DirEntryNameBuff[EntryNameAddrOffset] = char(EntryType & 0xFF);	// !!!!!!!!!!!!!!!!!!!!!!!!
+	pDirMetaData[dir_idx].p_Hash_DirEntry->DictInsert(pEntryName, EntryType, &(pDirMetaData[dir_idx].elt_list_DirEntry), &(pDirMetaData[dir_idx].ht_table_DirEntry));
+
+	pDirMetaData[dir_idx].nEntries++;
+	pDirMetaData[dir_idx].nLenAllEntries += (nLenEntryName+2);
+	if( pDirMetaData[dir_idx].nEntries >= pDirMetaData[dir_idx].nEntryTriggerExpand )	{	// NEED to expand hashtable
+		nMaxEntrySave = pDirMetaData[dir_idx].nMaxEntry;
+		pDirMetaData[dir_idx].nMaxEntry *= 2;
+		pHT_DirEntrySave = pDirMetaData[dir_idx].p_Hash_DirEntry;	// save it. We need to free it after transfering to newly allocated hashtable
+		elt_list_DirEntry_Save = pDirMetaData[dir_idx].elt_list_DirEntry;
+
+		pDirMetaData[dir_idx].nEntryTriggerExpand = (int)(pDirMetaData[dir_idx].nMaxEntry * RATIO_DIRENTRY_HASHTABLE_EXPAND);
+		pDirMetaData[dir_idx].nEntryTriggerShrink = (int)(pDirMetaData[dir_idx].nMaxEntry * RATIO_DIRENTRY_HASHTABLE_SHRINK);
+		pDirMetaData[dir_idx].p_Hash_DirEntry = (CHASHTABLE_DirEntry *)ncx_slab_alloc(sp_DirEntryHashTableBuff, CHASHTABLE_DirEntry::GetStorageSize(pDirMetaData[dir_idx].nMaxEntry));
+		pDirMetaData[dir_idx].p_Hash_DirEntry->DictCreate(pDirMetaData[dir_idx].nMaxEntry, &(pDirMetaData[dir_idx].elt_list_DirEntry), &(pDirMetaData[dir_idx].ht_table_DirEntry));	// init hash table
+
+		// need to transfering old ht to new ht
+		for(i=0; i<nMaxEntrySave; i++)	{	// loop all buckets in the orginal HT
+			if(elt_list_DirEntry_Save[i].key[0])	{	// a valid record
+				pDirMetaData[dir_idx].p_Hash_DirEntry->DictInsert(elt_list_DirEntry_Save[i].key, elt_list_DirEntry_Save[i].value, &(pDirMetaData[dir_idx].elt_list_DirEntry), &(pDirMetaData[dir_idx].ht_table_DirEntry) );
+			}
+		}
+
+		pthread_mutex_unlock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
+		ncx_slab_free(sp_DirEntryHashTableBuff, elt_list_DirEntry_Save);	// free the old HT
+	}
+	else	pthread_mutex_unlock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
+
+/*
+	// append the new file/dir at the end of parent dir entry list
+	pEntryName = szFullName + nLenParentDirName + 1;
+	nLenEntryName = my_strlen(pEntryName);
+	nEntry = pDirMetaData[*pIdx_Parent_Dir].nEntries;
+	p_nEntryNameOffset = (int *)(p_DirEntryNameOffsetBuff + pDirMetaData[*pIdx_Parent_Dir].nOffset_To_EntryNameOffsetList);
+	p_nEntryNameOffset[nEntry] = (int) ( (long int)(ncx_slab_alloc(sp_DirEntryName, nLenEntryName+2)) - (long int)p_DirEntryNameBuff );	// only store offset
+	strcpy(p_DirEntryNameBuff+p_nEntryNameOffset[nEntry] + 1, pEntryName);
+	p_DirEntryNameBuff[p_nEntryNameOffset[nEntry]] = char(EntryType & 0xFF);
+	*pIdxEntry_in_Dir = nEntry;
+
+//	printf("DBG> Rank = %d my_AddEntryInfo_Remote_Request(), %d entries in %s\nLists: ", mpi_rank, nEntry, pDirMetaData[*pIdx_Parent_Dir].szDirName);
+//	for(int i=0; i<nEntry; i++)	{
+//		printf(" %s", p_DirEntryNameBuff + p_nEntryNameOffset[i] + 1);
+//	}
+//	printf("\nTo Add %s\n", pEntryName);
+
+//	pMetaData[my_file_idx].IdxEntry_in_Dir = nEntry;	// NEED to update this on the server who sent this request!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	pDirMetaData[*pIdx_Parent_Dir].nEntries++;
+	pDirMetaData[*pIdx_Parent_Dir].nLenAllEntries += (nLenEntryName+2);
+	if(pDirMetaData[*pIdx_Parent_Dir].nEntries >= pDirMetaData[*pIdx_Parent_Dir].nMaxEntry)	{
+		pDirMetaData[*pIdx_Parent_Dir].nMaxEntry *= 2;
+		p_nEntryNameOffsetNew = (int *)ncx_slab_alloc(sp_DirEntryNameOffset, pDirMetaData[*pIdx_Parent_Dir].nMaxEntry*sizeof(int));
+		memcpy((void*)p_nEntryNameOffsetNew, (void*)p_nEntryNameOffset, sizeof(int)*pDirMetaData[*pIdx_Parent_Dir].nEntries);
+		pDirMetaData[*pIdx_Parent_Dir].nOffset_To_EntryNameOffsetList = (long int)p_nEntryNameOffsetNew - (long int)p_DirEntryNameOffsetBuff;
+		pthread_mutex_unlock(&(dir_entry_lock[(*pIdx_Parent_Dir) & MAX_NUM_FILE_OP_LOCK_M1]));
+		ncx_slab_free(sp_DirEntryNameOffset, (void*)p_nEntryNameOffset);	// free in memory pool
+	}
+	else	pthread_mutex_unlock(&(dir_entry_lock[(*pIdx_Parent_Dir) & MAX_NUM_FILE_OP_LOCK_M1]));
+*/
+//	printf("DBG> my_AddEntryInfo_Remote_Request(%s). Dir %s nEntries = %d\n", 
+//		szFullName, pDirMetaData[*pIdx_Parent_Dir].szDirName, pDirMetaData[*pIdx_Parent_Dir].nEntries);
 
 	return 0;
 }
@@ -1533,8 +2142,10 @@ int my_ls(char szDirName[])	// list entries under a directory
 	int i, dir_idx, nEntry;
 	unsigned long long fn_hash=0;
 	unsigned char *szDirEntryBuff=NULL;// entry data buffer
-	int *p_nBytesDirEntryBuff, *p_nDirEntries, *p_DirEntryOffset, nBytesDirEntryNameAccu=0, nBytesEntryName, *p_nEntryNameOffset;
+//	int *p_nBytesDirEntryBuff, *p_nDirEntries, *p_DirEntryOffset, nBytesDirEntryNameAccu=0, nBytesEntryName, *p_nEntryNameOffset;
+	int *p_nBytesDirEntryBuff, *p_nDirEntries, *p_DirEntryOffset, nBytesDirEntryNameAccu=0, nBytesEntryName;
 	char *p_szDirEntryName;
+	struct elt_CharEntry *elt_list_DirEntry;
 
 	dir_idx = p_Hash_Dir->DictSearch(szDirName, &elt_list_dir, &ht_table_dir, &fn_hash);
 	if(dir_idx < 0)	{
@@ -1549,6 +2160,20 @@ int my_ls(char szDirName[])	// list entries under a directory
 		p_nDirEntries = (int*)( szDirEntryBuff + sizeof(int)*1 );
 		*p_nDirEntries = pDirMetaData[dir_idx].nEntries;
 		printf("DBG> %d entries under directory %s\n", nEntry, szDirName);
+		elt_list_DirEntry = pDirMetaData[dir_idx].elt_list_DirEntry;
+		nEntry = 0;
+		for(i=0; i<pDirMetaData[dir_idx].nMaxEntry; i++)	{
+			if(elt_list_DirEntry[i].key[0])	{	// a valid entry. 
+				nEntry++;
+				nBytesEntryName = strlen(elt_list_DirEntry[i].key);
+				strcpy(p_szDirEntryName + nBytesDirEntryNameAccu + 1, elt_list_DirEntry[i].key);
+				p_szDirEntryName[nBytesDirEntryNameAccu] = (char)(elt_list_DirEntry[i].value & 0xFF);
+				printf("DBG> %d entry, %s\n", nEntry, p_szDirEntryName + nBytesDirEntryNameAccu + 1);
+				p_DirEntryOffset[i] = nBytesDirEntryNameAccu;
+				nBytesDirEntryNameAccu += (nBytesEntryName + 2);
+			}
+		}
+/*
 		for(i=0; i<nEntry; i++)	{
 			p_nEntryNameOffset = (int *)(p_DirEntryNameOffsetBuff + pDirMetaData[dir_idx].nOffset_To_EntryNameOffsetList);
 			nBytesEntryName = strlen(p_DirEntryNameBuff + p_nEntryNameOffset[i]);
@@ -1558,6 +2183,7 @@ int my_ls(char szDirName[])	// list entries under a directory
 			p_DirEntryOffset[i] = nBytesDirEntryNameAccu;
 			nBytesDirEntryNameAccu += (nBytesEntryName + 1);
 		}
+*/
 		p_nBytesDirEntryBuff = (int*)szDirEntryBuff;
 		*p_nBytesDirEntryBuff = nBytesDirEntryNameAccu + sizeof(int) * (3 + (*p_nDirEntries));
 
@@ -1577,10 +2203,11 @@ int my_fdopendir(int fd, void *loc_buf)
 
 int my_opendir_by_index(int dir_idx, void *loc_buf)
 {
-	int i, nEntry, nDirEntryListBuffSize;
+	int i, nEntry, nEntry_Save, nMaxEntry, nDirEntryListBuffSize;
 //	unsigned char *szDirEntryBuff=NULL;// entry data buffer
 	int *p_nDirEntries, *p_DirEntryOffset, nBytesDirEntryNameAccu=0, nBytesEntryName, *p_nEntryNameOffset;
 	char *p_szDirEntryName, *pResult_buf;
+	struct elt_CharEntry *elt_list_DirEntry;
 	
 	nEntry = pDirMetaData[dir_idx].nEntries;
 	nDirEntryListBuffSize = pDirMetaData[dir_idx].nLenAllEntries + sizeof(int)*(1 + nEntry);
@@ -1596,13 +2223,21 @@ int my_opendir_by_index(int dir_idx, void *loc_buf)
 	p_nDirEntries = (int*)( pResult_buf );
 	*p_nDirEntries = pDirMetaData[dir_idx].nEntries;
 //	printf("DBG> %d entries under directory %s\n", nEntry, pDirMetaData[dir_idx].szDirName);
-	for(i=0; i<nEntry; i++)	{
-		p_nEntryNameOffset = (int *)(p_DirEntryNameOffsetBuff + pDirMetaData[dir_idx].nOffset_To_EntryNameOffsetList);
-		nBytesEntryName = strlen(p_DirEntryNameBuff + p_nEntryNameOffset[i]);
-		strcpy(p_szDirEntryName + nBytesDirEntryNameAccu, p_DirEntryNameBuff + p_nEntryNameOffset[i]);	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!
-//		printf("DBG> %d entry, %s\n", i+1, p_szDirEntryName + nBytesDirEntryNameAccu + 1);
-		p_DirEntryOffset[i] = nBytesDirEntryNameAccu;
-		nBytesDirEntryNameAccu += (nBytesEntryName + 1);
+	nMaxEntry = pDirMetaData[dir_idx].nMaxEntry;
+	elt_list_DirEntry = pDirMetaData[dir_idx].elt_list_DirEntry;
+	nEntry_Save = nEntry;
+	nEntry = 0;
+	for(i=0; i<nMaxEntry; i++)	{
+		if(elt_list_DirEntry[i].key[0])	{	// a valid entry. 
+			nBytesEntryName = strlen(elt_list_DirEntry[i].key);
+			strcpy(p_szDirEntryName + nBytesDirEntryNameAccu + 1, elt_list_DirEntry[i].key);
+			p_szDirEntryName[nBytesDirEntryNameAccu] = (char)(elt_list_DirEntry[i].value & 0xFF);
+//			printf("DBG> %d entry, %s\n", nEntry, p_szDirEntryName + nBytesDirEntryNameAccu + 1);
+			p_DirEntryOffset[nEntry] = nBytesDirEntryNameAccu;
+			nBytesDirEntryNameAccu += (nBytesEntryName + 2);
+			nEntry++;
+			if(nEntry >= nEntry_Save)	break;
+		}
 	}
 	
 	return (nDirEntryListBuffSize);	// always larger than zero. 
@@ -1668,26 +2303,26 @@ void Test_File_System_Local(void)
 	int fd;
 	ncx_slab_stat_t ncx_stat;
 
-	printf("DBG> Before my_mkdir(). sp_DirEntryName\n");
-	ncx_slab_stat(sp_DirEntryName, &ncx_stat);
-	printf("DBG> Before my_mkdir(). sp_DirEntryNameOffset\n");
-	ncx_slab_stat(sp_DirEntryNameOffset, &ncx_stat);
+//	printf("DBG> Before my_mkdir(). sp_DirEntryName\n");
+//	ncx_slab_stat(sp_DirEntryName, &ncx_stat);
+//	printf("DBG> Before my_mkdir(). sp_DirEntryNameOffset\n");
+//	ncx_slab_stat(sp_DirEntryNameOffset, &ncx_stat);
 
 	my_mkdir("/myfs/tmp", S_IRWXU | S_IRWXG | S_IRWXO, my_uid, my_gid);
 
-	printf("DBG> After my_mkdir(). sp_DirEntryName\n");
-	ncx_slab_stat(sp_DirEntryName, &ncx_stat);
-	printf("DBG> After my_mkdir(). sp_DirEntryNameOffset\n");
-	ncx_slab_stat(sp_DirEntryNameOffset, &ncx_stat);
+//	printf("DBG> After my_mkdir(). sp_DirEntryName\n");
+//	ncx_slab_stat(sp_DirEntryName, &ncx_stat);
+//	printf("DBG> After my_mkdir(). sp_DirEntryNameOffset\n");
+//	ncx_slab_stat(sp_DirEntryNameOffset, &ncx_stat);
 
 	my_rmdir("/myfs/tmp");
 
 //	my_mkdir("/myfs/tmp_0");
 
-	printf("DBG> After my_rmdir(). sp_DirEntryName\n");
-	ncx_slab_stat(sp_DirEntryName, &ncx_stat);
-	printf("DBG> After my_rmdir(). sp_DirEntryNameOffset\n");
-	ncx_slab_stat(sp_DirEntryNameOffset, &ncx_stat);
+//	printf("DBG> After my_rmdir(). sp_DirEntryName\n");
+//	ncx_slab_stat(sp_DirEntryName, &ncx_stat);
+//	printf("DBG> After my_rmdir(). sp_DirEntryNameOffset\n");
+//	ncx_slab_stat(sp_DirEntryNameOffset, &ncx_stat);
 
 
 	Readin_All_Dir();
@@ -1696,10 +2331,10 @@ void Test_File_System_Local(void)
 	fd = my_openfile("/myfs/3/k.rnd", O_RDONLY);
 	my_close(fd);
 
-	printf("DBG> After my_mkdir(). sp_DirEntryName\n");
-	ncx_slab_stat(sp_DirEntryName, &ncx_stat);
-	printf("DBG> After my_mkdir(). sp_DirEntryNameOffset\n");
-	ncx_slab_stat(sp_DirEntryNameOffset, &ncx_stat);
+//	printf("DBG> After my_mkdir(). sp_DirEntryName\n");
+//	ncx_slab_stat(sp_DirEntryName, &ncx_stat);
+//	printf("DBG> After my_mkdir(). sp_DirEntryNameOffset\n");
+//	ncx_slab_stat(sp_DirEntryNameOffset, &ncx_stat);
 
 /*
 	int fd;

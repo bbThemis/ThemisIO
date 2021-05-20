@@ -2,6 +2,9 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <assert.h>
+#include <malloc.h>
+#include <stdlib.h>
+#include <execinfo.h>
 
 #define PTHREAD_MUTEXATTR_FLAG_PSHARED (0x80000000)	// int 
 
@@ -62,7 +65,7 @@ static ncx_uint_t  ncx_pagesize;
 static ncx_uint_t  ncx_pagesize_shift;
 static ncx_uint_t  ncx_real_pages;
 
-ncx_slab_pool_t * ncx_slab_init(size_t pool_size)
+ncx_slab_pool_t * ncx_slab_init(void *pMem, size_t pool_size)
 //void ncx_slab_init(ncx_slab_pool_t *pool)
 {
 	ncx_slab_pool_t *pool;
@@ -73,7 +76,9 @@ ncx_slab_pool_t * ncx_slab_init(size_t pool_size)
     int *p_mutex_attr;
     pthread_mutexattr_t mattr;
 
-	pool = (ncx_slab_pool_t *)malloc(pool_size);
+//	if(pMem == NULL)	pool = (ncx_slab_pool_t *)malloc(pool_size);
+	if(pMem == NULL)	pool = (ncx_slab_pool_t *)memalign(64, pool_size);
+	else	pool = (ncx_slab_pool_t *)pMem;
 	assert(pool != NULL);
 	pool->addr = (void*)pool;
 	pool->min_shift = 3;
@@ -142,10 +147,12 @@ ncx_slab_pool_t * ncx_slab_init(size_t pool_size)
 	return pool;
 }
 
+#define MAX_DEPTH       (16)
 
 void * ncx_slab_alloc(ncx_slab_pool_t *pool, size_t size)
 {
     void  *p;
+	ncx_slab_stat_t ncx_stat;
 	
 	if (pthread_mutex_lock(&(pool->mutex)) != 0) {
 		perror("mutex_lock");
@@ -160,6 +167,27 @@ void * ncx_slab_alloc(ncx_slab_pool_t *pool, size_t size)
 		exit(2);
 	}
 
+	if(p == NULL)	{
+		void *ptr, *ptr_trace[MAX_DEPTH];
+		int i, ndepth;
+		char **strings;
+		int flag=1;
+		ndepth = backtrace(ptr_trace, MAX_DEPTH);
+		strings = backtrace_symbols(ptr_trace, ndepth);
+
+		for(i=0; i<ndepth; i++)	{
+			printf("Frame %d: %s\n", i, strings[i]);
+		}
+
+		printf("Crashed! pid = %d\n", getpid());
+		fflush(stdout);
+
+		while(flag)	{
+			sleep(1);
+		}
+
+		ncx_slab_stat(pool, &ncx_stat);
+	}
 	assert(p != NULL);
 	
     return p;
