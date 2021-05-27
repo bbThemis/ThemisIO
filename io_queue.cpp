@@ -8,7 +8,6 @@
 #include "io_queue.h"
 #include "io_ops.h"
 #include "utility.h"
-#include "myfs_common.h"
 #include "corebinding.h"
 
 extern CORE_BINDING CoreBinding;
