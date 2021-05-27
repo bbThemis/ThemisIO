@@ -25,6 +25,11 @@ void RW_Utimes(IO_CMD_MSG *pRF_Op_Msg);
 void RW_Futimens(IO_CMD_MSG *pRF_Op_Msg);
 void RW_Disconnect_QP(IO_CMD_MSG *pRF_Op_Msg);
 
+void RW_File_AddEntry_ParentDir(IO_CMD_MSG *pRF_Op_Msg);
+void RW_File_RemoveEntry_ParentDir(IO_CMD_MSG *pRF_Op_Msg);
+void RW_File_UpdateEntry_ParentDir_EntryIdx(IO_CMD_MSG *pRF_Op_Msg);
+
 void RW_Print_Mem(void);
+void RW_Hello(IO_CMD_MSG *pRF_Op_Msg);
 
 #endif
