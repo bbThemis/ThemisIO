@@ -144,8 +144,21 @@ typedef struct {
 	int myerrno;	// errno is saved in case it is needed. 
 	int Tag_Ini;	// Tag_End and Tag_Ini need to be consistent. Tag_Ini xor const = Tag_End 
 	int nDataSize;	// the number of bytes of this data buffer
+	int pad[2];
 	int Tag_End;		// END		tag. Check this tag to make sure data transfer is DONE! Disabled here since a length undetermined buffer before this variable. 
 }RW_FUNC_RETURN, *PRW_FUNC_RETURN;
+
+typedef struct {
+	long int ret_value;	// return value of function call
+	int myerrno;	// errno is saved in case it is needed. 
+	int Tag_Ini;	// Tag_End and Tag_Ini need to be consistent. Tag_Ini xor const = Tag_End 
+	int nDataSize;	// the number of bytes of this data buffer
+	int pad[2];
+	struct ibv_mr *mr_tmp;
+	long int addr;
+	int rkey, nEntry;
+	int Tag_End;		// END		tag. Check this tag to make sure data transfer is DONE! Disabled here since a length undetermined buffer before this variable. 
+}RW_FUNC_RETURN_EXT, *PRW_FUNC_RETURN_EXT;
 
 typedef struct {
 	int idx_Parent_Dir;		// the index of parent dir in hash table

@@ -32,6 +32,9 @@ extern ACTIVEFILE fd_List[MAX_FD_ACTIVE];
 
 extern int IO_Msg_Size_op;
 
+extern ncx_slab_pool_t *sp_OpenDirEntryBuff;
+
+
 void RW_Open(IO_CMD_MSG *pRF_Op_Msg)
 {
 	int idx_qp, tag_magic;
@@ -121,9 +124,10 @@ void RW_Stat(IO_CMD_MSG *pRF_Op_Msg)
 
 void RW_Opendir(IO_CMD_MSG *pRF_Op_Msg)
 {
-	int idx_qp, tag_magic, *pTag_End;
+	int idx_qp, tag_magic, *pTag_End, *pDoneCopy;
 	char *szBuff;
 	RW_FUNC_RETURN *pResult;
+	RW_FUNC_RETURN_EXT *pResult_Ext;
 	struct ibv_mr *mr_shm_global;
 	void *rem_buff;
 	unsigned int rkey;
@@ -138,12 +142,31 @@ void RW_Opendir(IO_CMD_MSG *pRF_Op_Msg)
 	pResult->ret_value = my_opendir(pRF_Op_Msg->szName, (void*)((char*)pResult + sizeof(RW_FUNC_RETURN) - sizeof(int)));
 	pResult->myerrno = errno;
 	pResult->nDataSize = (pResult->ret_value >= 0) ? (sizeof(RW_FUNC_RETURN)+pResult->ret_value) : (sizeof(RW_FUNC_RETURN));
-
 	pResult->Tag_Ini = (int)((long int)rem_buff & 0xFFFFFFFF);
-	pTag_End = (int*)( (char*)pResult + pResult->nDataSize - sizeof(int) );
-	*pTag_End = (pResult->Tag_Ini) ^ tag_magic;
 
-	Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
+	if(pResult->nDataSize <= IO_RESULT_BUFFER_SIZE)	{
+		pTag_End = (int*)( (char*)pResult + pResult->nDataSize - sizeof(int) );
+		*pTag_End = (pResult->Tag_Ini) ^ tag_magic;
+		Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
+	}
+	else	{
+		pResult_Ext = (RW_FUNC_RETURN_EXT *)pResult;
+		pDoneCopy = (int *)(pResult_Ext->mr_tmp->addr);
+		*pDoneCopy = 0;
+
+		pResult_Ext->addr = (long int)(pResult_Ext->mr_tmp->addr);
+		pResult_Ext->rkey = (long int)(pResult_Ext->mr_tmp->rkey);
+
+		pTag_End = (int*)( (char*)pResult + sizeof(RW_FUNC_RETURN_EXT) - sizeof(int) );
+		*pTag_End = (pResult->Tag_Ini) ^ tag_magic;
+		Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, sizeof(RW_FUNC_RETURN_EXT));
+		while( (*pDoneCopy) == 0 )	{	// wait until client finishes data transfer
+		}
+		// free buffer
+		ibv_dereg_mr(pResult_Ext->mr_tmp);
+		ncx_slab_free(sp_OpenDirEntryBuff, (void*)(pResult_Ext->addr));
+	}
+
 }
 
 void RW_Read(IO_CMD_MSG *pRF_Op_Msg)

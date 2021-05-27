@@ -1037,7 +1037,7 @@ void SERVER_QUEUEPAIR::Init_Server_IB_Env(int remote_buff_size)
 	assert(mr_loc != NULL);
 
 	for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
-		send_complete_queue[i] = ibv_create_cq(context_, 1, NULL, NULL, 0);
+		send_complete_queue[i] = ibv_create_cq(context_, 1+NUM_THREAD_IO_WORKER_INTER_SERVER, NULL, NULL, 0);
 		assert(send_complete_queue[i] != NULL);
 	}
 
@@ -1165,10 +1165,10 @@ void CreateQueuePair(struct ibv_context* context, struct ibv_pd* pd, struct ibv_
 	qp_init_attr.send_cq = *pSend_complete_queue;
 	qp_init_attr.recv_cq = *pRecv_complete_queue;
 	
-	qp_init_attr.cap.max_send_wr = IB_QUEUE_SIZE;
+	qp_init_attr.cap.max_send_wr = 1+NUM_THREAD_IO_WORKER_INTER_SERVER;
 //	qp_init_attr.cap.max_recv_wr = 1;
 	qp_init_attr.cap.max_recv_wr = 1;
-	qp_init_attr.cap.max_send_sge = 1;
+	qp_init_attr.cap.max_send_sge = 1+NUM_THREAD_IO_WORKER_INTER_SERVER;
 	qp_init_attr.cap.max_recv_sge = 1;
 	qp_init_attr.sq_sig_all = 1;
 	//  qp_init_attr.sq_sig_all = 0;	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1232,6 +1232,9 @@ void SERVER_QUEUEPAIR::IB_Put(int idx, void* loc_buf, uint32_t lkey, void* rem_b
 	struct ibv_wc wc = {};
 	int bTimeOut=0;	// the flag of time out in PUT. 
 
+//	while(pQP_Data[idx].bTimeout==0)	{
+//	}
+//	assert(pQP_Data[idx].bServerReady == 1);
 	if(pQP_Data[idx].bTimeout)	{	// Something wrong with this QP. Client may disconnect or die...
 		printf("WARNING> QP %d got timeout in previous Put(). Ignore all OPs for this QP. HostName = %s tid = %d\n", 
 			idx, pQP_Data[idx].szClientHostName, pQP_Data[idx].ctid);
