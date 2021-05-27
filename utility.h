@@ -1,6 +1,8 @@
 #ifndef __UTILITY_H__
 #define __UTILITY_H__
 
+#include <stdint.h>
+
 //#ifndef min(a,b)
 #define min(a,b)	( ((a)<(b)) ? (a) : (b) )
 #define max(a,b)	( ((a)>(b)) ? (a) : (b) )
@@ -9,6 +11,23 @@
 #ifndef	BUDDY_PAGE_SHIFT
 #define BUDDY_PAGE_SHIFT	(12)	// assume page size is 4096
 #endif
+
+static inline uint64_t rotl(const uint64_t x, int k) {
+	return (x << k) | (x >> (64 - k));
+}
+
+static inline uint64_t next(uint64_t s[2])
+{
+	const uint64_t s0 = s[0];
+	uint64_t s1 = s[1];
+	const uint64_t result = s0 + s1;
+
+	s1 ^= s0;
+	s[0] = rotl(s0, 24) ^ s1 ^ (s1 << 16); // a, b
+	s[1] = rotl(s1, 37); // c
+
+	return result;
+}
 
 static inline unsigned long int Cal_Order(unsigned long int x)
 {
