@@ -79,7 +79,7 @@ public:
 //	int Offset_ht_table;	// Only save the offset since the memory address in different processes could be different!!!
 //	int Offset_elt_list;
 
-	static int GetStorageSize(int nSize)	{	return ( sizeof(CHASHTABLE_CHAR) + sizeof(int)*nSize*2 + sizeof(struct elt_Char)*nSize*2 );	}
+	static unsigned long int GetStorageSize(unsigned long int nSize)	{	return ( sizeof(CHASHTABLE_CHAR) + sizeof(int)*nSize*2 + sizeof(struct elt_Char)*nSize*2 );	}
 	void DictCreate(unsigned long int nSize, struct elt_Char ** p_elt_list, int ** p_ht_table);
 	int DictInsertAuto(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table);
 	int DictInsert(const char *key, const int value, struct elt_Char ** p_elt_list, int ** p_ht_table);

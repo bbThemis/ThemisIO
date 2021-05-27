@@ -11,6 +11,7 @@
 #include <sys/time.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <stddef.h>
 #include <bits/stat.h>
 
 #include "myfs.h"
@@ -59,6 +60,7 @@ ncx_slab_pool_t *sp_ExtraPointers=NULL;
 ncx_slab_pool_t *sp_DirEntryList=NULL;
 //static char *p_DirEntryNameOffsetBuff=NULL;
 //static char *p_DirEntryNameBuff=NULL;
+ncx_slab_pool_t *sp_OpenDirEntryBuff=NULL;
 
 void *pMyfs=NULL;
 
@@ -150,6 +152,8 @@ void Init_Memory(void)
 	sp_ExtraPointers = ncx_slab_init(NULL, MAX_LEN_EXTRA_POINTERS_BUFF);
 	sp_DirEntryList = ncx_slab_init(NULL, MAX_LEN_DIR_ENTRY_LIST_BUFF);
 	sp_DirEntryHashTableBuff = ncx_slab_init(NULL, MAX_LEN_DIR_ENTRY_HASHTABLE_BUFF);
+
+	sp_OpenDirEntryBuff = ncx_slab_init(NULL, MAX_LEN_OPEN_DIR_BUFF);
 
 	// insert the record of the root directory! 
 	my_mkdir(szFSRoot, S_IRWXU | S_IRWXG | S_IRWXO, my_uid, my_gid);
@@ -660,7 +664,9 @@ int my_openfile(char szFileName[], int oflags, ...)
 {
 	char szParentDir[512];
 	int file_idx, dir_idx, bFlagCreate=0, bFlagTrunc=0, bAppend=0, nLenParentDirName, nLenFileName, idx_server_ParentDir, bParentDirExisting, nEntryType;
+//	int dir_idx, bFlagCreate=0, bFlagTrunc=0, bAppend=0, nLenParentDirName, nLenFileName, idx_server_ParentDir, bParentDirExisting, nEntryType;
 	unsigned long long fn_hash=0;
+//	unsigned long int file_idx;
 	int mode = 0, two_args=1;
 //	static struct timeval tm;
 	struct timespec t_spec;
@@ -748,7 +754,9 @@ int my_openfile(char szFileName[], int oflags, ...)
 //				pMetaData[file_idx].nExtraPointer = 0;
 //				pMetaData[file_idx].nMaxExtraPointer = 0;
 //				pMetaData[file_idx].pExtraData = NULL;
-				memset(&(pMetaData[file_idx].nDirectPointer), 0, sizeof(DirectPointer)*NUM_DIRCT_PT + sizeof(DirectPointer *) + 4*sizeof(int) + sizeof(ULongInt));
+//				memset(&(pMetaData[file_idx].nDirectPointer), 0, sizeof(DirectPointer)*NUM_DIRCT_PT + sizeof(DirectPointer *) + 4*sizeof(int) + sizeof(ULongInt));
+				memset((void*)( (unsigned long int)pMetaData + sizeof(META_INFO)*file_idx + offsetof(META_INFO,nDirectPointer) ), 0, sizeof(DirectPointer)*NUM_DIRCT_PT + sizeof(DirectPointer *) + 4*sizeof(int) + sizeof(ULongInt));
+
 				pMetaData[file_idx].st_dev = 0;	// const
 				pMetaData[file_idx].st_ino = file_idx;
 				pMetaData[file_idx].st_nlink = 1;
@@ -923,6 +931,8 @@ int Truncate_File(int file_idx, size_t size)
 
 	if(pFileMetaInfo->st_size == 0)	return 0;
 
+//	pthread_mutex_lock(&(file_lock[file_idx & MAX_NUM_FILE_OP_LOCK_M1]));
+
 	pDirectPointer = pFileMetaInfo->DiretData;
 	pExtraPointer = pFileMetaInfo->pExtraData;
 
@@ -992,6 +1002,7 @@ int Truncate_File(int file_idx, size_t size)
 				pFileMetaInfo->pExtraData = (DirectPointer *)ncx_slab_alloc(sp_ExtraPointers, nExtraPointerNewlyAllocated*sizeof(DirectPointer));
 				if(nExtraPointer)	memcpy(pFileMetaInfo->pExtraData, pExtraData_Org, sizeof(DirectPointer)*nExtraPointer);
 				if(pExtraData_Org)	ncx_slab_free(sp_ExtraPointers, pExtraData_Org);
+				printf("DBG> Resizing ExtraData. %d --> %d. Checking, pExtraData[0] = %x in Truncate_File().\n", pFileMetaInfo->nMaxExtraPointer, nExtraPointerNewlyAllocated, pFileMetaInfo->pExtraData[0].AddressofData);
 				pFileMetaInfo->nMaxExtraPointer = nExtraPointerNewlyAllocated;
 			}
 			if(nExtraPointer == 0)	{
@@ -1044,6 +1055,8 @@ int Truncate_File(int file_idx, size_t size)
 			}
 
 			if(pFileMetaInfo->nExtraPointer)	{
+//				memset(pExtraPointer, 0, sizeof(DirectPointer)*pFileMetaInfo->nMaxExtraPointer);	// reset the memory. Not necessary
+				printf("DBG> Resizing ExtraData. %d --> 0. in Truncate_File().\n", pFileMetaInfo->nMaxExtraPointer);
 				ncx_slab_free(sp_ExtraPointers, pExtraPointer);
 				pFileMetaInfo->nExtraPointer = 0;
 				pFileMetaInfo->nMaxExtraPointer = 0;
@@ -1058,6 +1071,7 @@ int Truncate_File(int file_idx, size_t size)
 		else	{	// in extra data region
 			i = idx_block - NUM_DIRCT_PT + 1;
 			memset((void*)(pFileMetaInfo->pExtraData[i-1].AddressofData + (size - pFileMetaInfo->pExtraData[i-1].FileOffset) ), 0,  pFileMetaInfo->pExtraData[i-1].FileOffset + pFileMetaInfo->pExtraData[i-1].DataBlockSize - size );
+			printf("DBG> memset(%p, 0, %ld)\n", (void*)(pFileMetaInfo->pExtraData[i-1].AddressofData + (size - pFileMetaInfo->pExtraData[i-1].FileOffset) ), pFileMetaInfo->pExtraData[i-1].FileOffset + pFileMetaInfo->pExtraData[i-1].DataBlockSize - size);
 			while(Done == 0)	{
 				for(; i<pFileMetaInfo->nExtraPointer; i++)	{
 					if(pExtraPointer[i].AddressofData)	{
@@ -1089,19 +1103,50 @@ int Truncate_File(int file_idx, size_t size)
 		}
 	}
 
+//	pthread_mutex_unlock(&(file_lock[file_idx & MAX_NUM_FILE_OP_LOCK_M1]));
+
 	return 0;
 }
+/*
+void * my_memcpy(void *destination, const void *source, size_t num)
+{
+	size_t i;
+	unsigned char *pDest=(unsigned char *)destination, *pSrc=(unsigned char *)source;
+	unsigned long int Addr_Old;
+
+//	if( destination & 0x3)	{	// not a multipler of 4
+//		printf("");
+//	}
+
+	if( (nFile>=2) && (pMetaData[1].nExtraPointer > 0) )	Addr_Old = pMetaData[1].pExtraData[0].AddressofData;
+
+	for(i=0; i<num; i++)	{
+		pDest[i] = pSrc[i];
+	}
+
+	if( (nFile>=2) && (pMetaData[1].nExtraPointer > 0) )	{
+		if(Addr_Old != pMetaData[1].pExtraData[0].AddressofData)	{
+			if(pMetaData[1].pExtraData[0].AddressofData == 0)	{
+				printf("DBG> Gotcha! %ld %ld\n", Addr_Old, pMetaData[1].pExtraData[0].AddressofData);
+			}
+		}
+	}
+
+	return destination;
+}
+*/
 
 size_t my_write(int fd, const void *buf, size_t count, off_t offset)
 {
 	int Done = 0, i, nDirectPointer, nExtraPointer, nExtraPointerNewlyAllocated, idx_file;
-	size_t nBytes_Written, nBytes_Written_OneTime, nOffsetMax, nAllocatedSize, nBytesJustAllocated, nPrevOffset, count_save;
+	size_t nBytes_ToWrite, nBytes_Written, nBytes_Written_OneTime, nOffsetMax, nAllocatedSize, nBytesJustAllocated, nPrevOffset, count_save;
 	META_INFO *pFileMetaInfo;
 	void *pNewBuff=NULL;
-	DirectPointer *pExtraData_Org;
+	DirectPointer *pExtraDataNew, *pExtraDataOrg;
 //	Determine_Index_StorageBlock_for_Offset(fd, fd_List[fd].Offset);
 
 	count_save = count;
+	nBytes_ToWrite = count;
 	idx_file = fd_List[fd].idx_file;
 	pFileMetaInfo = &(pMetaData[idx_file]);
 
@@ -1114,9 +1159,7 @@ size_t my_write(int fd, const void *buf, size_t count, off_t offset)
 	nDirectPointer = pFileMetaInfo->nDirectPointer;
 	if(nOffsetMax > nAllocatedSize)	{	// need allocate new pages to accomodate new incoming data.
 		pNewBuff = pMem_Allocator->Mem_Alloc(nOffsetMax - nAllocatedSize, &nBytesJustAllocated);
-		assert(pNewBuff != NULL);
-		pFileMetaInfo->nSizeAllocated += nBytesJustAllocated;
-		pFileMetaInfo->st_blocks = (pFileMetaInfo->nSizeAllocated) >> 9;	// the number of blocks of 512 bytes
+		assert( (pNewBuff != NULL) && (nBytesJustAllocated > 0) );
 
 		if(nDirectPointer < NUM_DIRCT_PT)	{	// append this pointer
 			pFileMetaInfo->DiretData[nDirectPointer].AddressofData = (ULongInt)pNewBuff;
@@ -1127,21 +1170,30 @@ size_t my_write(int fd, const void *buf, size_t count, off_t offset)
 		else	{
 			nExtraPointer = pFileMetaInfo->nExtraPointer;
 			if(pFileMetaInfo->nMaxExtraPointer <= nExtraPointer)	{	// Need to reallocate the storage for pExtraData[]
-				pExtraData_Org = pFileMetaInfo->pExtraData;
+//				pExtraData_Org = pFileMetaInfo->pExtraData;
 				nExtraPointerNewlyAllocated = pFileMetaInfo->nMaxExtraPointer + max((pFileMetaInfo->nMaxExtraPointer)>>2, DEFAULT_NUM_EXTRA_PT);
-				pFileMetaInfo->pExtraData = (DirectPointer *)ncx_slab_alloc(sp_ExtraPointers, nExtraPointerNewlyAllocated*sizeof(DirectPointer));
-				if(nExtraPointer)	memcpy(pFileMetaInfo->pExtraData, pExtraData_Org, sizeof(DirectPointer)*nExtraPointer);
-				if(pExtraData_Org)	ncx_slab_free(sp_ExtraPointers, pExtraData_Org);
+//				pFileMetaInfo->pExtraData = (DirectPointer *)ncx_slab_alloc(sp_ExtraPointers, nExtraPointerNewlyAllocated*sizeof(DirectPointer));
+				pExtraDataNew = (DirectPointer *)ncx_slab_alloc(sp_ExtraPointers, nExtraPointerNewlyAllocated*sizeof(DirectPointer));
+				pExtraDataOrg = pFileMetaInfo->pExtraData;
+				if(nExtraPointer)	memcpy(pExtraDataNew, pExtraDataOrg, sizeof(DirectPointer)*nExtraPointer);
+				pFileMetaInfo->pExtraData = pExtraDataNew;
 				pFileMetaInfo->nMaxExtraPointer = nExtraPointerNewlyAllocated;
+				if(pExtraDataOrg)	ncx_slab_free(sp_ExtraPointers, pExtraDataOrg);
+//				printf("DBG> Resizing ExtraData. %d --> %d. Checking, pExtraData[0] = %x in my_write().\n", pFileMetaInfo->nMaxExtraPointer, nExtraPointerNewlyAllocated, pFileMetaInfo->pExtraData[0].AddressofData);
 			}
 			pFileMetaInfo->pExtraData[nExtraPointer].AddressofData = (ULongInt)pNewBuff;
 			pFileMetaInfo->pExtraData[nExtraPointer].FileOffset = (nExtraPointer > 0) ? (pFileMetaInfo->pExtraData[nExtraPointer-1].FileOffset + pFileMetaInfo->pExtraData[nExtraPointer-1].DataBlockSize) : (pFileMetaInfo->DiretData[NUM_DIRCT_PT-1].FileOffset + pFileMetaInfo->DiretData[NUM_DIRCT_PT-1].DataBlockSize);
 			pFileMetaInfo->pExtraData[nExtraPointer].DataBlockSize = nBytesJustAllocated;
 			pFileMetaInfo->nExtraPointer++;
 		}
+		pFileMetaInfo->nSizeAllocated += nBytesJustAllocated;
+		pFileMetaInfo->st_blocks = (pFileMetaInfo->nSizeAllocated) >> 9;	// the number of blocks of 512 bytes
 	}
 	pFileMetaInfo->st_size = max(pFileMetaInfo->st_size, nOffsetMax);	// update file size
 	Determine_Index_StorageBlock_for_Offset(fd, offset);
+//	if( (pFileMetaInfo->nExtraPointer > 0) && ( fd_List[fd].idx_block >= (pFileMetaInfo->nExtraPointer + NUM_DIRCT_PT) ) )	{
+//		printf("DBG> Something wrong!\n");
+//	}
 	pthread_mutex_unlock(&(file_lock[idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
 
 	nBytes_Written = 0;
@@ -1151,38 +1203,43 @@ size_t my_write(int fd, const void *buf, size_t count, off_t offset)
 		memcpy((char*)pNewBuff+offset, buf, count);
 		fd_List[fd].Offset += count;
 		nBytes_Written = count;
+		nBytes_ToWrite -= count;
 		if(count == pFileMetaInfo->DiretData[0].DataBlockSize)	fd_List[fd].idx_block++;
 	}
 	else	{
 		while(Done == 0)	{
 			if(fd_List[fd].idx_block < NUM_DIRCT_PT)	{
-				if( (pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset + pFileMetaInfo->DiretData[fd_List[fd].idx_block].DataBlockSize - fd_List[fd].Offset) <= count)	{	// need to go on
+				if( (pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset + pFileMetaInfo->DiretData[fd_List[fd].idx_block].DataBlockSize - fd_List[fd].Offset) <= nBytes_ToWrite)	{	// need to go on
 					nBytes_Written_OneTime = pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset + pFileMetaInfo->DiretData[fd_List[fd].idx_block].DataBlockSize - fd_List[fd].Offset;
 					memcpy((void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
+//					my_memcpy((void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
 					fd_List[fd].idx_block++;	// move to next block!!!
 				}
 				else	{
-					nBytes_Written_OneTime = count;
+					nBytes_Written_OneTime = nBytes_ToWrite;
 					memcpy((void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
+//					my_memcpy((void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
 				}
 //				nBytes_Written_OneTime = min(pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset + pFileMetaInfo->DiretData[fd_List[fd].idx_block].DataBlockSize - fd_List[fd].Offset, count);
 				nBytes_Written += nBytes_Written_OneTime;
 				fd_List[fd].Offset += nBytes_Written_OneTime;
-				count -= nBytes_Written_OneTime;
+				nBytes_ToWrite -= nBytes_Written_OneTime;
 			}
 			if( (fd_List[fd].idx_block >= NUM_DIRCT_PT) && (pFileMetaInfo->nExtraPointer > 0) )	{	// within extra blocks!!!
-				if( (pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset + pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].DataBlockSize - fd_List[fd].Offset) <= count)	{	// need to go on
+				if( (pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset + pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].DataBlockSize - fd_List[fd].Offset) <= nBytes_ToWrite)	{	// need to go on
 					nBytes_Written_OneTime = pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset + pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].DataBlockSize - fd_List[fd].Offset;
 					memcpy((void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
+//					my_memcpy((void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
 					fd_List[fd].idx_block++;	// move to next block!!!
 				}
 				else	{
-					nBytes_Written_OneTime = count;
+					nBytes_Written_OneTime = nBytes_ToWrite;
 					memcpy((void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
+//					my_memcpy((void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
 				}
 				nBytes_Written += nBytes_Written_OneTime;
 				fd_List[fd].Offset += nBytes_Written_OneTime;
-				count -= nBytes_Written_OneTime;
+				nBytes_ToWrite -= nBytes_Written_OneTime;
 			}
 			if( nBytes_Written >= count_save )	{
 				Done = 1;
@@ -1259,12 +1316,14 @@ inline void my_Adaptive_Write(int idx_qp, void *loc_buf, unsigned int lkey, void
 size_t my_write_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset)
 {
 	int Done = 0, i, nDirectPointer, nExtraPointer, nExtraPointerNewlyAllocated, idx_file;
-	size_t nBytes_Written, nBytes_Written_OneTime, nOffsetMax, nAllocatedSize, nBytesJustAllocated, nPrevOffset, count_save;
+	size_t nBytes_Written, nBytes_ToWrite, nBytes_Written_OneTime, nOffsetMax, nAllocatedSize, nBytesJustAllocated, nPrevOffset, count_save;
 	META_INFO *pFileMetaInfo;
 	void *pNewBuff=NULL;
-	DirectPointer *pExtraData_Org;
+//	DirectPointer *pExtraData_Org;
+	DirectPointer *pExtraDataNew, *pExtraDataOrg;
 
 	count_save = count;
+	nBytes_ToWrite = count;
 	idx_file = fd_List[fd].idx_file;
 	pFileMetaInfo = &(pMetaData[idx_file]);
 
@@ -1290,12 +1349,16 @@ size_t my_write_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void 
 		else	{
 			nExtraPointer = pFileMetaInfo->nExtraPointer;
 			if(pFileMetaInfo->nMaxExtraPointer <= nExtraPointer)	{	// Need to reallocate the storage for pExtraData[]
-				pExtraData_Org = pFileMetaInfo->pExtraData;
+//				pExtraData_Org = pFileMetaInfo->pExtraData;
 				nExtraPointerNewlyAllocated = pFileMetaInfo->nMaxExtraPointer + max((pFileMetaInfo->nMaxExtraPointer)>>2, DEFAULT_NUM_EXTRA_PT);
-				pFileMetaInfo->pExtraData = (DirectPointer *)ncx_slab_alloc(sp_ExtraPointers, nExtraPointerNewlyAllocated*sizeof(DirectPointer));
-				if(nExtraPointer)	memcpy(pFileMetaInfo->pExtraData, pExtraData_Org, sizeof(DirectPointer)*nExtraPointer);
-				if(pExtraData_Org)	ncx_slab_free(sp_ExtraPointers, pExtraData_Org);
+//				pFileMetaInfo->pExtraData = (DirectPointer *)ncx_slab_alloc(sp_ExtraPointers, nExtraPointerNewlyAllocated*sizeof(DirectPointer));
+				pExtraDataNew = (DirectPointer *)ncx_slab_alloc(sp_ExtraPointers, nExtraPointerNewlyAllocated*sizeof(DirectPointer));
+				pExtraDataOrg = pFileMetaInfo->pExtraData;
+				if(nExtraPointer)	memcpy(pExtraDataNew, pExtraDataOrg, sizeof(DirectPointer)*nExtraPointer);
+//				printf("DBG> Resizing ExtraData. %d --> %d. Checking, pExtraData[0] = %x in my_write_RDMA().\n", pFileMetaInfo->nMaxExtraPointer, nExtraPointerNewlyAllocated, pFileMetaInfo->pExtraData[0].AddressofData);
+				pFileMetaInfo->pExtraData = pExtraDataNew;
 				pFileMetaInfo->nMaxExtraPointer = nExtraPointerNewlyAllocated;
+				if(pExtraDataOrg)	ncx_slab_free(sp_ExtraPointers, pExtraDataOrg);
 			}
 			pFileMetaInfo->pExtraData[nExtraPointer].AddressofData = (ULongInt)pNewBuff;
 			pFileMetaInfo->pExtraData[nExtraPointer].FileOffset = (nExtraPointer > 0) ? (pFileMetaInfo->pExtraData[nExtraPointer-1].FileOffset + pFileMetaInfo->pExtraData[nExtraPointer-1].DataBlockSize) : (pFileMetaInfo->DiretData[NUM_DIRCT_PT-1].FileOffset + pFileMetaInfo->DiretData[NUM_DIRCT_PT-1].DataBlockSize);
@@ -1318,42 +1381,43 @@ size_t my_write_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void 
 		my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, count, (void*)((char*)pNewBuff + offset));
 		fd_List[fd].Offset += count;
 		nBytes_Written = count;
+		nBytes_ToWrite -= count;
 		if(count == pFileMetaInfo->DiretData[0].DataBlockSize)	fd_List[fd].idx_block++;
 	}
 	else	{
 		while(Done == 0)	{
 			if(fd_List[fd].idx_block < NUM_DIRCT_PT)	{
-				if( (pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset + pFileMetaInfo->DiretData[fd_List[fd].idx_block].DataBlockSize - fd_List[fd].Offset) <= count)	{	// need to go on
+				if( (pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset + pFileMetaInfo->DiretData[fd_List[fd].idx_block].DataBlockSize - fd_List[fd].Offset) <= nBytes_ToWrite)	{	// need to go on
 					nBytes_Written_OneTime = pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset + pFileMetaInfo->DiretData[fd_List[fd].idx_block].DataBlockSize - fd_List[fd].Offset;
 //					memcpy((void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
 					my_Adaptive_Write(idx_qp, loc_buf, lkey, (char*)rem_buf+nBytes_Written, rkey, nBytes_Written_OneTime, (void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset));
 					fd_List[fd].idx_block++;	// move to next block!!!
 				}
 				else	{
-					nBytes_Written_OneTime = count;
+					nBytes_Written_OneTime = nBytes_ToWrite;
 //					memcpy((void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
 					my_Adaptive_Write(idx_qp, loc_buf, lkey, (char*)rem_buf+nBytes_Written, rkey, nBytes_Written_OneTime, (void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset));
 				}
 //				nBytes_Written_OneTime = min(pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset + pFileMetaInfo->DiretData[fd_List[fd].idx_block].DataBlockSize - fd_List[fd].Offset, count);
 				nBytes_Written += nBytes_Written_OneTime;
 				fd_List[fd].Offset += nBytes_Written_OneTime;
-				count -= nBytes_Written_OneTime;
+				nBytes_ToWrite -= nBytes_Written_OneTime;
 			}
 			if( (fd_List[fd].idx_block >= NUM_DIRCT_PT) && (pFileMetaInfo->nExtraPointer > 0) )	{	// within extra blocks!!!
-				if( (pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset + pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].DataBlockSize - fd_List[fd].Offset) <= count)	{	// need to go on
+				if( (pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset + pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].DataBlockSize - fd_List[fd].Offset) <= nBytes_ToWrite)	{	// need to go on
 					nBytes_Written_OneTime = pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset + pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].DataBlockSize - fd_List[fd].Offset;
 					my_Adaptive_Write(idx_qp, loc_buf, lkey, (char*)rem_buf+nBytes_Written, rkey, nBytes_Written_OneTime, (void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset));
 //					memcpy((void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
 					fd_List[fd].idx_block++;	// move to next block!!!
 				}
 				else	{
-					nBytes_Written_OneTime = count;
+					nBytes_Written_OneTime = nBytes_ToWrite;
 //					memcpy((void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
 					my_Adaptive_Write(idx_qp, loc_buf, lkey, (char*)rem_buf+nBytes_Written, rkey, nBytes_Written_OneTime, (void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset));
 				}
 				nBytes_Written += nBytes_Written_OneTime;
 				fd_List[fd].Offset += nBytes_Written_OneTime;
-				count -= nBytes_Written_OneTime;
+				nBytes_ToWrite -= nBytes_Written_OneTime;
 			}
 			if( nBytes_Written >= count_save )	{
 				Done = 1;
@@ -2206,18 +2270,26 @@ int my_opendir_by_index(int dir_idx, void *loc_buf)
 	int i, nEntry, nEntry_Save, nMaxEntry, nDirEntryListBuffSize;
 //	unsigned char *szDirEntryBuff=NULL;// entry data buffer
 	int *p_nDirEntries, *p_DirEntryOffset, nBytesDirEntryNameAccu=0, nBytesEntryName, *p_nEntryNameOffset;
-	char *p_szDirEntryName, *pResult_buf;
+	char *p_szDirEntryName, *pResult_buf, *pResult_New_Allocated=NULL;
 	struct elt_CharEntry *elt_list_DirEntry;
+	RW_FUNC_RETURN_EXT *pResult_Ext;
 	
 	nEntry = pDirMetaData[dir_idx].nEntries;
 	nDirEntryListBuffSize = pDirMetaData[dir_idx].nLenAllEntries + sizeof(int)*(1 + nEntry);
 	if(nDirEntryListBuffSize > (IO_RESULT_BUFFER_SIZE - sizeof(RW_FUNC_RETURN)) )	{	// too large to fit in result buffer (loc_buf)
-		printf("ERROR> The result buffer is not enough to hold dir entry list for %s. Need %d bytes.\n", pDirMetaData[dir_idx].szDirName, nDirEntryListBuffSize);
-		errno = ENOMEM;
-		return (-1);
+		pResult_New_Allocated = (char *)ncx_slab_alloc(sp_OpenDirEntryBuff, nDirEntryListBuffSize + sizeof(int));
+		assert(pResult_New_Allocated != NULL);
+		pResult_Ext = (RW_FUNC_RETURN_EXT *)((long int)loc_buf + sizeof(int) - sizeof(RW_FUNC_RETURN));
+		pResult_Ext->mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote((void*)pResult_New_Allocated, nDirEntryListBuffSize + sizeof(int));
+		assert(pResult_Ext->mr_tmp != NULL);
+		pResult_Ext->nEntry = pDirMetaData[dir_idx].nEntries;
+
+		pResult_buf = (char*)pResult_New_Allocated + sizeof(int);
+	}
+	else	{
+		pResult_buf = (char*)loc_buf;
 	}
 
-	pResult_buf = (char*)loc_buf;
 	p_szDirEntryName = (char*)pResult_buf + sizeof(int) * (1 + nEntry);
 	p_DirEntryOffset = (int*)( pResult_buf + sizeof(int)*1 );
 	p_nDirEntries = (int*)( pResult_buf );

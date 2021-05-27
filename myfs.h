@@ -18,7 +18,7 @@ typedef unsigned int UInt;
 #define DEFAULT_NUM_EXTRA_PT	(16)
 
 //#define _NPAGES			(2*8192*1024L)
-#define _NPAGES                       (2*8192*1024L)
+#define _NPAGES                       (4*8192*1024L)
 
 #define MAX_NUM_FILE	(0x1000000UL)	// per node
 #define MAX_NUM_DIR		(0x400000UL)	// per node
@@ -37,13 +37,14 @@ typedef unsigned int UInt;
 //#define DEFAULT_FULL_FILE_NAME_LEN	(176)
 #define DEFAULT_MAX_ENTRY_PER_DIR	(16)
 
-#define MAX_LEN_EXTRA_POINTERS_BUFF	(256*1024*1024)
+#define MAX_LEN_EXTRA_POINTERS_BUFF	(512*1024*1024)
 //#define MAX_LEN_DIR_ENTRY_BUFF	(128*1024*1024)
 //#define MAX_LEN_DIR_ENTRY_OFFSET_BUFF	(160*1024*1024)
 #define MAX_LEN_DIR_ENTRY_LIST_BUFF	(56*1024*1024)
 #define MAX_LEN_LONG_FILE_NAME_BUFF	(16*1024*1024)
 #define MAX_LEN_PER_DIR_ENTRY_BUFF	(2*1024*1024)
 #define MAX_LEN_RETURN_BUFF			(2*1024*1024)
+#define MAX_LEN_OPEN_DIR_BUFF		(384*1024*1024)
 
 //#define MAX_LEN_DIR_ENTRY_HASHTABLE_BUFF	(16*4096*1024*1024L)	// NEED for large number of files in mdtest!!!
 #define MAX_LEN_DIR_ENTRY_HASHTABLE_BUFF      (6*4096*1024*1024L)

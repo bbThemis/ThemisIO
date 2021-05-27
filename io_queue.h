@@ -7,12 +7,13 @@
 #define LARGE_T_QUEUED	(0x60000000000000UL)
 #define	N_SECOND_THRESHOLD_REMOVE_JOB	(15)	// When (nQP == 0) and dT > N_SECOND_THRESHOLD_REMOVE_JOB, remove current job from active job list
 
-#define NUM_THREAD_IO_WORKER_INTER_SERVER  (10)
+#define NUM_THREAD_IO_WORKER_INTER_SERVER  (8)
 #define NUM_THREAD_IO_WORKER  (16+NUM_THREAD_IO_WORKER_INTER_SERVER)
 
 #define MAX_NUM_ACTIVE_JOB	(1024)	// max number of concurrent slurm job id
 
-#define MAX_NUM_QUEUE	(640 + NUM_THREAD_IO_WORKER_INTER_SERVER)	// The first queue is reserved for inter-server communications! 
+#define MAX_NUM_QUEUE (640 + NUM_THREAD_IO_WORKER_INTER_SERVER)
+//#define MAX_NUM_QUEUE	(640 + NUM_THREAD_IO_WORKER_INTER_SERVER)	// The first queue is reserved for inter-server communications! 
 #define MAX_NUM_QUEUE_MX	(MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER)
 
 #define NUM_QUEUE_PER_WORKER	(MAX_NUM_QUEUE_MX/(NUM_THREAD_IO_WORKER-NUM_THREAD_IO_WORKER_INTER_SERVER))
