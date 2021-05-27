@@ -1,8 +1,8 @@
 CXX=g++
 CXXFLAGS=-march=skylake-avx512 -g -O0 -I/opt/intel/compilers_and_libraries_2018.6.288/linux/mpi/intel64/include -DNCX_PTR_SIZE=8 -pipe -DLOG_LEVEL=4  -DPAGE_MERGE
 OBJS=put_get_server.o qp.o dict.o xxhash.o io_queue.o myfs.o io_ops.o buddy.o ncx_slab.o corebinding.o unique_thread.o 
-#HEADERS=dict.h qp_common.h qp.h io_queue.h utility.h xxhash.h list.h buddy.h myfs_common.h myfs.h io_ops_common.h io_ops.h ncx_slab.h ncx_core.h ncx_log.h client/qp_client.h
-HEADERS=dict.h qp_common.h qp.h io_queue.h utility.h xxhash.h list.h buddy.h myfs_common.h myfs.h io_ops_common.h io_ops.h corebinding.h unique_thread.h ncx_slab.h ncx_core.h ncx_log.h
+#HEADERS=dict.h qp_common.h qp.h io_queue.h utility.h xxhash.h list.h buddy.h myfs.h io_ops_common.h io_ops.h ncx_slab.h ncx_core.h ncx_log.h client/qp_client.h
+HEADERS=dict.h qp_common.h qp.h io_queue.h utility.h xxhash.h list.h buddy.h myfs.h io_ops_common.h io_ops.h corebinding.h unique_thread.h ncx_slab.h ncx_core.h ncx_log.h
 RM=rm -rf
 
 # in cmd of windows
