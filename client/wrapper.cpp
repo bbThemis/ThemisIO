@@ -619,7 +619,7 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 					fetch_and_add(&nQp, 1);	// atomically add the counter
 				}
 
-				idx_fs = pIO_Cmd->file_hash % pFileServerList->nFSServer;	// the index of which file server holding this file
+//				idx_fs = pIO_Cmd->file_hash % pFileServerList->nFSServer;	// the index of which file server holding this file
 				DirList[idx_fd].fd = idx_fd;
 				DirList[idx_fd].idx_fs = idx_fs;
 				DirList[idx_fd].OpenFlag = oflags;
