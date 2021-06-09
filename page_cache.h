@@ -6,6 +6,19 @@
 
   Simple page cache for a single file with adjustable levels of consistency.
 
+  This is designed to be an intermediate layer between application
+  code and an implementation of POSIX file I/O calls. For testing, an
+  application can use this API directly with direct POSIX I/O calls as
+  the backend, but the intended target is in the wrapper layer of the
+  bbThemis implementation. POSIX file I/O calls will be
+  intercepted. Anything related to a bbThemis server will be routed to
+  this API, and this API will use the bbThemis server as its backend.
+
+  application calls write()
+    -> wrapper intercept
+    -> PageCache::write
+    -> bbThemis server
+
   visible-after-write
     POSIX default. All writes are guaranteed to be visible after the
     call to write() completes. All writes are write-through, with
@@ -32,12 +45,17 @@
     
     This will improve the performance of small reads and writes, because
     they can complete without contacting the file system.
-    
 
   visible-after-task
     Writes may be visible immediately, but they are not guaranteed to be
     visible unless the reading process starts after the writing process
-    exits.
+    exits. 
+
+    Also, this will support deferred calls to open(). It can be a
+    burden on a filesystem when many processes all call open() at
+    about the same time. If this is set, and the processes are all opening
+    the file for O_WRONLY | O_CREAT | O_TRUNC, we will just buffer data
+    in memory for a while before actually calling open() on the backend.
 
     Caches are maintained even when files are closed, and writes are not
     flushed until the process exits. 
@@ -45,15 +63,16 @@
     This will improve the performance of processes that frequently close
     and reopen the same file.
 
-    
+
   This cache will store pages of files, use up to some set amount of
   memory. The page size and memory limit will be set in the constructor,
   but the amount of memory can be changed at any time.
   
   This will handle multiple files, so all open files will share the
-  memory limit. If a file is opened multiple times, consistency must
-  be maintained across all open sessions. If each open file used an
-  independent cache, this could lead to inconsistent file accesses.
+  memory limit. If a file is opened multiple times by one process,
+  consistency must be maintained across all open instances. If each
+  open file used an independent cache, this could lead to inconsistent
+  file accesses.
 
   As a file can be opened multiple times each with a distinct file
   descriptor, it is not sufficient to associate the file with the file
@@ -86,6 +105,41 @@
   when thread support is not needed, set the PAGE_CACHE_THREAD_SAFE
   macro to 1 when thread synchronization calls are desired.
 
+  -- Structure --
+
+  OpenFile : a file that is currently being managed by the cache.
+    Uniquely identified by the canonical pathname of the file, but
+    when inode numbers are supported it will use those.
+    Lookup table: open_files_by_name
+
+  FileDescriptor : one instance of an open file. Uniquely identified
+    by an integer file descriptor returned by open(). Multiple FileDescriptors
+    can reference one OpenFile.
+    Lookup table: file_fds
+
+  Entry : a slot in which one page of data can be cached. The number of
+    available Entry objects is set when the maximum memory usage is set.
+    (entries.count() = floor( max_memory / (page_size + sizeof(Entry)) )).
+    All entry objects are stored in one vector, and are identified by
+    an integer index. The actual data is stored in one large char array
+    of size (page_size * entries.count()), where entry[i] manages the data
+    at offset (i*page_size).
+    Lookup table: entry_table
+
+  page_id : index of a page in a file. Given a file offset, the page_id
+    is floor(offset / page_size).
+
+  idle_list, inactive_list, active_list : doubly-linked lists of entries,
+    Every entry is in exactly one of these three lists.
+      idle: unallocated
+      inactive: the page is infrequently used
+      active: the page is frequently used
+
+  Implementation - layer of virtual functions that is the backend
+    implementation.  The static instance sample_implementation
+    references POSIX I/O calls directly. This is where a bbThemis
+    backend implementation will be interfaced.
+
   Ed Karrels
   edk@illinois.edu
 */
@@ -115,14 +169,9 @@ public:
 
   class Implementation;
 
-  /*
-    - impl is the lower-level implementations of functions such as
-      open() and read(). There is a static object
-      PageCache::system_implementation which just forwards all calls
-      to the standard ::open(), ::read(), etc.
-    - page_size must be a power of 2
-
-  */
+  /* One instance of PageCache can cache multiple files. It is designed
+     to have one instance per process.
+    - page_size must be a power of 2 */
   PageCache(ConsistencyLevel consistency,
             int page_size_ = DEFAULT_PAGE_SIZE,
             size_t max_memory_usage = DEFAULT_MEM_SIZE,
@@ -131,6 +180,8 @@ public:
   ~PageCache();
 
 
+  /* If VISIBLE_AFTER_CLOSE, all pages for the file will be flushed
+     when the file is opened. */
   int open(const char *pathname, int flags, ...);
   
   int creat(const char *pathname, mode_t mode);
@@ -152,10 +203,10 @@ public:
 
   off_t lseek(int fd, off_t offset, int whence);
   
-  /* if if VISIBLE_AFTER_CLOSE, flush all the pages for this file. */
+  /* If VISIBLE_AFTER_CLOSE, flush all the pages for this file. */
   int close(int fd);
   
-  /* if if VISIBLE_AFTER_EXIT, flush all */
+  /* If VISIBLE_AFTER_EXIT, flush all */
   void exit();
   
   int getPageSize() {return page_size;}
@@ -171,15 +222,20 @@ public:
   // Call this when there is a little idle time. Up to bytes/page_size
   // dirty pages will be flushed;
   // Return 0 on success or errno on error.
+  // TODO: not implemented yet
   int flushSomeWriteCache(long bytes);
 
   // Increase or decrease maximum memory usage. May cause page flushes.
+  // TODO: not implemented yet
   void setMaxMemoryUsage(long bytes);
 
   // Check the data structure for errors. Return true if correct.
   bool fsck() const;
   
   static std::string currentDir();
+
+  // Make path into an absolute path in the form (/name)*
+  // No trailing slash, no "../" or "./" or "//".
   static std::string canonicalPath(const char *path);
 
   class Implementation {
@@ -200,24 +256,16 @@ public:
   
 private:
 
-  /* Data needed for each file:
-      - Current position
-      - Current length
-      - inode number
-      - If currently open, we'll need the file descriptor. If not, we'll
-        need the filename, open flags, and possibly file mode so we can
-        call open() later.
-
-     As part of supporting deferred opens, we need to handle the case
+  /* As part of supporting deferred opens, we need to handle the case
      where a process opens a file for writing and opens it a second
      time for reading. May need to keep a table of name of files that
      have been opened via deferred opens, so another call to open can
      use the same data.
-  */
 
-  /* If a file has been opened multiple times, so there are multiple file
-     descriptors referencing it, this is the data that will be shared
-     across all the file descriptors.
+     Multiple file descriptors can refer to the same file. To keep
+     cached data consistent across multiple file descriptors, all
+     those file descriptors will reference one OpenFile object if
+     they're all referring to the same file.
   */
   class OpenFile {
   public:
@@ -236,25 +284,22 @@ private:
     long last_mod_nanos;
 
     /* The first time this file is opened, this object will retain the
-       file descriptor returned by impl.open().  
+       file descriptor returned by impl.open().
 
-       If the inital open was O_RDONLY and a later open() succeeds with
-       O_RDWR or O_WRONLY, retain that file descriptor so we can process
-       later calls to write().
+       If the inital open was read-only and a later open() succeeds
+       with O_RDWR or O_WRONLY, retain that file descriptor so we can
+       process later calls to flush dirty pages with calls to write().
 
-       If a file is only opened O_WRONLY and a write() updates only
-       part of a page, we would need to read the rest of the page in
-       order to accurately write the whole page back to storage.
-       So if we don't already have the file opened for reading, when
-       a call to open requests O_WRONLY, we'll actually try to open 
-       it O_RDWR. If that fails, then open it O_WRONLY but disable
-       caching for this file. */
+       If a file is opened write-only and a write() updates only part
+       of a page, we would need to read the rest of the page in order
+       to accurately write the whole page back to storage.  So, in
+       that case the write will not be cached and will be immediately
+       processed. */
     int fd;
 
-    // O_RDONLY, O_WRONLY, or O_RDWR. Other flags such as O_CREAT
-    // have been stripped out.
-
-    // ! If this is O_WRONLY, then partial page writes cannot be cached.
+    /* access = O_RDONLY, O_WRONLY, or O_RDWR. Other flags such as O_CREAT
+       have been stripped out.
+       ! If this is O_WRONLY, then partial page writes cannot be cached. */
     int access;
 
     OpenFile(const std::string &canonical_path_) :
@@ -264,9 +309,9 @@ private:
     // if length still isn't set, use fstat() to set it now
     long needLength(Implementation &impl);
 
-    // keep a reference count of each FileDescriptor referencing this,
-    // so it can be removed from open_files_by_name and deallocated
-    // when they're all closed.
+    /* Keep a reference count of each FileDescriptor referencing this,
+       so it can be removed from open_files_by_name and deallocated
+       when they're all closed. */
     int addref() {return ++refcount;}
     int rmref() {return --refcount;}
 
@@ -278,8 +323,8 @@ private:
   };
 
   
-  // This encapsulates data associated with the file descriptor.
-  // Multiple FileDescriptors can point to the same OpenFile.
+  /* This encapsulates data associated with the file descriptor.
+     Multiple FileDescriptors can point to the same OpenFile. */
   class FileDescriptor {
   public:
     OpenFile * const open_file;
@@ -287,9 +332,9 @@ private:
     int fd;
     int access; // O_RDONLY, O_RDWR, or O_WRONLY
 
-    // if open is deferred (consistency >= VISIBLE_AFTER_EXIT), then
-    // open_is_deferred will be true, and these fields will be set to
-    // the arguments to open().
+    /* if open is deferred (consistency = VISIBLE_AFTER_EXIT), then
+       open_is_deferred will be true, and the arguments to open() will
+       be saved in these fields. */
     bool open_is_deferred;
     int dirfd;
     std::string path;  // the argument to open, not the canonical path
@@ -315,13 +360,7 @@ private:
     bool checkLastModified(Implementation &impl);
   };
 
-  /* Data needed for each cached page:
-      - file id (inode number?)
-      - page id (file_offset / page_size)
-      - content pointer
-      - is_dirty flag
-
-     Each cache entry can be on one of three lists:
+  /* Each cache entry can be on one of three lists:
       - unused (page_id=-1, content=NULL, flags=0)
       - inactive (page_id>=0, content!=NULL, flags&IS_USED != 0)
       - active (page_id>=0, content!=NULL, flags&IS_ACTIVE != 0)
@@ -346,6 +385,8 @@ private:
     // is currently in
     int list_prev, list_next;
 
+    // bits 0,1: current list 00=idle, 01=inactive, 10=active
+    // bit 2: dirty bit
     unsigned flags;
 
     void init(OpenFile *file_, long page_id_) {
@@ -406,7 +447,10 @@ private:
     void checkFront() const {
       assert(size()==0 || entries[front()].listNo() == my_list_no);
     }
-    
+
+    // When an entry is remove from the list, don't bother invalidating
+    // its list_next and list_prev pointers, because it will be immediately
+    // placed on a different list and they will be set again.
     int popFront() {
       assert(!isEmpty());
       int tmp = head;
@@ -494,11 +538,11 @@ private:
   };
 
 
+  // Key for identifying a page in the cache: (file handle, page index)
   struct PageKey {
-    OpenFile *f;
-    long page_id;
+    const OpenFile *f;
+    const long page_id;
 
-    PageKey() {}
     PageKey(const PageKey &x) : f(x.f), page_id(x.page_id) {}
     PageKey(OpenFile *f_, long page_id_) : f(f_), page_id(page_id_) {}
 
@@ -523,7 +567,8 @@ private:
 
 
   FileDescriptor *getFileDescriptor(int fd);
-  
+
+  // internal implementations, after mapping an integer fd to the FileDescriptor object
   ssize_t pread(FileDescriptor *filedes, void *buf, size_t count, off_t offset);
   ssize_t pwrite(FileDescriptor *filedes, const void *buf, size_t count, off_t offset);
 
@@ -546,6 +591,7 @@ private:
     NoLockGuard(std::recursive_mutex &m) {}
   };
 
+  
   bool deferOpen(const std::string &path, int flags) {
     return false;
     /*
