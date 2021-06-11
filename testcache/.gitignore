@@ -1,2 +1,4 @@
+*.o
 *.exe
 test_page_cache
+test_page_cache.out
