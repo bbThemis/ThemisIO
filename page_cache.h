@@ -80,14 +80,9 @@
   as multiple names can refer to the same file via hard links,
   symbolic links, directory references ("../../foo/bar/gonzo" and
   "../bar/gonzo"), and non-canonical file references ("foo/bar" and
-  "foo//bar"). Thus a file's inode number should be used to associate
-  a it with its cache entries.
-
-  However, this is being built on top of a system that doesn't yet
-  assign unique inodes to each file, so we don't have that
-  option. Thus we'll use canonical filenames for now.
-
-  TODO: identify unique files by inode rather than canonical filename.
+  "foo//bar"). However, every distinct file has a distinct inode
+  number.  Thus a file's inode number should be used to associate it
+  with its cache entries.
 
   All data will be accessed in pages, so if the user requests one byte,
   a full page will be read.
@@ -108,9 +103,8 @@
   -- Structure --
 
   OpenFile : a file that is currently being managed by the cache.
-    Uniquely identified by the canonical pathname of the file, but
-    when inode numbers are supported it will use those.
-    Lookup table: open_files_by_name
+    Uniquely identified by the inode of the file.
+    Lookup table: open_files_by_inode
 
   FileDescriptor : one instance of an open file. Uniquely identified
     by an integer file descriptor returned by open(). Multiple FileDescriptors
@@ -119,7 +113,7 @@
 
   Entry : a slot in which one page of data can be cached. The number of
     available Entry objects is set when the maximum memory usage is set.
-    (entries.count() = floor( max_memory / (page_size + sizeof(Entry)) )).
+    (entries.count() = floor(max_memory / (page_size + sizeof(Entry)))).
     All entry objects are stored in one vector, and are identified by
     an integer index. The actual data is stored in one large char array
     of size (page_size * entries.count()), where entry[i] manages the data
@@ -135,10 +129,10 @@
       inactive: the page is infrequently used
       active: the page is frequently used
 
-  Implementation - layer of virtual functions that is the backend
+  Implementation - a layer of virtual functions that is the backend
     implementation.  The static instance sample_implementation
     references POSIX I/O calls directly. This is where a bbThemis
-    backend implementation will be interfaced.
+    backend implementation can be incorporated.
 
   Ed Karrels
   edk@illinois.edu
@@ -150,6 +144,7 @@
 #include <cstdio>
 #include <string>
 #include <iostream>
+#include <sstream>
 #include <unordered_map>
 #include <vector>
 #include <mutex>
@@ -183,16 +178,7 @@ public:
   /* If VISIBLE_AFTER_CLOSE, all pages for the file will be flushed
      when the file is opened. */
   int open(const char *pathname, int flags, ...);
-  
   int creat(const char *pathname, mode_t mode);
-
-  
-  /* This is difficult because given dirfd, we can't determine what the
-     canonical path name is, so we can't tell whether this file is cached.
-     We could trace calls to open(..., O_DIRECTORY) opendir(), dup(), and 
-     possibly more, so we know where the dirfd came from. This seems like
-     a bad idea. Until we have inodes, I'll ignore the dirfd when computing
-     the canonical pathname. */
   int openat(int dirfd, const char *pathname, int flags, ...);
 
   
@@ -231,6 +217,14 @@ public:
 
   // Check the data structure for errors. Return true if correct.
   bool fsck() const;
+
+  // Used for testing, this returns true iff the data at this offset
+  // of the file is cached.
+  bool isCached(int fd, long file_offset) const;
+
+  // Used for testing, this returns true if the data at this offset
+  // of the file is cached and the page is dirty.
+  bool isPageDirty(int fd, long file_offset) const;
   
   static std::string currentDir();
 
@@ -241,6 +235,8 @@ public:
   class Implementation {
   public:
     virtual int open(const char *pathname, int flags, ...);
+    // this would be nice, a combined open/fstat:
+    // virtual int openStat(struct stat *statbuf, const char *pathname, int flags, ...);
     virtual int openat(int dirfd, const char *pathname, int flags, ...);
     virtual ssize_t write(int fd, const void *buf, size_t count);
     virtual ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset);
@@ -269,6 +265,10 @@ private:
   */
   class OpenFile {
   public:
+    const ino_t inode;
+    
+    // Not needed now that inode is used to uniquely identify files,
+    // but this is handy for debugging.
     const std::string canonical_path;
 
     /* Used to share the length across all file descriptors, because
@@ -286,34 +286,79 @@ private:
     /* The first time this file is opened, this object will retain the
        file descriptor returned by impl.open().
 
-       If the inital open was read-only and a later open() succeeds
-       with O_RDWR or O_WRONLY, retain that file descriptor so we can
-       process later calls to flush dirty pages with calls to write().
+       The first opened file descriptor with read permission is stored
+       in read_fd. The first writer in write_fd.
 
        If a file is opened write-only and a write() updates only part
        of a page, we would need to read the rest of the page in order
-       to accurately write the whole page back to storage.  So, in
-       that case the write will not be cached and will be immediately
-       processed. */
-    int fd;
+       to accurately write the whole page back to storage.  If read_fd
+       has not been set, then that write will not be cached and will
+       be immediately processed. */
+    int read_fd, write_fd;
 
-    /* access = O_RDONLY, O_WRONLY, or O_RDWR. Other flags such as O_CREAT
-       have been stripped out.
-       ! If this is O_WRONLY, then partial page writes cannot be cached. */
-    int access;
+    OpenFile(ino_t inode_, const std::string &canonical_path_) :
+      inode(inode_), canonical_path(canonical_path_), length(-1),
+      last_mod_nanos(0),
+      read_fd(-1), write_fd(-1), refcount(0) {}
 
-    OpenFile(const std::string &canonical_path_) :
-      canonical_path(canonical_path_), length(-1), last_mod_nanos(0),
-      fd(-1), access(0), refcount(1) {}
+    bool isReadable() {return read_fd != -1;}
+    bool isReadOnly() {return isReadable() && !isWritable();}
+    bool isWritable() {return write_fd != -1;}
+    bool isWriteOnly() {return isWritable() && !isReadable();}
+    bool isReadWrite() {return isReadable() && isWritable();}
 
     // if length still isn't set, use fstat() to set it now
     long needLength(Implementation &impl);
 
     /* Keep a reference count of each FileDescriptor referencing this,
        so it can be removed from open_files_by_name and deallocated
-       when they're all closed. */
-    int addref() {return ++refcount;}
+       when they're all closed.
+       flags: the 'flags' argument from a call to open(). */
+    void addref(int fd, int flags) {
+      ++refcount;
+      flags &= O_ACCMODE;
+      
+      // try to use just one fd to minimize the number of open fd's
+      if (flags == O_RDWR) {
+        if (read_fd == -1 || read_fd != write_fd) {
+          read_fd = write_fd = fd;
+        }
+      } else if (flags == O_RDONLY) {
+        if (read_fd == -1)
+          read_fd = fd;
+      } else {
+        assert(flags == O_WRONLY);
+        if (write_fd == -1)
+          write_fd = fd;
+      }
+    }
     int rmref() {return --refcount;}
+    int getref() {return refcount;}
+
+    bool isFileDescriptorInUse(int fd) {
+      return fd == read_fd || fd == write_fd;
+    }
+
+    void close(Implementation &impl) {
+      if (read_fd != -1)
+        impl.close(read_fd);
+      if (write_fd != -1 && write_fd != read_fd)
+        impl.close(write_fd);
+      read_fd = write_fd = -1;
+    }
+
+    std::string name() {
+      // without the inode, just return the path
+      // return canonical_path;
+
+      std::ostringstream buf;
+      buf << "inode=" << inode;
+      
+      // without canonical_path, just comment this out to use the inode
+      buf << ".path=" << canonical_path;
+        
+      return buf.str();
+    }
 
 
   private:
@@ -336,11 +381,10 @@ private:
        open_is_deferred will be true, and the arguments to open() will
        be saved in these fields. */
     bool open_is_deferred;
-    int dirfd;
-    std::string path;  // the argument to open, not the canonical path
-                       // XXX Maybe it should be the canonical path, in
-                       // case the current directory is changed before
-                       // the file is opened?
+    int dirfd;  // >= 0 iff openat() was called
+    /* canonical version of the pathname argument to open, in case the
+       current directory is changed before the file is opened. */
+    std::string path;  
     int flags;
     mode_t mode;
 
@@ -348,9 +392,11 @@ private:
       open_file(f), position(0), fd(fd_), access(access_),
       open_is_deferred(false), dirfd(-1), mode(0) {}
 
-    void setDeferred(int dirfd_, const std::string &path_, mode_t mode_) {
+    void setDeferred(int dirfd_, const std::string &path_, int flags_,
+                     mode_t mode_) {
       open_is_deferred = true;
       dirfd = dirfd_;
+      flags = flags_;
       path = path_;
       mode = mode_;
     }
@@ -396,7 +442,7 @@ private:
       flags = 0;
     }
 
-    bool isDirty() const {return flags & 4;}
+    bool isDirty() const {return (flags & 4) != 0;}
     void setClean() {
       flags &= ~((unsigned)4);
     }
@@ -538,23 +584,153 @@ private:
   };
 
 
+  struct ListPtrs {int prev, next;};
+
+  /*
+  struct ListHandlesGlobal {
+    int& prev(Entry &e) {return e.global_list.prev;}
+    int& next(Entry &e) {return e.global_list.next;}
+  };
+
+  struct ListHandlesFile {
+    int& prev(Entry &e) {return e.file_list.prev;}
+    int& next(Entry &e) {return e.file_list.next;}
+  };
+  */
+
+  /* Using a template to support multiple independent sets of
+     prev/next pointers in each object, so each cache entry can
+     be in multiple lists (global idle/inactive/active lists) and
+     (OpenFile clean/dirty lists). */
+  template <class ListHandles>
+  class MultiList {
+    const int list_no_;
+    int head_, tail_, size_;
+    ListHandles handles;
+    std::vector<Entry> &entries_;
+    
+  public:
+    MultiList(std::vector<Entry> &entries, int list_no)
+      : list_no_(list_no), head_(-1), tail_(-1), size_(0),
+        entries_(entries){}
+
+    int listNo() const {return list_no_;}
+    bool isEmpty() const {return size()==0;}
+    
+    int size() const {return size_;}
+
+    int front() const {
+      assert(!isEmpty());
+      return head_;
+    }
+
+    void checkFront() const {
+      assert(size()==0 || entries[front()].listNo() == listNo());
+    }
+
+    // When an entry is remove from the list, don't bother invalidating
+    // its list_next and list_prev pointers, because it will be immediately
+    // placed on a different list and they will be set again.
+    int popFront() {
+      assert(!isEmpty());
+      int tmp = head_;
+      if (head_ == tail_) {
+        head_ = tail_ = -1;
+      } else {
+        head_ = handles(entries[head_]).next();
+      }
+      size_--;
+      return tmp;
+    }
+
+    void pushFront(int id) {
+      assert(id >= 0 && id < entries.size());
+      Entry &e = entries[id];
+      if (isEmpty()) {
+        handles(e).next() = handles(e).prev() = -1;
+        head_ = tail_ = id;
+      } else {
+        handles(entries[head_]).prev() = id;
+        handles(e).prev() = -1;
+        handles(e).next() = head_;
+        head_ = id;
+      }
+      size_++;
+      e.setListNo(listNo());
+    }
+
+    int back() const {
+      assert(!isEmpty());
+      return tail_;
+    }
+
+    void checkBack() const {
+      assert(size()==0 || entries[back()].listNo() == listNo());
+    }
+    
+    int popBack() {
+      assert(!isEmpty());
+      int tmp = tail_;
+      if (head_ == tail_) {
+        head_ = tail_ = -1;
+      } else {
+        tail_ = handles(entries[tail_]).prev();
+      }
+      size_--;
+      return tmp;
+    }
+
+    void pushBack(int id) {
+      assert(id >= 0 && id < entries.size());
+      Entry &e = entries[id];
+      if (isEmpty()) {
+        handles(e).next() = handles(e).prev() = -1;
+        head_ = tail_ = id;
+      } else {
+        handles(entries[tail_]).next() = id;
+        handles(e).next() = -1;
+        handles(e).prev() = tail_;
+        tail_ = id;
+      }
+      size_++;
+      e.setListNo(listNo());
+    }
+
+    // caller asserts id is in this list
+    void removeDirect(int id) {
+      assert(!isEmpty());
+      Entry &e = entries[id];
+      if (head_ == id) {
+        if (tail_ == id) {
+          head_ = tail_ = -1;
+        } else {
+          head_ = handles(e).next();
+        }
+      } else if (tail_ == id) {
+        tail_ = handles(e).prev();
+      }
+      size_--;
+    }
+  };
+
+
   // Key for identifying a page in the cache: (file handle, page index)
   struct PageKey {
-    const OpenFile *f;
+    const ino_t inode;
     const long page_id;
 
-    PageKey(const PageKey &x) : f(x.f), page_id(x.page_id) {}
-    PageKey(OpenFile *f_, long page_id_) : f(f_), page_id(page_id_) {}
+    PageKey(const PageKey &x) : inode(x.inode), page_id(x.page_id) {}
+    PageKey(ino_t inode_, long page_id_) : inode(inode_), page_id(page_id_) {}
 
     size_t hash() const {
       const size_t factor = 11400714819323198329ull;
-      size_t h = (size_t)f;
+      size_t h = (size_t)inode;
       h ^= page_id + factor + (h << 12) + (h >> 4);
       return h;
     }
 
     bool operator == (const PageKey &x) const {
-      return f == x.f && page_id == x.page_id;
+      return inode == x.inode && page_id == x.page_id;
     }
   };
 
@@ -566,7 +742,7 @@ private:
   };
 
 
-  FileDescriptor *getFileDescriptor(int fd);
+  FileDescriptor *getFileDescriptor(int fd) const;
 
   // internal implementations, after mapping an integer fd to the FileDescriptor object
   ssize_t pread(FileDescriptor *filedes, void *buf, size_t count, off_t offset);
@@ -729,7 +905,7 @@ private:
   Implementation &impl;
 
   // note lock() and unlock() do nothing if (!PAGE_CACHE_THREAD_SAFE)
-  std::recursive_mutex mtx;
+  mutable std::recursive_mutex mtx;
 #if PAGE_CACHE_THREAD_SAFE
   using Lock = std::lock_guard<std::recursive_mutex>;
 #else
@@ -743,8 +919,8 @@ private:
   // page_bits = log2(page_size)
   int page_bits;
 
-  // lookup by canonicalized filename
-  std::unordered_map<std::string,OpenFile*> open_files_by_name;
+  // lookup by inode
+  std::unordered_map<ino_t,OpenFile*> open_files_by_inode;
 
   // lookup by file descriptor
   std::unordered_map<int,FileDescriptor*> file_fds;
