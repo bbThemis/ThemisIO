@@ -169,7 +169,7 @@ int PageCache::open(const char *pathname, int flags, ...) {
   // see if this file has already been opened
   auto open_it = open_files_by_inode.find(statbuf.st_ino);
   if (open_it == open_files_by_inode.end()) {
-    open_file = new OpenFile(statbuf.st_ino, canonical_path);
+    open_file = new OpenFile(statbuf.st_ino, canonical_path, entries);
     open_files_by_inode[statbuf.st_ino] = open_file;
     const struct timespec &t = statbuf.st_mtim;
     open_file->last_mod_nanos = t.tv_sec * (long)1000000000 + t.tv_nsec;
@@ -799,7 +799,7 @@ int PageCache::flushAll() {
 
 
 // Check the data structure for errors. Return true if correct.
-bool PageCache::fsck() const {
+bool PageCache::fsck() {
 
   assert((1 << page_bits) == page_size);
 
@@ -836,7 +836,7 @@ bool PageCache::fsck() const {
 
   // check lists
   for (int list_id=0; list_id < 3; list_id++) {
-    const List &list = getList(list_id);
+    GlobalList &list = getList(list_id);
     assert(list.fsck(list_id, entries));
   }
 
@@ -866,10 +866,10 @@ bool PageCache::fsck() const {
 }
 
 
-bool PageCache::List::fsck(int list_id, const std::vector<Entry> &entries) const {
+bool PageCache::GlobalList::fsck(int list_id, std::vector<Entry> &entries) {
   assert(listNo() == list_id);
   if (isEmpty()) {
-    assert(size() == 0 && head == -1 && tail == -1);
+    assert(size() == 0 && front() == -1 && back() == -1);
     return true;
   }
   
@@ -879,9 +879,10 @@ bool PageCache::List::fsck(int list_id, const std::vector<Entry> &entries) const
   while (entry_id != -1) {
     count++;
     assert(entries[entry_id].listNo() == list_id);
-    int next = entries[entry_id].list_next;
+    // int next = handles.next(entries[entry_id]);
+    int next = Handler().next(entries[entry_id]);
     if (next != -1) {
-      assert(entries[next].list_prev == entry_id);
+      assert(Handler().prev(entries[next]) == entry_id);
     } else {
       assert(back() == entry_id);
     }
