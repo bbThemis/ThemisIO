@@ -216,7 +216,7 @@ public:
   void setMaxMemoryUsage(long bytes);
 
   // Check the data structure for errors. Return true if correct.
-  bool fsck() const;
+  bool fsck();
 
   // Used for testing, this returns true iff the data at this offset
   // of the file is cached.
@@ -252,6 +252,154 @@ public:
   
 private:
 
+  struct ListPtrs {
+    int prev, next;
+    ListPtrs() {reset();}
+    void reset() {
+      prev = next = -1;
+    }
+  };
+
+  class Entry;
+
+  // reference Entry.global_list.{prev,next}
+  struct ListHandlesGlobal {
+    int& prev(Entry &e) {return e.global_list.prev;}
+    int& next(Entry &e) {return e.global_list.next;}
+  };
+
+  // reference Entry.file_list.{prev,next}
+  struct ListHandlesFile {
+    int& prev(Entry &e) {return e.file_list.prev;}
+    int& next(Entry &e) {return e.file_list.next;}
+  };
+
+
+  /* Using a template to support multiple independent sets of
+     prev/next pointers in each object, so each cache entry can
+     be in multiple lists (global idle/inactive/active lists) and
+     (OpenFile clean/dirty lists). */
+  template <class ListHandles>
+  class MultiList {
+  public:
+    const int list_no_;
+    int head_, tail_, size_;
+    std::vector<Entry> &entries_;
+    
+  public:
+    MultiList(std::vector<Entry> &entries, int list_no)
+      : list_no_(list_no), head_(-1), tail_(-1), size_(0),
+        entries_(entries){}
+
+    int listNo() const {return list_no_;}
+    bool isEmpty() const {return size()==0;}
+    
+    int size() const {return size_;}
+
+    int& prev(int id) {return ListHandles().prev(entries_[id]);}
+    int& prev(Entry &e) {return ListHandles().prev(e);}
+    int& next(int id) {return ListHandles().next(entries_[id]);}
+    int& next(Entry &e) {return ListHandles().next(e);}
+
+    int front() const {
+      return head_;
+    }
+
+    void checkFront() const {
+      assert(size()==0 || entries_[front()].listNo() == listNo());
+    }
+
+    // When an entry is remove from the list, don't bother invalidating
+    // its list_next and list_prev pointers, because it will be immediately
+    // placed on a different list and they will be set again.
+    int popFront() {
+      assert(!isEmpty());
+      int tmp = head_;
+      if (head_ == tail_) {
+        head_ = tail_ = -1;
+      } else {
+        head_ = next(entries_[head_]);
+      }
+      size_--;
+      return tmp;
+    }
+
+    void pushFront(int id) {
+      assert(id >= 0 && id < entries_.size());
+      Entry &e = entries_[id];
+      if (isEmpty()) {
+        next(e) = prev(e) = -1;
+        head_ = tail_ = id;
+      } else {
+        prev(head_) = id;
+        prev(e) = -1;
+        next(e) = head_;
+        head_ = id;
+      }
+      size_++;
+      e.setListNo(listNo());
+    }
+
+    int back() const {
+      return tail_;
+    }
+
+    void checkBack() const {
+      assert(size()==0 || entries_[back()].listNo() == listNo());
+    }
+    
+    int popBack() {
+      assert(!isEmpty());
+      int tmp = tail_;
+      if (head_ == tail_) {
+        head_ = tail_ = -1;
+      } else {
+        tail_ = prev(tail_);
+      }
+      size_--;
+      return tmp;
+    }
+
+    void pushBack(int id) {
+      assert(id >= 0 && id < entries_.size());
+      Entry &e = entries_[id];
+      if (isEmpty()) {
+        next(e) = prev(e) = -1;
+        head_ = tail_ = id;
+      } else {
+        next(tail_) = id;
+        next(e) = -1;
+        prev(e) = tail_;
+        tail_ = id;
+      }
+      size_++;
+      e.setListNo(listNo());
+    }
+
+    // caller asserts id is in this list
+    void removeDirect(int id) {
+      assert(!isEmpty());
+      Entry &e = entries_[id];
+      if (head_ == id) {
+        if (tail_ == id) {
+          head_ = tail_ = -1;
+        } else {
+          head_ = next(e);
+        }
+      } else if (tail_ == id) {
+        tail_ = prev(e);
+      }
+      size_--;
+    }
+  };
+
+  // doubly-linked list of Entry objects using Entry::global_list
+  using GlobalListBase = MultiList<ListHandlesGlobal>;
+  
+  // doubly-linked list of Entry objects using Entry::file_list
+  using FileList = MultiList<ListHandlesFile>;
+
+  
   /* As part of supporting deferred opens, we need to handle the case
      where a process opens a file for writing and opens it a second
      time for reading. May need to keep a table of name of files that
@@ -296,10 +444,16 @@ private:
        be immediately processed. */
     int read_fd, write_fd;
 
-    OpenFile(ino_t inode_, const std::string &canonical_path_) :
+    // all cached pages for this file are either on clean_list or dirty_list
+    PageCache::FileList clean_list, dirty_list;
+
+    OpenFile(ino_t inode_, const std::string &canonical_path_,
+             std::vector<Entry> &entries) :
       inode(inode_), canonical_path(canonical_path_), length(-1),
       last_mod_nanos(0),
-      read_fd(-1), write_fd(-1), refcount(0) {}
+      read_fd(-1), write_fd(-1),
+      clean_list(entries, 0), dirty_list(entries, 1),
+      refcount(0) {}
 
     bool isReadable() {return read_fd != -1;}
     bool isReadOnly() {return isReadable() && !isWritable();}
@@ -419,17 +573,20 @@ private:
 
   class Entry {
   public:
-    Entry() : file(nullptr), page_id(-1), list_prev(-1), list_next(-1),
-              flags(0) {}
+    Entry() : file(nullptr), page_id(-1), flags(0) {}
+              
     
     OpenFile *file;
 
     // file offset = page_size * page_id + page_offset
     long page_id;
 
-    // linked list pointers for whatever list this entry
-    // is currently in
-    int list_prev, list_next;
+    /* global_list: prev/next indices for this entry on 
+         PageCache.idle_list, PageCache.inactive_list, or PageCache.active_list.
+         inactive, or active lists
+       file_list: prev/next indices for this entry on the clean or
+         dirty lists on the OpenFile object */
+    ListPtrs global_list, file_list;
 
     // bits 0,1: current list 00=idle, 01=inactive, 10=active
     // bit 2: dirty bit
@@ -438,7 +595,8 @@ private:
     void init(OpenFile *file_, long page_id_) {
       file = file_;
       page_id = page_id_;
-      list_prev = list_next = -1;
+      global_list.reset();
+      file_list.reset();
       flags = 0;
     }
 
@@ -471,247 +629,17 @@ private:
   };
 
 
-  /* Doubly-linked list of entries, referenced via indices in entries vector */
-  class List {
-    int head, tail, size_, my_list_no;
-    std::vector<Entry> &entries;
-    
+  // add a fsck function for GlobalLists
+  class GlobalList : public GlobalListBase {
   public:
-    List(std::vector<Entry> &entries_, int my_list_no_)
-      : head(-1), tail(-1), size_(0), my_list_no(my_list_no_), entries(entries_){}
+    GlobalList(std::vector<Entry> &entries, int list_no)
+      : GlobalListBase(entries, list_no) {}
 
-    int listNo() const {return my_list_no;}
-    bool isEmpty() const {return size()==0;}
-    
-    int size() const {return size_;}
+    bool fsck(int list_id, std::vector<Entry> &entries);
 
-    int front() const {
-      assert(!isEmpty());
-      return head;
-    }
-
-    void checkFront() const {
-      assert(size()==0 || entries[front()].listNo() == my_list_no);
-    }
-
-    // When an entry is remove from the list, don't bother invalidating
-    // its list_next and list_prev pointers, because it will be immediately
-    // placed on a different list and they will be set again.
-    int popFront() {
-      assert(!isEmpty());
-      int tmp = head;
-      if (head == tail) {
-        head = tail = -1;
-      } else {
-        head = entries[head].list_next;
-        // entries[head].list_next = entries[head].list_prev = -1;
-      }
-      size_--;
-      return tmp;
-    }
-
-    void pushFront(int id) {
-      assert(id >= 0 && id < entries.size());
-      Entry &e = entries[id];
-      if (isEmpty()) {
-        e.list_next = e.list_prev = -1;
-        head = tail = id;
-      } else {
-        entries[head].list_prev = id;
-        e.list_prev = -1;
-        e.list_next = head;
-        head = id;
-      }
-      size_++;
-      e.setListNo(my_list_no);
-    }
-
-    int back() const {
-      assert(!isEmpty());
-      return tail;
-    }
-
-    void checkBack() const {
-      assert(size()==0 || entries[back()].listNo() == my_list_no);
-    }
-    
-    int popBack() {
-      assert(!isEmpty());
-      int tmp = tail;
-      if (head == tail) {
-        head = tail = -1;
-      } else {
-        tail = entries[tail].list_prev;
-        // entries[head].list_next = entries[head].list_prev = -1;
-      }
-      size_--;
-      return tmp;
-    }
-
-    void pushBack(int id) {
-      assert(id >= 0 && id < entries.size());
-      Entry &e = entries[id];
-      if (isEmpty()) {
-        e.list_next = e.list_prev = -1;
-        head = tail = id;
-      } else {
-        entries[tail].list_next = id;
-        e.list_next = -1;
-        e.list_prev = tail;
-        tail = id;
-      }
-      size_++;
-      e.setListNo(my_list_no);
-    }
-
-    // caller asserts id is in this list
-    void removeDirect(int id) {
-      assert(!isEmpty());
-      Entry &e = entries[id];
-      if (head == id) {
-        if (tail == id) {
-          head = tail = -1;
-        } else {
-          head = e.list_next;
-        }
-      } else if (tail == id) {
-        tail = e.list_prev;
-      }
-      size_--;
-    }
-
-    bool fsck(int list_id, const std::vector<Entry> &entries) const;
+    using Handler = ListHandlesGlobal;
   };
 
-
-  struct ListPtrs {int prev, next;};
-
-  /*
-  struct ListHandlesGlobal {
-    int& prev(Entry &e) {return e.global_list.prev;}
-    int& next(Entry &e) {return e.global_list.next;}
-  };
-
-  struct ListHandlesFile {
-    int& prev(Entry &e) {return e.file_list.prev;}
-    int& next(Entry &e) {return e.file_list.next;}
-  };
-  */
-
-  /* Using a template to support multiple independent sets of
-     prev/next pointers in each object, so each cache entry can
-     be in multiple lists (global idle/inactive/active lists) and
-     (OpenFile clean/dirty lists). */
-  template <class ListHandles>
-  class MultiList {
-    const int list_no_;
-    int head_, tail_, size_;
-    ListHandles handles;
-    std::vector<Entry> &entries_;
-    
-  public:
-    MultiList(std::vector<Entry> &entries, int list_no)
-      : list_no_(list_no), head_(-1), tail_(-1), size_(0),
-        entries_(entries){}
-
-    int listNo() const {return list_no_;}
-    bool isEmpty() const {return size()==0;}
-    
-    int size() const {return size_;}
-
-    int front() const {
-      assert(!isEmpty());
-      return head_;
-    }
-
-    void checkFront() const {
-      assert(size()==0 || entries[front()].listNo() == listNo());
-    }
-
-    // When an entry is remove from the list, don't bother invalidating
-    // its list_next and list_prev pointers, because it will be immediately
-    // placed on a different list and they will be set again.
-    int popFront() {
-      assert(!isEmpty());
-      int tmp = head_;
-      if (head_ == tail_) {
-        head_ = tail_ = -1;
-      } else {
-        head_ = handles(entries[head_]).next();
-      }
-      size_--;
-      return tmp;
-    }
-
-    void pushFront(int id) {
-      assert(id >= 0 && id < entries.size());
-      Entry &e = entries[id];
-      if (isEmpty()) {
-        handles(e).next() = handles(e).prev() = -1;
-        head_ = tail_ = id;
-      } else {
-        handles(entries[head_]).prev() = id;
-        handles(e).prev() = -1;
-        handles(e).next() = head_;
-        head_ = id;
-      }
-      size_++;
-      e.setListNo(listNo());
-    }
-
-    int back() const {
-      assert(!isEmpty());
-      return tail_;
-    }
-
-    void checkBack() const {
-      assert(size()==0 || entries[back()].listNo() == listNo());
-    }
-    
-    int popBack() {
-      assert(!isEmpty());
-      int tmp = tail_;
-      if (head_ == tail_) {
-        head_ = tail_ = -1;
-      } else {
-        tail_ = handles(entries[tail_]).prev();
-      }
-      size_--;
-      return tmp;
-    }
-
-    void pushBack(int id) {
-      assert(id >= 0 && id < entries.size());
-      Entry &e = entries[id];
-      if (isEmpty()) {
-        handles(e).next() = handles(e).prev() = -1;
-        head_ = tail_ = id;
-      } else {
-        handles(entries[tail_]).next() = id;
-        handles(e).next() = -1;
-        handles(e).prev() = tail_;
-        tail_ = id;
-      }
-      size_++;
-      e.setListNo(listNo());
-    }
-
-    // caller asserts id is in this list
-    void removeDirect(int id) {
-      assert(!isEmpty());
-      Entry &e = entries[id];
-      if (head_ == id) {
-        if (tail_ == id) {
-          head_ = tail_ = -1;
-        } else {
-          head_ = handles(e).next();
-        }
-      } else if (tail_ == id) {
-        tail_ = handles(e).prev();
-      }
-      size_--;
-    }
-  };
 
 
   // Key for identifying a page in the cache: (file handle, page index)
@@ -818,7 +746,7 @@ private:
     entries[entry_id].setDirty();
   }
 
-  const List& getList(/*EntryListEnum*/ int list_id) const {
+  const GlobalList& getList(int list_id) const {
     switch (list_id) {
     case LIST_ACTIVE: return active_list;
     case LIST_INACTIVE: return inactive_list;
@@ -826,15 +754,15 @@ private:
     }
   }
 
-  List& getList(/*EntryListEnum*/ int list_id) {
-    return const_cast<List&>(static_cast<const PageCache &>(*this).getList(list_id));
+  GlobalList& getList(int list_id) {
+    return const_cast<GlobalList&>(static_cast<const PageCache &>(*this).getList(list_id));
   }
 
   void moveEntryToList(int entry_id, EntryListEnum list_id) {
     Entry &e = entries[entry_id];
     if (e.listNo() == list_id) return;
-    List &src_list = getList(e.listNo());
-    List &dest_list = getList(list_id);
+    GlobalList &src_list = getList(e.listNo());
+    GlobalList &dest_list = getList(list_id);
 
     src_list.removeDirect(entry_id);
     dest_list.pushBack(entry_id);
@@ -938,7 +866,7 @@ private:
   char *all_content;
 
   // all page cache entries are in one of these three lists
-  List idle_list, active_list, inactive_list;
+  GlobalList idle_list, active_list, inactive_list;
 };
 
 
