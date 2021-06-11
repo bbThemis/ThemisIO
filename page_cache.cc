@@ -11,7 +11,30 @@
 #include "page_cache.h"
 
 
+/* Static instance of Implementation that is a wrapper around
+   POSIX file I/O calls. This is a placeholder for when we switch
+   to using a bbThemis backend. */
 PageCache::Implementation PageCache::system_implementation;
+
+/*
+  TODO: with VISIBLE_AFTER_WRITE, in each call to read() the
+  last-modified field is checked, and if it has changed, then all
+  cached pages for this file are dumped. With the current data
+  structure, that requires scanning everything in the 'entries'
+  vector. That could be improved. 
+   - Have each file retains a linked list of all its pages.
+     Space overhead: 2 links per entry.
+   - Keep a count of the current number of entries for each file,
+     so if the count is 0 no scan is required. This will only help
+     if the file currently has 0 cached pages.
+     Space overhead: 1 counter per file
+   - Timestamp or counter on each entry. Each time the file is read,
+     the last-modifield field will be checked. If it has changed,
+     save the new value or increment a counter. When a cache entry
+     is to be used, if its timestamp or counter is out of date then
+     entry will be ignored. 
+*/
+
 
 /*
   O_APPEND
@@ -21,7 +44,7 @@ PageCache::Implementation PageCache::system_implementation;
   the file position, but any write, from any file descriptor on that
   file, will move it back to the end.
 
-  lseek - file position can be past EOF. An lseek past EOF will success,
+  lseek - file position can be past EOF. An lseek past EOF will succeed,
   as will a write, but reads will just return 0.
  */
 
@@ -42,6 +65,7 @@ PageCache::PageCache
   assert(sizeof(off_t) == sizeof(long));
   assert(sizeof(size_t) == sizeof(long));
   assert(sizeof(ssize_t) == sizeof(long));
+  assert(sizeof(ino_t) == sizeof(long));
   
   // check power of 2
   if ((page_size & (page_size-1)) != 0) {
@@ -111,130 +135,68 @@ int PageCache::open(const char *pathname, int flags, ...) {
     two_args=0;
   }
 
-  // bbThemis doesn't assign unique inodes to files, so we'll use
-  // the canonical filename to associate duplicates.
+  // Keep the canonical path for debugging
   std::string canonical_path = canonicalPath(pathname);
 
+  // XXX not implemented yet
+  /*
+  if (deferOpen(flags)) {
+    deferred_open = true;
+    fd = ?
+    inode = ?
+    return fd;
+  }
+  */
+
+  if (two_args) {
+    fd = impl.open(pathname, flags);
+  } else {
+    fd = impl.open(pathname, flags, mode);
+  }
+
+  // fail
+  if (fd == -1)
+    return -1;
+
+  // get the inode and length
+  // TODO for efficiency, make a combined open/fstat function in bbThemis
+  struct stat statbuf = {0};
+  if (impl.fstat(fd, &statbuf)) {
+    fprintf(stderr, "Error calling stat() in PageCache::OpenFile::needLength "
+            " on %s: %s\n", canonical_path.c_str(), strerror(errno));
+  }
+  
   // see if this file has already been opened
-  auto open_it = open_files_by_name.find(canonical_path);
-  if (open_it == open_files_by_name.end()) {
-    open_file = new OpenFile(canonical_path);
+  auto open_it = open_files_by_inode.find(statbuf.st_ino);
+  if (open_it == open_files_by_inode.end()) {
+    open_file = new OpenFile(statbuf.st_ino, canonical_path);
+    open_files_by_inode[statbuf.st_ino] = open_file;
+    const struct timespec &t = statbuf.st_mtim;
+    open_file->last_mod_nanos = t.tv_sec * (long)1000000000 + t.tv_nsec;
+    open_file->length = statbuf.st_size;
   } else {
     open_file = open_it->second;
-    open_file->addref();
+    // Don't update last_mod_nanos if the file was already open,
+    // because there might be cached data that should be flushed if
+    // last-modified has changed.
   }
+  open_file->addref(fd, flags);
 
   if (consistency == VISIBLE_AFTER_CLOSE)
     flushFilePages(open_file, false);
-
-  // Extract just the access permissions from flags
-  // On most systems, (O_WRONLY & O_RDWR) == 0, but it's legal to
-  // have (O_WRONLY | O_RDONLY) == O_RDWR. Handle both cases.
-  int flags_access = flags & (O_RDONLY | O_WRONLY | O_RDWR);
-  assert(flags_access == O_RDONLY ||
-         flags_access == O_WRONLY ||
-         flags_access == O_RDWR);
-
-  bool deferred_open = false;
-  if (deferOpen(canonical_path, flags)) {
-    deferred_open = true;
-    fd = reserveFileDescriptor(canonical_path, flags, mode);
-  } else {
-
-    /* open mode trickiness. See comment in page_cache.hh on OpenFile.fd.
-       "current" is open_file->open_mode.
-
-       file access mode (O_RDONLY, O_WRONLY, or O_RDWR)
-
-       In what mode should we attempt to open the file?
-
-                flags
-                  O_RDONLY  | O_WRONLY  | O_RDWR
-       current  +-----------+-----------+------
-       -1       | O_RDONLY  | O_RDWR    | O_RDWR
-       O_RDONLY | O_RDONLY  | O_RDWR    | O_RDWR
-       O_WRONLY | O_RDWR    | O_WRONLY  | O_RDWR
-       O_RDWR   | O_RDONLY  | O_WRONLY  | O_RDWR
-
-       If the file is currently only open for write access, then we
-       must have already tried to open it O_RDWR and failed.
-
-       If the file is currently open O_RDWR then we have all the
-       access we need, and this call can do what it wants.
-
-       So we'll only try to expand our permissions if it currently
-       open read-only and we're now opening it write-only, or
-       vice-versa.
-    */
-
-    if ( (flags_access == O_WRONLY &&
-          ((open_file->access == -1) ||
-           (open_file->access == O_RDONLY)))
-         ||
-         (flags_access == O_RDONLY && 
-          open_file->access == O_WRONLY) ) {
-
-      int flags_other = flags & ~(O_RDONLY | O_WRONLY | O_RDWR);
-      int flags_attempted = O_RDWR | flags_other;
-      
-      if (two_args) {
-        fd = impl.open(pathname, flags_attempted);
-      } else {
-        fd = impl.open(pathname, flags_attempted, mode);
-      }
-
-      if (fd != -1) {
-        // great, we were able to upgrade the permissions
-        // save the new file descriptor
-        open_file->access = O_RDWR;
-        open_file->fd = fd;
-      }
-    }
-
-    // No need to open the file if we already succeeded in opening it
-    // with upgraded permissions.
-    if (fd == -1) {
-      if (two_args) {
-        fd = impl.open(pathname, flags);
-      } else {
-        fd = impl.open(pathname, flags, mode);
-      }
-    }
-
-    // return immediately on error
-    if (fd == -1) {
-      if (open_file->rmref() == 0) {
-        // the only place this file could be open is right here from the call
-        // that created it above, so we know it isn't in open_files_by_name yet.
-        delete open_file;
-      }
-      return fd;
-    }
-
-    // if this is the first call to open() on this file then save the fd
-    if (open_file->fd == -1) {
-      open_file->fd = fd;
-      open_file->access = flags_access;
-    }
-    
-  }
-
-  // set f->length if the file is opened for append
-  if ((flags & O_APPEND) && !deferred_open)
-    open_file->needLength(impl);    
-
-  open_files_by_name[canonical_path] = open_file;
   
   auto fd_iter = file_fds.find(fd);
   if (fd_iter != file_fds.end()) {
     fprintf(stderr, "Error opening %s: got file descriptor %d, which is in use\n",
             pathname, fd);
   } else {
-    filedes = new FileDescriptor(open_file, fd, flags_access);
+    filedes = new FileDescriptor(open_file, fd, flags & O_ACCMODE);
+    /* not implemented yet
     if (deferred_open) {
       // save the canonical path in case the current directory changes before we open the file
-      filedes->setDeferred(-1, canonical_path, mode);
-    }
+      filedes->setDeferred(-1, canonical_path, flags, mode);
+      }
+    */
     file_fds[fd] = filedes;
   }
 
@@ -247,7 +209,7 @@ int PageCache::creat(const char *pathname, mode_t mode) {
 }
 
 
-PageCache::FileDescriptor* PageCache::getFileDescriptor(int fd) {
+PageCache::FileDescriptor* PageCache::getFileDescriptor(int fd) const {
   auto file_fds_it = file_fds.find(fd);
   if (file_fds_it == file_fds.end()) {
     return nullptr;
@@ -293,8 +255,10 @@ ssize_t PageCache::pread(FileDescriptor *filedes, void *buf, size_t count, off_t
     }
   }
 
-  // if we're reading from the file, we need to know where EOF is
-  open_file->needLength(impl);
+  // if we're reading from the file, we need to know where EOF is.
+  // we should have it from the call to fstat() right after open()
+  // open_file->needLength(impl);
+  assert(open_file->length >= 0);
 
   // already past the end of the file
   if (offset >= open_file->length) return 0;
@@ -364,6 +328,10 @@ ssize_t PageCache::pwrite(FileDescriptor *filedes, const void *buf, size_t count
 
   OpenFile *open_file = filedes->open_file;
 
+  // don't cache writes, but do update file position
+  // TODO: handle the case where these pages are in the read cache.
+  // After I update a page, a subsequent read on this process should
+  // see that update in the cached page. Either flush the page or update it.
   if (consistency == VISIBLE_AFTER_WRITE) {
     ssize_t result = impl.pwrite(filedes->fd, buf, count, offset);
     if (result != -1) {
@@ -394,7 +362,7 @@ ssize_t PageCache::pwrite(FileDescriptor *filedes, const void *buf, size_t count
         ssize_t result = impl.pwrite(filedes->fd, buf_pos, copy_len, file_offset);
         if (result != copy_len) {
           fprintf(stderr, "PageCache::pwrite error ::pwrite(%s, %ld, %ld) "
-                  "returned %ld\n", open_file->canonical_path.c_str(),
+                  "returned %ld\n", open_file->name().c_str(),
                   (long)count, file_offset, (long)result);
           if (result != -1)
             buf_pos += result;
@@ -523,16 +491,17 @@ int PageCache::close(int fd) {
   int result = 0;
 
   // don't actually close my file descriptor if open_file is using it
-  if (fd != open_file->fd) {
+  if (!open_file->isFileDescriptorInUse(fd)) {
     result = impl.close(fd);
   }
 
   file_fds.erase(fd);
   delete filedes;
 
+  // if no other FileDescriptors reference this OpenFile, close it
   if (!other_refs && consistency <= VISIBLE_AFTER_CLOSE) {
-    impl.close(open_file->fd);
-    open_files_by_name.erase(open_file->canonical_path);
+    open_file->close(impl);
+    open_files_by_inode.erase(open_file->inode);
     delete open_file;
   }
   
@@ -548,7 +517,7 @@ void PageCache::exit() {
 /* Look up a cache entry for a given page_id. Returns -1 if
    this page it not currently cached. */
 int PageCache::getCachedPageEntry(OpenFile *f, long page_id) {
-  PageKey key(f, page_id);
+  PageKey key(f->inode, page_id);
 
   // check if the page is in the cache already
   auto table_it = entry_table.find(key);
@@ -577,7 +546,7 @@ int PageCache::getCachedPageEntry(OpenFile *f, long page_id) {
 int PageCache::getPageEntry(OpenFile *f, long page_id, bool fill,
                             bool known_new) {
 
-  PageKey key(f, page_id);
+  PageKey key(f->inode, page_id);
 
   if (!known_new) {
     // check if the page is in the cache already
@@ -598,39 +567,40 @@ int PageCache::getPageEntry(OpenFile *f, long page_id, bool fill,
 
   if (fill) {
     // we're actually reading the file, so we need to know where EOF is at
-    f->needLength(impl);
+    // f->needLength(impl);
+    assert(f->length != -1);
 
     long offset = page_id * page_size;
     char *content = getEntryContent(entry_id);
 
     // reading past EOF? believe it or not, also jail.
     if (offset >= f->length) {
+      // TODO: this shouldn't happen. reading past EOF should return
+      // immediately with a value of 0.
       memset(content, 0, page_size);
     } else {
 
       // make sure the file is open for reading
-      assert(f->access != -1);
-      assert(f->fd != -1);
-      if (f->access == O_WRONLY) {
+      if (!f->isReadable()) {
         fprintf(stderr, "PageCache::getPageEntry error: "
-                "cannot read page at offset %ld for write-only file %s\n",
-                page_id * page_size, f->canonical_path.c_str());
+                "cannot read page at offset %ld for file %s opened write-only\n",
+                page_id * page_size, f->name().c_str());
       } else {
         assert(f->length >= 0 && offset < f->length);
         int read_len = std::min((long)page_size, f->length - offset);
-        int bytes_read = impl.pread(f->fd, content, read_len, offset);
+        int bytes_read = impl.pread(f->read_fd, content, read_len, offset);
                                     
         if (bytes_read == -1) {
           fprintf(stderr, "PageCache::getPageEntry error reading at offset "
                   "%ld of file %s: %s\n",
-                  page_id * page_size, f->canonical_path.c_str(),
+                  page_id * page_size, f->name().c_str(),
                   strerror(errno));
           memset(content, 0, page_size);
         } else if (bytes_read < read_len) {
 
           fprintf(stderr, "PageCache::getPageEntry error short read at offset "
                   "%ld of file %s: %d of %d bytes\n",
-                  page_id * page_size, f->canonical_path.c_str(),
+                  page_id * page_size, f->name().c_str(),
                   bytes_read, page_size);
           
           memset(content + bytes_read, 0, page_size - bytes_read);
@@ -702,27 +672,26 @@ int PageCache::writeDirtyEntry(int entry_id) {
   Entry &e = entries[entry_id];
   int err = 0;
 
-  assert(e.file->access != -1);
-  if (e.file->access == O_RDONLY) {
+  if (!e.file->isWritable()) {
     fprintf(stderr, "PageCache::writeDirtyEntry error cannot write dirty "
-            "page at offset %ld to read-only file %s\n",
-            e.page_id * page_size, e.file->canonical_path.c_str());
+            "page at offset %ld to file opened read-only %s\n",
+            e.page_id * page_size, e.file->name().c_str());
     return 1;
   }
 
-  int bytes_written = impl.pwrite(e.file->fd, getEntryContent(entry_id),
+  int bytes_written = impl.pwrite(e.file->write_fd, getEntryContent(entry_id),
                                   page_size, e.page_id * page_size);
                                   
   if (bytes_written == -1) {
     fprintf(stderr, "PageCache::writeDirtyEntry error failed to write dirty "
             "page at offset %ld to read-only file %s: %s\n",
-            e.page_id * page_size, e.file->canonical_path.c_str(),
+            e.page_id * page_size, e.file->name().c_str(),
             strerror(errno));
     err = 2;
   } else if (bytes_written < page_size) {
     fprintf(stderr, "PageCache::writeDirtyEntry error short write at offset "
             "%ld of file %s: %d of %d bytes\n",
-            e.page_id * page_size, e.file->canonical_path.c_str(),
+            e.page_id * page_size, e.file->name().c_str(),
             bytes_written, page_size);
     err = 3;
   }
@@ -742,13 +711,13 @@ void PageCache::removeEntry(int entry_id) {
   if (e.isDirty())
     writeDirtyEntry(entry_id);
   
-  PageKey key(e.file, e.page_id);
+  PageKey key(e.file->inode, e.page_id);
   assert(entry_table[key] == entry_id);
   entry_table.erase(key);
   
   e.file = nullptr;
   e.page_id = -1;
-
+  
   moveEntryToList(entry_id, LIST_IDLE);
   assert(!entries[entry_id].isDirty() && entries[entry_id].isIdle());
 }
@@ -799,29 +768,29 @@ int PageCache::flushAll() {
     // TODO handle deferred opens
     assert(!filedes->open_is_deferred);
     
-    if (fd != open_file->fd) {
+    if (!open_file->isFileDescriptorInUse(fd)) {
       impl.close(fd);
     }
     delete filedes;
 
     int refcount = open_file->rmref();
     if (refcount == 0) {
-      impl.close(open_file->fd);
-      open_files_by_name.erase(open_file->canonical_path);
+      open_file->close(impl);
+      open_files_by_inode.erase(open_file->inode);
       delete open_file;
     }
     f_it = file_fds.erase(f_it);
   }
 
-  auto o_it = open_files_by_name.begin();
-  while (o_it != open_files_by_name.end()) {
-    const std::string &name = o_it->first;
+  auto o_it = open_files_by_inode.begin();
+  while (o_it != open_files_by_inode.end()) {
+    // ino_t inode = o_it->first;
     OpenFile *f = o_it->second;
     printf("in PageCache::exit() lingering open_file \"%s\"\n",
-           name.c_str());
-    impl.close(f->fd);
+           f->name().c_str());
+    f->close(impl);
     delete f;
-    o_it = open_files_by_name.erase(o_it);
+    o_it = open_files_by_inode.erase(o_it);
     any_err = 1;
   }
   
@@ -834,11 +803,12 @@ bool PageCache::fsck() const {
 
   assert((1 << page_bits) == page_size);
 
-  // check open_files_by_name
-  for (auto it = open_files_by_name.begin();
-       it != open_files_by_name.end();
+  // check open_files_by_inode
+  for (auto it = open_files_by_inode.begin();
+       it != open_files_by_inode.end();
        it++) {
-    assert(it->first == it->second->canonical_path);
+    OpenFile *f = it->second;
+    assert(it->first == f->inode);
   }
 
   // check file_fds
@@ -853,15 +823,15 @@ bool PageCache::fsck() const {
     assert(entry_id >= 0 && entry_id < entries.size());
 
     const Entry &e = entries[entry_id];
-    assert(key.f == e.file);
+    assert(key.inode == e.file->inode);
     assert(key.page_id == e.page_id);
     assert(e.listNo() == LIST_INACTIVE ||
            e.listNo() == LIST_ACTIVE);
-
-    const std::string &path = key.f->canonical_path;
-    auto of_it = open_files_by_name.find(path);
-    assert(of_it != open_files_by_name.end());
-    assert(of_it->second == key.f);
+    
+    auto of_it = open_files_by_inode.find(key.inode);
+    assert(of_it != open_files_by_inode.end());
+    assert(of_it->second);
+    assert(of_it->second->inode == of_it->first);
   }
 
   // check lists
@@ -923,11 +893,34 @@ bool PageCache::List::fsck(int list_id, const std::vector<Entry> &entries) const
 }
   
   
+// Used for testing, this returns true iff the data at this offset
+// of the file is cached.
+bool PageCache::isCached(int fd, long file_offset) const {
+  Lock lock(mtx);
+  FileDescriptor *f = getFileDescriptor(fd);
+  if (!f) return false;
+  PageKey key(f->open_file->inode, file_offset / page_size);
+  return entry_table.find(key) != entry_table.end();
+}
+
+
+// Used for testing, this returns true if the data at this offset
+// of the file is cached and the page is dirty.
+bool PageCache::isPageDirty(int fd, long file_offset) const {
+  Lock lock(mtx);
+  FileDescriptor *f = getFileDescriptor(fd);
+  if (!f) return false;
+  PageKey key(f->open_file->inode, file_offset / page_size);
+  auto it = entry_table.find(key);
+  if (it == entry_table.end()) return false;
+  return entries[it->second].isDirty();
+}
 
 
 long PageCache::OpenFile::needLength(Implementation &impl) {
   if (length != -1) return length;
-  
+
+  int fd = read_fd == -1 ? write_fd : read_fd;
   struct stat statbuf;
   if (impl.fstat(fd, &statbuf)) {
     fprintf(stderr, "Error calling stat() in PageCache::OpenFile::needLength "
@@ -967,8 +960,12 @@ long PageCache::FileDescriptor::statLastModifiedNanos() {
 #endif
 
 
-/* Use fstat() to check if the file has been modified by another process.
-   If so, update open_file->{last_mod_nanos,length}. */
+/* Use fstat() to check if the file has been modified by another
+   process.  If so, update open_file->{last_mod_nanos,length}.
+
+   FYI, st_mtim is for the last time the contents of a file were
+   modified.  st_ctim is for the last time the permissions/metadata
+   were modified. */
 bool PageCache::FileDescriptor::checkLastModified(Implementation &impl) {
   struct stat statbuf;
   if (impl.fstat(fd, &statbuf)) {
