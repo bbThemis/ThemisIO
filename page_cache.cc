@@ -95,8 +95,8 @@ PageCache::PageCache
     assert(entries[entry_id].isIdle());
   }
   assert(idle_list.size() == entries.size());
-  assert(inactive_list.isEmpty());
-  assert(active_list.isEmpty());
+  assert(inactive_list.empty());
+  assert(active_list.empty());
   assert(fsck());
 }
 
@@ -527,7 +527,7 @@ int PageCache::getCachedPageEntry(OpenFile *f, long page_id) {
     int entry_id = table_it->second;
     
     // move the entry to the active list if it isn't there already
-    setPageActive(entry_id);
+    moveEntryToList(entry_id, active_list);
     return entry_id;
   }
 }
@@ -556,7 +556,7 @@ int PageCache::getPageEntry(OpenFile *f, long page_id, bool fill,
       int entry_id = table_it->second;
     
       // move the entry to the active list if it isn't there already
-      setPageActive(entry_id);
+      moveEntryToList(entry_id, active_list);
       return entry_id;
     }
   }
@@ -613,42 +613,48 @@ int PageCache::getPageEntry(OpenFile *f, long page_id, bool fill,
 }
 
 
+/* Get an unused entry, either by taking one off the idle list or by
+   evicting someone else */
 int PageCache::newEntry(OpenFile *f, long page_id) {
   int entry_id;
 
-  // check that every entry is in exactly one list
+  // check that every entry is in exactly one of the global lists
   assert(idle_list.size() + inactive_list.size() + active_list.size() == entries.size());
   
   // do a little balancing
   balanceEntryLists();
 
   // try to get an unused entry
-  if (!idle_list.isEmpty()) {
-    entry_id = idle_list.popFront();
+  if (!idle_list.empty()) {
+    entry_id = idle_list.front();
   } else {
-
-    // entries on the inactive or active list may be dirty
-
-    // first try to scavenge one from the inactive list.
-    // it's the entries that haven't been used more than once or haven't
-    // been used recently.
-    if (!inactive_list.isEmpty()) {
-      entry_id = inactive_list.popFront();
+    /* Otherwise repurpose a used entry.  First try to scavenge one
+       from the inactive list.  It's the entries that haven't been
+       used more than once or haven't been used recently. */
+    if (!inactive_list.empty()) {
+      entry_id = inactive_list.front();
     } else {
-      entry_id = active_list.popFront();
+      assert(!active_list.empty());
+      entry_id = active_list.front();
     }
 
     // flush this page, send it to idle list
-    removeEntry(entry_id);
+    // TODO this puts it on the idle list, which is unnecessary because
+    // we're immediately putting it on the inactive list.
+    removeEntry(entry_id, false);
   }
 
   Entry &e = entries[entry_id];
   e.init(f, page_id);
 
   // new entries start on the inactive list
-  inactive_list.pushBack(entry_id);
+  moveEntryToList(entry_id, inactive_list);
+
+  // and they start clean
+  assert(!entries[entry_id].isDirty());
+  f->clean_list.pushBack(entry_id);
   
-  // check that every entry is still in exactly one list
+  // check that every entry is still in exactly one of the global lists
   assert(idle_list.size() + inactive_list.size() + active_list.size() == entries.size());
 
   return entry_id;
@@ -660,11 +666,7 @@ void PageCache::balanceEntryLists() {
 
   // if imbalanced, move one entry from active to inactive
   if (active_list.size() > 2*(1+inactive_list.size())) {
-    // do some list assertions, just to check
-    active_list.checkFront();
-    int entry_id = active_list.popFront();
-    inactive_list.pushBack(entry_id);
-    inactive_list.checkBack();
+    moveEntryToList(active_list.front(), inactive_list);
   }
 }
 
@@ -672,6 +674,8 @@ int PageCache::writeDirtyEntry(int entry_id) {
   Entry &e = entries[entry_id];
   int err = 0;
 
+  assert(e.isDirty());
+  
   if (!e.file->isWritable()) {
     fprintf(stderr, "PageCache::writeDirtyEntry error cannot write dirty "
             "page at offset %ld to file opened read-only %s\n",
@@ -700,16 +704,26 @@ int PageCache::writeDirtyEntry(int entry_id) {
   // clean, or other code that depends on this might fail.
   
   e.setClean();
+  e.file->dirty_list.removeDirect(entry_id, false);
+  e.file->clean_list.pushBack(entry_id);
   return err;
 }
 
 
-void PageCache::removeEntry(int entry_id) {
+/* Writes an entry if it's dirty, disassociates with from its page,
+   and returns it to the idle list. If clear_ptrs is true, then
+   reset the list pointers for the per-file dirty/clean lists.  Only
+   do this if the entry is not going to immediately be reassigned to
+   another OpenFile. */
+void PageCache::removeEntry(int entry_id, bool clear_ptrs) {
   Entry &e(entries[entry_id]);
   if (e.isIdle()) return;
 
-  if (e.isDirty())
+  if (e.isDirty()) {
     writeDirtyEntry(entry_id);
+    assert(!e.isDirty());
+  }
+  e.file->clean_list.removeDirect(entry_id, clear_ptrs);
   
   PageKey key(e.file->inode, e.page_id);
   assert(entry_table[key] == entry_id);
@@ -718,24 +732,31 @@ void PageCache::removeEntry(int entry_id) {
   e.file = nullptr;
   e.page_id = -1;
   
-  moveEntryToList(entry_id, LIST_IDLE);
+  moveEntryToList(entry_id, idle_list);
   assert(!entries[entry_id].isDirty() && entries[entry_id].isIdle());
 }
 
 
 void PageCache::flushFilePages(OpenFile *f, bool dirty_only) {
-  for (size_t i=0; i < entries.size(); i++) {
-    Entry &e = entries[i];
-    if (e.file == f) {
-      if (dirty_only) {
-        if (e.isDirty()) {
-          writeDirtyEntry(i);
-        }
-      } else {
-        removeEntry(i);
-      }        
+  // remove pages on the dirty list
+  int entry_id = f->dirty_list.front();
+  while (entry_id != -1) {
+    int next_id = f->dirty_list.next(entry_id);
+    if (!dirty_only)
+      removeEntry(entry_id, true);
+    entry_id = next_id;
+  }
+
+  // remove pages on the clean list
+  if (!dirty_only) {
+    entry_id = f->clean_list.front();
+    while (entry_id != -1) {
+      int next_id = f->clean_list.next(entry_id);
+      removeEntry(entry_id, true);
+      entry_id = next_id;
     }
   }
+  
 }
 
 
@@ -754,9 +775,14 @@ int PageCache::flushWriteCache() {
 
 int PageCache::flushAll() {
   int any_err = 0;
-  
-  if (flushWriteCache())
-    any_err = 1;
+
+  // flush dirty pages and move everything to the idle list
+  for (size_t i=0; i < entries.size(); i++)
+    removeEntry(i);
+
+  assert(idle_list.size() == entries.size());
+  assert(inactive_list.empty());
+  assert(active_list.empty());
 
   auto f_it = file_fds.begin();
   while (f_it != file_fds.end()) {
@@ -775,6 +801,10 @@ int PageCache::flushAll() {
 
     int refcount = open_file->rmref();
     if (refcount == 0) {
+      // all pages should have been flushed
+      assert(open_file->clean_list.empty());
+      assert(open_file->dirty_list.empty());
+
       open_file->close(impl);
       open_files_by_inode.erase(open_file->inode);
       delete open_file;
@@ -809,6 +839,8 @@ bool PageCache::fsck() {
        it++) {
     OpenFile *f = it->second;
     assert(it->first == f->inode);
+
+    assert(f->fsck(entries));
   }
 
   // check file_fds
@@ -868,7 +900,7 @@ bool PageCache::fsck() {
 
 bool PageCache::GlobalList::fsck(int list_id, std::vector<Entry> &entries) {
   assert(listNo() == list_id);
-  if (isEmpty()) {
+  if (empty()) {
     assert(size() == 0 && front() == -1 && back() == -1);
     return true;
   }
@@ -917,6 +949,26 @@ bool PageCache::isPageDirty(int fd, long file_offset) const {
   return entries[it->second].isDirty();
 }
 
+
+bool PageCache::OpenFile::fsck(std::vector<Entry> &entries) {
+  int len = 0, id = clean_list.front();
+  while (id != -1) {
+    len++;
+    assert(!entries[id].isDirty());
+    id = clean_list.next(id);
+  }
+  assert(len == clean_list.size());
+
+  len = 0, id = dirty_list.front();
+  while (id != -1) {
+    len++;
+    assert(entries[id].isDirty());
+    id = dirty_list.next(id);
+  }
+  assert(len == dirty_list.size());
+  
+  return true;
+}
 
 long PageCache::OpenFile::needLength(Implementation &impl) {
   if (length != -1) return length;

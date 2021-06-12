@@ -13,7 +13,7 @@ const char *filename = "test_page_cache.out";
 int main() {
   char data[] = "000 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015 016 017 018 019 020 021 022 023 024\n";
   FILE *outf = fopen(filename, "w");
-  fprintf(outf, data);
+  fwrite(data, 1, strlen(data), outf);
   fclose(outf);
 
   PageCache cache(PageCache::VISIBLE_AFTER_CLOSE, 64, 500);
@@ -43,6 +43,7 @@ int main() {
   assert(cache.isCached(fd, 64));
   
   cache.close(fd);
+  remove(filename);
   
   printf("done\n");
   return 0;
