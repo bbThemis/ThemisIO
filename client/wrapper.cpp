@@ -414,6 +414,9 @@ org_realpath real_realpath=NULL;
 typedef int (*org_rename)(const char *OldName, const char *NewName);
 org_rename real_rename=NULL;
 
+typedef int (*org_MPI_Finalize)(void);
+org_MPI_Finalize real_MPI_Finalize=NULL;
+
 #define F_LINUX_SPECIFIC_BASE  1024
 #define F_ADD_SEALS     (F_LINUX_SPECIFIC_BASE + 9)
 #define F_OFD_GETLK    36
@@ -1939,7 +1942,7 @@ extern "C" dirent *readdir(DIR *__dirp)
 		pIdxMax = (int*)( (char*)__dirp + offsetof(MYDIR_REAL, IdxMax) );
 
 		pEntryOffsetList = (int*)( (char*)__dirp + offsetof(MYDIR_REAL, EntryOffsetList) );
-		pEntryNameBuff = (char*)__dirp + offsetof(MYDIR_REAL, EntryOffsetList) + sizeof(int)*( (*pIdxMax) - (*pIdxMin) + 1 );
+		pEntryNameBuff = (char*)__dirp + offsetof(MYDIR_REAL, EntryOffsetList) + sizeof(int)*( (*pIdxMax) - (*pIdxMin) + 1);
 
 		if(__dirp->offset == 0)	{
 				strcpy(one_dirent.d_name, ".");
@@ -3564,6 +3567,19 @@ extern "C" char * realpath(const char *pathname, char *resolved_path)
 
 	return real_realpath(pathname, resolved_path);
 
+}
+
+extern "C" int MPI_Finalize(void)
+{
+	if(real_MPI_Finalize==NULL)	{
+		real_MPI_Finalize = (org_MPI_Finalize)dlsym(RTLD_NEXT, "MPI_Finalize");
+		assert(real_MPI_Finalize != NULL);
+	}
+
+	printf("DBG> In MPI_Finalize().\n");
+	// You can push all cached IO requests to server here!!!
+
+	return real_MPI_Finalize();
 }
 
 
