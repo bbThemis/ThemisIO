@@ -1,26 +1,28 @@
 # TBD
 
-# Compile server and wrapper.so
-git clone https://github.com/bbThemis/TBD
-cd TBD
-make (# You need to reivse the impi path in Makefile)
-cd client
-./compile.sh
+Compile server and wrapper.so, <br>
+`git clone https://github.com/bbThemis/TBD`
+`cd TBD`
+`make`
+`cd client`
+`./compile.sh`
+<br>
 
+You need to reivse the impi path in Makefile.<br>
 
-# Run
-# Server side
-cd TBD
-./server
+Run a server, <br>
+`cd TBD`
+`./server`
+<br>
+Run on client side<br>
+`export MYFS_CONF="/full_path/TBD/myfs.param"`
+`export LD_PRELOAD="/full_path/TBD/client/wrapper.so"`
 
-# Client side
-export MYFS_CONF="/full_path/TBD/myfs.param"
-export LD_PRELOAD="/full_path/TBD/client/wrapper.so"
+`ls -l /myfs`
+`touch /myfs/a`
+`ls -l /myfs`
 
-ls -l /myfs
-touch /myfs/a
-ls -l /myfs
-
-# There are still many bugs. You can "unset LD_PRELOAD" whenever you get issues. I normally add "LD_PRELOAD=xxxx" before the command I need to test. 
+<br>
+There are still many bugs. You can "unset LD_PRELOAD" whenever you get issues. I normally add "LD_PRELOAD=xxxx" before the command I need to test. 
 
 
