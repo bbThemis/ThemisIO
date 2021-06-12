@@ -292,7 +292,7 @@ private:
         entries_(entries){}
 
     int listNo() const {return list_no_;}
-    bool isEmpty() const {return size()==0;}
+    bool empty() const {return size()==0;}
     
     int size() const {return size_;}
 
@@ -305,15 +305,11 @@ private:
       return head_;
     }
 
-    void checkFront() const {
-      assert(size()==0 || entries_[front()].listNo() == listNo());
-    }
-
     // When an entry is remove from the list, don't bother invalidating
     // its list_next and list_prev pointers, because it will be immediately
     // placed on a different list and they will be set again.
     int popFront() {
-      assert(!isEmpty());
+      assert(!empty());
       int tmp = head_;
       if (head_ == tail_) {
         head_ = tail_ = -1;
@@ -327,7 +323,7 @@ private:
     void pushFront(int id) {
       assert(id >= 0 && id < entries_.size());
       Entry &e = entries_[id];
-      if (isEmpty()) {
+      if (empty()) {
         next(e) = prev(e) = -1;
         head_ = tail_ = id;
       } else {
@@ -337,19 +333,14 @@ private:
         head_ = id;
       }
       size_++;
-      e.setListNo(listNo());
     }
 
     int back() const {
       return tail_;
     }
-
-    void checkBack() const {
-      assert(size()==0 || entries_[back()].listNo() == listNo());
-    }
     
     int popBack() {
-      assert(!isEmpty());
+      assert(!empty());
       int tmp = tail_;
       if (head_ == tail_) {
         head_ = tail_ = -1;
@@ -363,7 +354,7 @@ private:
     void pushBack(int id) {
       assert(id >= 0 && id < entries_.size());
       Entry &e = entries_[id];
-      if (isEmpty()) {
+      if (empty()) {
         next(e) = prev(e) = -1;
         head_ = tail_ = id;
       } else {
@@ -373,12 +364,12 @@ private:
         tail_ = id;
       }
       size_++;
-      e.setListNo(listNo());
     }
 
     // caller asserts id is in this list
-    void removeDirect(int id) {
-      assert(!isEmpty());
+    // if clear_ptrs is true, reset prev and next
+    void removeDirect(int id, bool clear_ptrs = false) {
+      assert(!empty());
       Entry &e = entries_[id];
       if (head_ == id) {
         if (tail_ == id) {
@@ -390,6 +381,9 @@ private:
         tail_ = prev(e);
       }
       size_--;
+      if (clear_ptrs) {
+        prev(e) = next(e) = -1;
+      }
     }
   };
 
@@ -514,6 +508,8 @@ private:
       return buf.str();
     }
 
+    bool fsck(std::vector<Entry> &entries);
+
 
   private:
     // Number of file descriptors that have the file open.
@@ -592,12 +588,12 @@ private:
     // bit 2: dirty bit
     unsigned flags;
 
+    /* Assign file and page_id, and make sure page is marked clean.
+       Don't change the listNo(). */
     void init(OpenFile *file_, long page_id_) {
       file = file_;
       page_id = page_id_;
-      global_list.reset();
-      file_list.reset();
-      flags = 0;
+      setClean();
     }
 
     bool isDirty() const {return (flags & 4) != 0;}
@@ -618,6 +614,7 @@ private:
     bool isActive() const {return listNo() == LIST_ACTIVE;}
     void setListActive() {setListNo(LIST_ACTIVE);}
 
+    // return current global_list: 0=idle 1=inactive 2=active
     int listNo() const {return flags & 3;}
     void setListNo(int list_no) {
       assert(list_no >=0 && list_no < 3);
@@ -670,9 +667,13 @@ private:
   };
 
 
+  /* Given a file descriptor returned by open, return the associated
+     FileDescriptor*. This value comes from the user application, so
+     fd may be invalid. */
   FileDescriptor *getFileDescriptor(int fd) const;
 
-  // internal implementations, after mapping an integer fd to the FileDescriptor object
+  // internal implementations, after mapping an integer fd to the
+  // FileDescriptor object
   ssize_t pread(FileDescriptor *filedes, void *buf, size_t count, off_t offset);
   ssize_t pwrite(FileDescriptor *filedes, const void *buf, size_t count, off_t offset);
 
@@ -707,6 +708,11 @@ private:
   }
 
 
+  /* TODO
+     To support deferred opens, we'll need to return some file descriptor
+     when open() is called. Either make something up that will be translated
+     to a real FD when the file is actually opened, or reserve a FD that
+     will eventually become the real one. */
   int reserveFileDescriptor(const std::string &path, int flags, mode_t mode) {
     return -1;
   }
@@ -758,29 +764,29 @@ private:
     return const_cast<GlobalList&>(static_cast<const PageCache &>(*this).getList(list_id));
   }
 
-  void moveEntryToList(int entry_id, EntryListEnum list_id) {
+  void moveEntryToList(int entry_id, GlobalList &dest_list) {
     Entry &e = entries[entry_id];
-    if (e.listNo() == list_id) return;
+    int dest_list_no = dest_list.listNo();
+    if (e.listNo() == dest_list_no) return;
     GlobalList &src_list = getList(e.listNo());
-    GlobalList &dest_list = getList(list_id);
 
     src_list.removeDirect(entry_id);
     dest_list.pushBack(entry_id);
+    e.setListNo(dest_list_no);
   }
 
 
   /* Look up a cache entry for a given page_id. Returns -1 if
-     this page it not currently cached. */
+     this page is not currently cached. */
   int getCachedPageEntry(OpenFile *f, long page_id);
-  
 
   /* Look up a cache entry for a given page_id.
      If it's already cached, return the entry_id.
-     If not, allocate an entry and read the data. 
+     If not, allocate a new entry and return the entry_id.
 
-     If (fill) is set, then read the page content. from the file.  If
+     If fill is set, then read the page content from the file.  If
      the caller is going to overwrite the whole page, they can set
-     (fill) to false.
+     fill to false.
 
      If known_new is true, then caller has already confirmed that the
      page does not exist, so don't bother looking. */
@@ -788,13 +794,18 @@ private:
                    bool known_new = false);
 
   /* Get an unused entry, either by taking one off the idle list or by
-     evicting someone else */
+     evicting someone else. */
   int newEntry(OpenFile *f, long page_id);
 
-  // writes an entry if its dirty, disassociates with from its page,
-  // and returns it to the idle list.
-  void removeEntry(int entry_id);
+  /* Writes an entry if it's dirty, disassociates it from its page,
+     and returns it to the idle list. If clear_ptrs is true, then
+     reset the list pointers for the per-file dirty/clean lists.  Only
+     do this if the entry is not going to immediately be reassigned to
+     another OpenFile. */
+  void removeEntry(int entry_id, bool clear_ptrs = false);
 
+  /* If the active list is much longer than the inactive list, move
+     some of the older entries from active to inactive. */
   void balanceEntryLists();
 
   // write dirty entry to disk and mark it clean
@@ -807,22 +818,6 @@ private:
 
   // Write every dirty page
   void flushAllDirty();
-
-  void markPageDirty(int entry_id) {
-    entries[entry_id].setDirty();
-  }
-
-  // If this entry isn't already on the active list, move it there.
-  void setPageActive(int entry_id) {
-    Entry &e = entries[entry_id];
-    int current_list_no = e.listNo();
-    if (current_list_no == LIST_ACTIVE) return;
-
-    // can't move a page from idle to active
-    assert(current_list_no == LIST_INACTIVE);
-    inactive_list.removeDirect(entry_id);
-    active_list.pushBack(entry_id);
-  }
 
   
   static const int DEFAULT_PAGE_SIZE = 1024 * 1024;
