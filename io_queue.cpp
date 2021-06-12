@@ -8,6 +8,7 @@
 #include "io_queue.h"
 #include "io_ops.h"
 #include "utility.h"
+#include "myfs_common.h"
 #include "corebinding.h"
 
 extern CORE_BINDING CoreBinding;
@@ -432,15 +433,15 @@ void Process_One_IO_OP(IO_CMD_MSG *pOP_Msg)
 	case RF_RW_OP_WRITE:
 		RW_Write(pOP_Msg);
 		break;
-	case RF_RW_OP_PREAD:
-		RW_PRead(pOP_Msg);
-		break;
+//	case RF_RW_OP_PREAD:
+//		RW_PRead(pOP_Msg);
+//		break;
 //	case RF_RW_OP_PWRITE:
 //		RW_PWrite(pOP_Msg);
 //		break;
-	case RF_RW_OP_SEEK:
-		RW_Seek(pOP_Msg);
-		break;
+//	case RF_RW_OP_SEEK:
+//		RW_Seek(pOP_Msg);
+//		break;
 	case RF_RW_OP_STAT:
 		RW_Stat(pOP_Msg);
 		break;
@@ -505,11 +506,20 @@ void Process_One_IO_OP(IO_CMD_MSG *pOP_Msg)
 	case RF_RW_OP_DIR_EXIST:
 		RW_Dir_Exist(pOP_Msg);
 		break;
+	case RF_RW_OP_FREE_STRIPE_DATA:
+		RW_Free_Stripe_Data(pOP_Msg);
+		break;
 	case RF_RW_OP_PRINT_MEM:
 		RW_Print_Mem();
 		break;
 	case RF_RW_OP_HELLO:
 		RW_Hello(pOP_Msg);
+		break;
+	case RF_RW_OP_STAT_FS:
+		RW_StatFS(pOP_Msg);
+		break;
+	case RF_RW_OP_READ_DIR_ENTRIES:
+		RW_Read_Dir_Entries(pOP_Msg);
 		break;
 	case RF_RW_OP_DISCONNECT:
 		RW_Disconnect_QP(pOP_Msg);

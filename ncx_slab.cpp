@@ -180,13 +180,14 @@ void * ncx_slab_alloc(ncx_slab_pool_t *pool, size_t size)
 		}
 
 		printf("Crashed! pid = %d\n", getpid());
+		ncx_slab_stat(pool, &ncx_stat);
+
 		fflush(stdout);
 
 		while(flag)	{
 			sleep(1);
 		}
 
-		ncx_slab_stat(pool, &ncx_stat);
 	}
 	assert(p != NULL);
 	

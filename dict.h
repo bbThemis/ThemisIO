@@ -44,7 +44,7 @@ public:
 	int pad;
 	pthread_mutex_t lock;	// 40 bytes
 
-	static int GetStorageSize(int nSize)	{	return ( sizeof(CHASHTABLE_INT) + sizeof(int)*nSize*2 + sizeof(struct elt_Int)*nSize*2 );	}
+	static unsigned long int GetStorageSize(unsigned long int nSize)	{	return ( sizeof(CHASHTABLE_INT) + sizeof(int)*nSize*2 + sizeof(struct elt_Int)*nSize*2 );	}
 	void DictCreate(unsigned long int nSize, struct elt_Int ** p_elt_list, int ** p_ht_table);
 	int DictInsertAuto(const int key, struct elt_Int ** p_elt_list, int ** p_ht_table);
 	int DictInsert(const int key, const int value, struct elt_Int ** p_elt_list, int ** p_ht_table);
@@ -61,7 +61,7 @@ public:
 	int nBytesMemReg;	// the size of registered memory
 	pthread_mutex_t lock;	// 40 bytes
 
-	static int GetStorageSize(int nSize)	{	return ( sizeof(CHASHTABLE_MEMREG) + sizeof(int)*nSize*2 + sizeof(struct elt_MEMREG)*nSize*2 );	}
+	static unsigned long int GetStorageSize(unsigned long int nSize)	{	return ( sizeof(CHASHTABLE_MEMREG) + sizeof(int)*nSize*2 + sizeof(struct elt_MEMREG)*nSize*2 );	}
 	void DictCreate(unsigned long int nSize, struct elt_MEMREG ** p_elt_list, int ** p_ht_table);
 	int DictInsert(const long int key, const int value, struct elt_MEMREG ** p_elt_list, int ** p_ht_table);
 	int DictSearch(const long int key, struct elt_MEMREG ** p_elt_list, int ** p_ht_table, unsigned long long *fn_hash);
@@ -82,6 +82,7 @@ public:
 	static unsigned long int GetStorageSize(unsigned long int nSize)	{	return ( sizeof(CHASHTABLE_CHAR) + sizeof(int)*nSize*2 + sizeof(struct elt_Char)*nSize*2 );	}
 	void DictCreate(unsigned long int nSize, struct elt_Char ** p_elt_list, int ** p_ht_table);
 	int DictInsertAuto(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table);
+	int DictSearchAndInsertAuto(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table, int *bNewRecord);
 	int DictInsert(const char *key, const int value, struct elt_Char ** p_elt_list, int ** p_ht_table);
 	int DictSearch(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table, unsigned long long *fn_hash);
 	int DictSearchOrg(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table);
@@ -96,7 +97,7 @@ public:
 	int pad;
 //	pthread_mutex_t lock;	// 40 bytes
 
-	static int GetStorageSize(int nSize)	{	return ( sizeof(CHASHTABLE_DirEntry) + sizeof(int)*nSize*2 + sizeof(struct elt_CharEntry)*nSize*2 );	}
+	static unsigned long int GetStorageSize(unsigned long int nSize)	{	return ( sizeof(CHASHTABLE_DirEntry) + sizeof(int)*nSize*2 + sizeof(struct elt_CharEntry)*nSize*2 );	}
 	void DictCreate(unsigned long int nSize, struct elt_CharEntry ** p_elt_list, int ** p_ht_table);
 	int DictInsertAuto(const char *key, struct elt_CharEntry ** p_elt_list, int ** p_ht_table);
 	int DictInsert(const char *key, const int value, struct elt_CharEntry ** p_elt_list, int ** p_ht_table);

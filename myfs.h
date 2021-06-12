@@ -20,8 +20,11 @@ typedef unsigned int UInt;
 //#define _NPAGES			(2*8192*1024L)
 #define _NPAGES                       (4*8192*1024L)
 
+#define MAX_NUM_LARGE_FILE	(0x100000UL)	// per node
+
 #define MAX_NUM_FILE	(0x1000000UL)	// per node
 #define MAX_NUM_DIR		(0x400000UL)	// per node
+
 
 #define MAX_FD_ACTIVE	(1024*1024)
 #define INVALID_FILE_IDX	(-1)
@@ -57,10 +60,10 @@ typedef struct	{
 }DirectPointer, *PDirectPointer;
 
 typedef struct	{
-	int idx_file, idx_block;	// idx_file - index in hash table. idx_bock - index of the current offset located in which pointer block. 
-	unsigned long int Offset;	// the offset of reading/writing
+	int idx_file;	// idx_file - index in hash table. idx_bock - index of the current offset located in which pointer block. 
+//	int idx_file, idx_block;	// idx_file - index in hash table. idx_bock - index of the current offset located in which pointer block. 
+//	unsigned long int Offset;	// the offset of reading/writing
 }ACTIVEFILE, *PACTIVEFILE;
-
 
 typedef struct {
 	int nLenName;			// 
@@ -72,13 +75,12 @@ typedef struct {
 	int nOpen;				// refernce counter. 
 	int ToRemove;			// A flag for deleting file. Can be removed only after the reference number decreases to zero. 
 	int nLinks;
-	int nDirectPointer;
+
 	int nExtraPointer;
 	int nMaxExtraPointer;	// the max number of extra pointers
-	int pad;
-	ULongInt nSizeAllocated;	// the allocated space
-	DirectPointer DiretData[NUM_DIRCT_PT];	// list of direct data pointers
+	off_t MaxOffset, MaxDataRange;
 	DirectPointer *pExtraData;	// the extra data blocks list
+
 	char *pszFullName;	// full name in case of DEFAULT_FULL_FILE_NAME_LEN is not long enough to hold the file name
 	char szFileName[DEFAULT_FULL_FILE_NAME_LEN];	// real file name. Full path. This should be stored in the hash table key. 
 
@@ -100,14 +102,13 @@ typedef struct {
 	struct timespec st_ctim;  // 16. Time of last status change
 	ULongInt	__unused[3];  // 8*3. Always zero. 
 //	struct stat stat;	// length 144 bytes
-//	char szPad[24];
 }META_INFO, *PMETA_INFO;	// local meta info of rw files
 
 typedef struct {
 	UInt		nEntries;	// 4. number of entries under this directory
 	UInt		nMaxEntry;	// 4. the max number of entries current buffer can hold.
 //	ULongInt	nOffset_To_EntryNameOffsetList;		// the offset relative of p_DirEntryNameOffsetBuff
-	int			nLenAllEntries;
+	UInt		nLenAllEntries;
 	int			nEntryTriggerExpand;	// larger than or equal to this number triggers hash table expand. Will implement shrink later!
 	int			nEntryTriggerShrink;	// larger than or equal to this number triggers hash table expand. Will implement shrink later!
 	CHASHTABLE_DirEntry *p_Hash_DirEntry=NULL;
@@ -119,31 +120,47 @@ typedef struct {
 	char szPad[40];
 }DIR_META_INFO, *PDIR_META_INFO;	// local meta info of rw files
 
+typedef struct {
+	int nExtraPointer;
+	int nMaxExtraPointer;	// the max number of extra pointers
+	size_t MaxOffset, MaxDataRange;
+	DirectPointer *pExtraData;	// the extra data blocks list
+}STRIPE_DATA_INFO, *PSTRIPE_DATA_INFO;
+
 void Init_Memory(void);
 int Query_Parent_Dir(char szDirName[], int *nLenParentDirName, int *nLenFileName);
 int my_mkdir(char szDirName[], int mode, int uid, int gid);
 int my_openfile(char szFileName[], int oflags, ...);
 int openfile_by_index(int idx_file, int bAppend);
-int my_close(int fd);
-size_t my_read(int fd, void *buf, size_t count, off_t offset);
-size_t my_read_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset);
-size_t my_write(int fd, const void *buf, size_t count, off_t offset);
-size_t my_write_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset);
+int my_close(int fd, META_DATA_ON_CLOSE *pMetaData_OnClose);
+//size_t my_read(int fd, void *buf, size_t count, off_t offset);
+//size_t my_read_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset);
+//size_t my_write(int fd, const void *buf, size_t count, off_t offset);
+//size_t my_write_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset);
+
+size_t my_write_stripe(int fd, const char *szFileName, int server_shift, const void *buf, size_t count, off_t offset);
+size_t my_write_stripe_RDMA(int fd, const char *szFileName, int server_shift, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset);
+
+size_t my_read_stripe(int fd, const char *szFileName, int server_shift, void *buf, size_t count, off_t offset);
+size_t my_read_stripe_RDMA(int fd, const char *szFileName, int server_shift, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset);
+
 int Find_First_Available_FD(void);
 int Truncate_File(int file_idx, size_t size);
 off_t my_lseek(int fd, off_t offset, int whence);
 void Determine_Index_StorageBlock_for_Offset(int fd, off_t offset);
 int Query_Index_StorageBlock_with_Offset(int idx_file, off_t offset);
-int my_unlink(char szFileName[]);
+int Query_Index_StorageBlock_with_Offset_Stripe(STRIPE_DATA_INFO *pStripeData, off_t offset);
+int my_unlink(char szFileName[], size_t *nFileSize);
 int my_rmdir(char szDirName[]);
 int my_ls(char szDirName[]);	// list entries under a directory
 int my_AddEntryInfo(int my_file_idx, int dir_idx);
 void my_RemoveEntryInfo(int my_file_idx);
 int my_fdopendir(int fd, void *loc_buf);
-int my_opendir_by_index(int dir_idx, void *loc_buf);
+int my_opendir_by_index(int dir_idx, void *loc_buf, long int offset, long int nBuffSize);
 int my_opendir(char szDirName[], void *loc_buf);
 int my_chmod(char szFileName[], int mode);
 int my_setuserinfo(char szFileName[]);
+void my_statfs(FS_STAT *pFS_Stat);
 
 int my_AddEntryInfo_Remote_Request(char *szFullName, int nLenParentDirName, int EntryType, int *pIdx_Parent_Dir);
 void my_RemoveEntryInfo_Remote_Request(char szEntryName_ToRemove[], int idx_Parent_Dir, int nLenParentDirName);
@@ -154,5 +171,8 @@ void Test_File_System_Local(void);
 static void Readin_All_Dir(void);
 static void Readin_All_File(void);
 ssize_t read_all(int fd, void *buf, size_t count);
+
+void Request_Free_Stripe_Data(int idx_server, char szFileName[]);
+void my_Free_Stripe_Data_Ext_Server(char szFileName[]);
 
 #endif

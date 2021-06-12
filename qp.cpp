@@ -1213,10 +1213,16 @@ struct ibv_mr* SERVER_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote(void* buf, size_
 {
   struct ibv_mr* mr_buf = ibv_reg_mr(pd_, buf, len, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
   if (mr_buf == 0) {
+	  perror("ibv_reg_mr");
       fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_reg_mr on RW_Local_Remote.\n", __FILE__, __LINE__);
+					char szHostName[128];
+					gethostname(szHostName, 63);
+					printf("DBG> Hostname = %s pid = %d\n", szHostName, getpid());
+					fflush(stdout);
+					sleep(300);
       exit(1);
   }
-//  nSizeReg += len;
+  nSizeReg += len;
 //  printf("DBG> nSizeReg = %ld\n", nSizeReg);
 
   return mr_buf;

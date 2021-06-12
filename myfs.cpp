@@ -13,6 +13,8 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <bits/stat.h>
+#include <immintrin.h>
+#include <sys/syscall.h>
 
 #include "myfs.h"
 #include "qp.h"
@@ -32,22 +34,28 @@ extern __thread int idx_qp_server;
 extern SERVER_QUEUEPAIR Server_qp;
 
 const int IO_Msg_Size_op = ( offsetof(IO_CMD_MSG,op) + sizeof(int) );
+static size_t File_Strip_Size_All_server, Stripe_Offset_Shift;
 
 static int my_uid, my_gid, idx_fs_FSRoot=-1;
 
 int nFile=0, nDir=0;	// number of file and dir on this server
-ULongInt FSSize, HashTableFileSize, FileMetaDataSize, HashTableDirSize, DirMetaDataSize, AllocatorSize, DataAreaSize;
+ULongInt FSSize, HashTableFileSize, HashTableLargeFileSize, FileMetaDataSize, LargeFileStripeDataSize, HashTableDirSize, DirMetaDataSize, AllocatorSize, DataAreaSize;
 // hash table for files, dirs;
 int fd_shm;
 char szNameShm[]="myfs_shm";
 char szFSRoot[64]=MYFS_ROOT_DIR;
 
-pthread_mutex_t create_new_lock[MAX_NUM_FILE_OP_LOCK];
+pthread_mutex_t create_new_lock[MAX_NUM_FILE_OP_LOCK];	// the lock used by the right server
+//pthread_mutex_t create_new_ext_lock[MAX_NUM_FILE_OP_LOCK];	// the lock used by extended server
 pthread_mutex_t unlink_lock[MAX_NUM_FILE_OP_LOCK];
 pthread_mutex_t file_lock[MAX_NUM_FILE_OP_LOCK];
+//pthread_mutex_t file_wr_lock[MAX_NUM_FILE_OP_LOCK];
 pthread_mutex_t dir_entry_lock[MAX_NUM_FILE_OP_LOCK];
 pthread_mutex_t fd_lock;
-pthread_mutex_t ht_lock;	// modify hashtable lock
+pthread_mutex_t ht_file_lock;	// modify hashtable lock
+pthread_mutex_t ht_dir_lock;	// modify hashtable lock
+pthread_mutex_t ht_stripe_lock;	// modify hashtable lock
+//pthread_mutex_t ht_DirEntry_lock[MAX_NUM_FILE_OP_LOCK];	// modify hashtable lock
 pthread_mutex_t *pAccess_qp0_lock;	// Only one token is available to access queue pair 0 since the target buffer on remote server is shared!!!! 
 
 
@@ -74,8 +82,14 @@ CHASHTABLE_CHAR *p_Hash_Dir=NULL;
 struct elt_Char *elt_list_dir=NULL;
 int *ht_table_dir=NULL;
 
+CHASHTABLE_CHAR *p_Hash_LargeFile=NULL;
+struct elt_Char *elt_list_LargeFile=NULL;
+int *ht_table_LargeFile=NULL;
+
 META_INFO *pMetaData=NULL;
 DIR_META_INFO *pDirMetaData=NULL;
+
+STRIPE_DATA_INFO *pStripeData=NULL;
 
 extern int mpi_rank, nFSServer, nNUMAPerNode;	// rank and size of MPI, number of numa nodes per compute node
 
@@ -97,13 +111,16 @@ void Init_Memory(void)
 
 	HashTableFileSize = CHASHTABLE_CHAR::GetStorageSize(MAX_NUM_FILE);
 	HashTableDirSize = CHASHTABLE_CHAR::GetStorageSize(MAX_NUM_DIR);
+	HashTableLargeFileSize = CHASHTABLE_CHAR::GetStorageSize(MAX_NUM_LARGE_FILE);
+
+	LargeFileStripeDataSize = sizeof(STRIPE_DATA_INFO)*MAX_NUM_LARGE_FILE;
 	FileMetaDataSize = sizeof(META_INFO)*MAX_NUM_FILE;
 	DirMetaDataSize = sizeof(DIR_META_INFO)*MAX_NUM_DIR;
 	AllocatorSize = _NPAGES * sizeof(struct page);
 	DataAreaSize = _NPAGES * BUDDY_PAGE_SIZE;
 
 //	FSSize = HashTableFileSize + HashTableDirSize + FileMetaDataSize + DirMetaDataSize + sizeof(CMEM_ALLOCATOR) + AllocatorSize + DataAreaSize;
-	FSSize = HashTableFileSize + HashTableDirSize + FileMetaDataSize + DirMetaDataSize + BUDDY_PAGE_SIZE + AllocatorSize + DataAreaSize;
+	FSSize = HashTableFileSize + HashTableDirSize + HashTableLargeFileSize + LargeFileStripeDataSize + FileMetaDataSize + DirMetaDataSize + BUDDY_PAGE_SIZE + AllocatorSize + DataAreaSize;
 
 	if (ftruncate(fd_shm, FSSize) != 0) {
 		perror("ftruncate for fd_shm");
@@ -115,7 +132,6 @@ void Init_Memory(void)
 	Offset = 0;
 
 	pMem_Allocator = (CMEM_ALLOCATOR *)pMyfs;
-//	Offset += sizeof(CMEM_ALLOCATOR);
 	Offset += BUDDY_PAGE_SIZE;
 	pMem_Allocator->Mem_Allocator_Init(_NPAGES, (void*)((ULongInt)pMyfs + Offset), (void*)((ULongInt)pMyfs + Offset + AllocatorSize));
 //	printf("%lx %lx \n", (ULongInt)pMyfs + Offset, (ULongInt)pMyfs + Offset + AllocatorSize);
@@ -140,13 +156,16 @@ void Init_Memory(void)
 //	printf("%lx \n", (ULongInt)pDirMetaData);
 	Offset += DirMetaDataSize;
 
-//	sp_CallReturnBuff = ncx_slab_init(MAX_LEN_RETURN_BUFF);
-//	p_CallReturnBuff = (char*)sp_CallReturnBuff;
+	p_Hash_LargeFile = (CHASHTABLE_CHAR *)((ULongInt)pMyfs + Offset);
+	p_Hash_LargeFile->DictCreate(MAX_NUM_LARGE_FILE, &elt_list_LargeFile, &ht_table_LargeFile);	// init hash table
+//	printf("%lx \n", (ULongInt)p_Hash_Dir);
+	Offset += HashTableLargeFileSize;
 
-//	sp_DirEntryName = ncx_slab_init(NULL, MAX_LEN_DIR_ENTRY_BUFF);
-//	p_DirEntryNameBuff = (char*)sp_DirEntryName;
-//	sp_DirEntryNameOffset = ncx_slab_init(NULL, MAX_LEN_DIR_ENTRY_OFFSET_BUFF);
-//	p_DirEntryNameOffsetBuff = (char*)sp_DirEntryNameOffset;
+	pStripeData = (STRIPE_DATA_INFO *)((ULongInt)pMyfs + Offset);
+//	printf("%lx \n", (ULongInt)pDirMetaData);
+	Offset += LargeFileStripeDataSize;
+
+
 	sp_LongFileNameBuff = ncx_slab_init(NULL, MAX_LEN_LONG_FILE_NAME_BUFF);
 	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	sp_ExtraPointers = ncx_slab_init(NULL, MAX_LEN_EXTRA_POINTERS_BUFF);
@@ -178,17 +197,29 @@ void Init_Memory(void)
 			exit(1);
 		}
 		if(pthread_mutex_init(&(dir_entry_lock[i]), NULL) != 0) { 
-			printf("\n mutex file_lock init failed\n"); 
+			printf("\n mutex dir_entry_lock init failed\n"); 
 			exit(1);
 		}
+//		if(pthread_mutex_init(&(ht_DirEntry_lock[i]), NULL) != 0) { 
+//			printf("\n mutex ht_dir_lock init failed\n"); 
+//			exit(1);
+//		}
 
 	}
 	if(pthread_mutex_init(&fd_lock, NULL) != 0) { 
 		printf("\n mutex fd_lock init failed\n"); 
 		exit(1);
 	}
-	if(pthread_mutex_init(&ht_lock, NULL) != 0) { 
-		printf("\n mutex ht_lock init failed\n"); 
+	if(pthread_mutex_init(&ht_file_lock, NULL) != 0) { 
+		printf("\n mutex ht_file_lock init failed\n"); 
+		exit(1);
+	}
+	if(pthread_mutex_init(&ht_dir_lock, NULL) != 0) { 
+		printf("\n mutex ht_dir_lock init failed\n"); 
+		exit(1);
+	}
+	if(pthread_mutex_init(&ht_stripe_lock, NULL) != 0) { 
+		printf("\n mutex ht_stripe_lock init failed\n"); 
 		exit(1);
 	}
 
@@ -196,7 +227,7 @@ void Init_Memory(void)
 	pAccess_qp0_lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t) * nQP_Server);
 	for(i=0; i<nQP_Server; i++)	{
 		if(pthread_mutex_init(&(pAccess_qp0_lock[i]), NULL) != 0) { 
-			printf("\n mutex ht_lock init failed\n"); 
+			printf("\n mutex pAccess_qp0_lock[%d] init failed\n", i); 
 			exit(1);
 		}
 	}
@@ -209,6 +240,9 @@ void Init_Memory(void)
 	unsigned long long int fn_hash;
 	fn_hash = XXH64(szFSRoot, strlen(szFSRoot), 0);
 	idx_fs_FSRoot = fn_hash % nFSServer;
+
+	File_Strip_Size_All_server = nFSServer * FILE_STRIPE_SIZE;
+	Stripe_Offset_Shift = File_Strip_Size_All_server - FILE_STRIPE_SIZE;
 }
 
 inline int Query_Server_Index(char szPath[], int nLen)
@@ -446,6 +480,38 @@ int Request_Is_ParentDIr_Existing(int idx_server, char szPath[], int *pIdx_Paren
 	return ret;
 }
 
+void Request_Free_Stripe_Data(int idx_server, char szFileName[])
+{
+	IO_CMD_MSG *pIO_Cmd_ToSend_Other_Server;
+	char *pNewMsg_ToSend, *pMemAlloc;
+	int idx_qp;
+
+	idx_qp = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_qp_server;
+	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN) + 1*sizeof(int));
+	pNewMsg_ToSend = (char*)pMemAlloc;
+	pIO_Cmd_ToSend_Other_Server = (IO_CMD_MSG *)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG);
+
+	strcpy(pIO_Cmd_ToSend_Other_Server->szName, szFileName);
+	pIO_Cmd_ToSend_Other_Server->tag_magic = (int)(next(rseed) & 0xFFFFFFFF);
+	pIO_Cmd_ToSend_Other_Server->op = IO_OP_MAGIC | RF_RW_OP_FREE_STRIPE_DATA;
+
+	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+		perror("pthread_mutex_lock");
+		exit(2);
+	}
+	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, IO_Msg_Size_op);
+	pNewMsg_ToSend[0] = TAG_NEW_REQUEST;	// new msg!
+	Server_qp.IB_Put(idx_qp, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_new_msg), Server_qp.pQP_Data[idx_qp].rem_key, 1);
+
+	// No need to wait other server finish this request. 
+//	Wait_For_IO_Request_Result(pIO_Cmd_ToSend_Other_Server->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_ToSend_Other_Server->rem_buff));
+	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+		perror("pthread_mutex_unlock");
+		exit(2);
+	}
+	ncx_slab_free(sp_CallReturnBuff, pMemAlloc);
+}
+
 // return 0 if succeed, -1 if fail
 int Request_ParentDir_Add_Entry(int idx_server, char szPath[], int nLenParentDirName, int EntryType, int *pIdx_Parent_Dir)
 {
@@ -550,7 +616,7 @@ int my_mkdir(char szDirName[], int mode, int uid, int gid)
 {
 	char szParentDir[512];
 	int dir_idx, file_idx, Parent_dir_idx, nLenParentDirName, nLenFileName, idx_server_ParentDir, bParentDirExisting;
-	unsigned long long fn_hash=0;
+	unsigned long long fn_hash=0, fn_hash_2=0;
 	struct timespec t_spec;
 	struct stat dir_stat;
 
@@ -558,7 +624,7 @@ int my_mkdir(char szDirName[], int mode, int uid, int gid)
 	clock_gettime(CLOCK_REALTIME, &t_spec);
 	fn_hash = XXH64(szDirName, strlen(szDirName), 0);
 	pthread_mutex_lock(&(create_new_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
-	dir_idx = p_Hash_Dir->DictSearch(szDirName, &elt_list_dir, &ht_table_dir, &fn_hash);
+	dir_idx = p_Hash_Dir->DictSearch(szDirName, &elt_list_dir, &ht_table_dir, &fn_hash_2);
 	if(dir_idx < 0)	{
 		Parent_dir_idx = Query_Parent_Dir(szDirName, szParentDir, &nLenParentDirName, &nLenFileName, &idx_server_ParentDir);
 		
@@ -584,10 +650,10 @@ int my_mkdir(char szDirName[], int mode, int uid, int gid)
 		}
 
 		if( bParentDirExisting )	{	// parent dir exists. 
-			pthread_mutex_lock(&ht_lock);
+			pthread_mutex_lock(&ht_dir_lock);
 			dir_idx = p_Hash_Dir->DictInsertAuto(szDirName, &elt_list_dir, &ht_table_dir);
 			nDir++;
-			pthread_mutex_unlock(&ht_lock);
+			pthread_mutex_unlock(&ht_dir_lock);
 
 			strcpy(pDirMetaData[dir_idx].szDirName, szDirName);
 
@@ -602,10 +668,10 @@ int my_mkdir(char szDirName[], int mode, int uid, int gid)
 			pDirMetaData[dir_idx].nLenAllEntries = 0;
 
 			// insert into file hash table too.
-			pthread_mutex_lock(&ht_lock);
+			pthread_mutex_lock(&ht_file_lock);
 			file_idx = p_Hash_File->DictInsertAuto(szDirName, &elt_list_file, &ht_table_file);
 			nFile++;
-			pthread_mutex_unlock(&ht_lock);
+			pthread_mutex_unlock(&ht_file_lock);
 
 			strcpy(pMetaData[file_idx].szFileName, szDirName);
 			pMetaData[file_idx].idx_Server_Parent_Dir = idx_server_ParentDir;
@@ -665,7 +731,7 @@ int my_openfile(char szFileName[], int oflags, ...)
 	char szParentDir[512];
 	int file_idx, dir_idx, bFlagCreate=0, bFlagTrunc=0, bAppend=0, nLenParentDirName, nLenFileName, idx_server_ParentDir, bParentDirExisting, nEntryType;
 //	int dir_idx, bFlagCreate=0, bFlagTrunc=0, bAppend=0, nLenParentDirName, nLenFileName, idx_server_ParentDir, bParentDirExisting, nEntryType;
-	unsigned long long fn_hash=0;
+	unsigned long long fn_hash=0, fn_hash_2=0;
 //	unsigned long int file_idx;
 	int mode = 0, two_args=1;
 //	static struct timeval tm;
@@ -692,7 +758,7 @@ int my_openfile(char szFileName[], int oflags, ...)
 	if(bFlagCreate)	{
 		fn_hash = XXH64(szFileName, strlen(szFileName), 0);
 		pthread_mutex_lock(&(create_new_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
-		file_idx = p_Hash_File->DictSearch(szFileName, &elt_list_file, &ht_table_file, &fn_hash);
+		file_idx = p_Hash_File->DictSearch(szFileName, &elt_list_file, &ht_table_file, &fn_hash_2);
 
 		if(file_idx < 0)	{	// not existing. Create a new file
 			dir_idx = Query_Parent_Dir(szFileName, szParentDir, &nLenParentDirName, &nLenFileName, &idx_server_ParentDir);
@@ -723,11 +789,10 @@ int my_openfile(char szFileName[], int oflags, ...)
 			if( bParentDirExisting )	{	// parent dir exists on current server!
 				// insert into file hash table too.
 
-				pthread_mutex_lock(&ht_lock);
+				pthread_mutex_lock(&ht_file_lock);
 				file_idx = p_Hash_File->DictInsertAuto(szFileName, &elt_list_file, &ht_table_file);
 				nFile++;
-				pthread_mutex_unlock(&ht_lock);
-
+				pthread_mutex_unlock(&ht_file_lock);
 
 				pMetaData[file_idx].nLenName = nLenFileName;
 				pMetaData[file_idx].nLenParentDirName = nLenParentDirName;
@@ -750,12 +815,12 @@ int my_openfile(char szFileName[], int oflags, ...)
 				clock_gettime(CLOCK_REALTIME, &t_spec);
 				pMetaData[file_idx].idx_dir_ht = -1;	// regular file
 				pMetaData[file_idx].nOpen = 1;
-//				pMetaData[file_idx].nDirectPointer = 0;
-//				pMetaData[file_idx].nExtraPointer = 0;
-//				pMetaData[file_idx].nMaxExtraPointer = 0;
-//				pMetaData[file_idx].pExtraData = NULL;
-//				memset(&(pMetaData[file_idx].nDirectPointer), 0, sizeof(DirectPointer)*NUM_DIRCT_PT + sizeof(DirectPointer *) + 4*sizeof(int) + sizeof(ULongInt));
-				memset((void*)( (unsigned long int)pMetaData + sizeof(META_INFO)*file_idx + offsetof(META_INFO,nDirectPointer) ), 0, sizeof(DirectPointer)*NUM_DIRCT_PT + sizeof(DirectPointer *) + 4*sizeof(int) + sizeof(ULongInt));
+
+				pMetaData[file_idx].nExtraPointer = 0;
+				pMetaData[file_idx].nMaxExtraPointer = 0;
+				pMetaData[file_idx].MaxOffset = 0;
+				pMetaData[file_idx].MaxDataRange = 0;
+				pMetaData[file_idx].pExtraData = NULL;
 
 				pMetaData[file_idx].st_dev = 0;	// const
 				pMetaData[file_idx].st_ino = file_idx;
@@ -854,25 +919,23 @@ int openfile_by_index(int idx_file, int bAppend)
 
 	fd = Find_First_Available_FD();
 	fd_List[fd].idx_file = idx_file;
-	if(bAppend)	{
-		fd_List[fd].idx_block = (pMetaData[idx_file].st_size < pMetaData[idx_file].nSizeAllocated) ? (pMetaData[idx_file].nDirectPointer + pMetaData[idx_file].nExtraPointer - 1) : (pMetaData[idx_file].nDirectPointer + pMetaData[idx_file].nExtraPointer);
-		fd_List[fd].Offset = pMetaData[idx_file].st_size;
-	}
-	else	{
-		fd_List[fd].idx_block = 0;
-		fd_List[fd].Offset = 0;
-	}
-//	fd_List[fd].idx_block = (pMetaData[idx_file].st_size < pMetaData[idx_file].nSizeAllocated) ? (pMetaData[idx_file].nDirectPointer + pMetaData[idx_file].nExtraPointer - 1) : (pMetaData[idx_file].nDirectPointer + pMetaData[idx_file].nExtraPointer);
-//	fd_List[fd].Offset = bAppend ? (pMetaData[idx_file].st_size) : (0);
+//	if(bAppend)	{
+//		fd_List[fd].idx_block = (pMetaData[idx_file].st_size < pMetaData[idx_file].nSizeAllocated) ? (pMetaData[idx_file].nDirectPointer + pMetaData[idx_file].nExtraPointer - 1) : (pMetaData[idx_file].nDirectPointer + pMetaData[idx_file].nExtraPointer);
+//		fd_List[fd].Offset = pMetaData[idx_file].st_size;
+//	}
+//	else	{
+//		fd_List[fd].idx_block = 0;
+//		fd_List[fd].Offset = 0;
+//	}
 
 //	printf("DBG> open(%s) fd = %d idx = %d\n", pMetaData[idx_file].szFileName, fd, fd_List[fd].idx_file);
 	return fd;
 }
 
-int my_close(int fd)
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! TO optimize lock !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+int my_close(int fd, META_DATA_ON_CLOSE *pMetaData_OnClose)
 {
 	int i, idx_file;
-//	static struct timeval tm;
 	struct timespec t_spec;
 
 //	printf("DBG> closing(%d)\n", fd);
@@ -891,9 +954,22 @@ int my_close(int fd)
 //	printf("DBG> Free %d fd.\n", fd);
 	pMetaData[idx_file].st_atim.tv_sec = t_spec.tv_sec;
 	pMetaData[idx_file].st_atim.tv_nsec = t_spec.tv_nsec;
-//	pMetaData[idx_file].st_mtim.tv_sec = tm.tv_sec;	// need to track which fd is writing this file
-//	pMetaData[idx_file].st_mtim.tv_nsec = tm.tv_usec*1000;
+	if(pMetaData_OnClose)	{
+		if(pMetaData[idx_file].st_mtim.tv_sec < pMetaData_OnClose->modification_time.tv_sec)	{
+			pMetaData[idx_file].st_mtim.tv_sec = pMetaData_OnClose->modification_time.tv_sec;
+			pMetaData[idx_file].st_mtim.tv_nsec = pMetaData_OnClose->modification_time.tv_nsec;
+		}
+		else if(pMetaData[idx_file].st_mtim.tv_sec == pMetaData_OnClose->modification_time.tv_sec)	{
+			if(pMetaData[idx_file].st_mtim.tv_nsec < pMetaData_OnClose->modification_time.tv_nsec)	{
+				pMetaData[idx_file].st_mtim.tv_nsec = pMetaData_OnClose->modification_time.tv_nsec;
+			}
+		}
 
+		if(pMetaData[idx_file].st_size < pMetaData_OnClose->MaxDataRange)	{
+			pMetaData[idx_file].st_size = pMetaData_OnClose->MaxDataRange;
+			pMetaData[idx_file].st_blocks = pMetaData[idx_file].st_size >> 9;
+		}
+	}
 
 	pMetaData[idx_file].nOpen--;
 
@@ -919,6 +995,53 @@ int my_close(int fd)
 	return 0;
 }
 
+void my_Free_Stripe_Data_Common(DirectPointer *pExtraData, int nExtraPointer)
+{
+	int i, count;
+	void *Addr_List[MAX_NUM_BLOCKS_TO_FREE];
+
+	i = 0;
+	count = 0;
+	while(i<nExtraPointer)	{
+		if(pExtraData[i].AddressofData)	{
+			Addr_List[count] = (void *)(pExtraData[i].AddressofData);
+			count++;
+			if(count == MAX_NUM_BLOCKS_TO_FREE_M1)	{
+				Addr_List[count] = NULL;
+				pMem_Allocator->Mem_Batch_Free(Addr_List);
+				count = 0;	// reset
+			}
+		}
+		i++;
+	}
+	if(count > 0)	{
+		Addr_List[count] = NULL;
+		pMem_Allocator->Mem_Batch_Free(Addr_List);
+		count = 0;	// reset
+	}
+	ncx_slab_free(sp_ExtraPointers, pExtraData);
+}
+
+void my_Free_Stripe_Data_Ext_Server(char szFileName[])
+{
+	void *Addr_List[MAX_NUM_BLOCKS_TO_FREE];
+	unsigned long long fn_hash=0, fn_hash_2=0;
+	int idx_file=-1;
+
+	fn_hash = XXH64(szFileName, strlen(szFileName), 0);
+
+	pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+	idx_file = p_Hash_LargeFile->DictSearch(szFileName, &elt_list_LargeFile, &ht_table_LargeFile, &fn_hash_2);
+	if(idx_file >= 0)	my_Free_Stripe_Data_Common(pStripeData[idx_file].pExtraData, pStripeData[idx_file].nExtraPointer);
+	pthread_mutex_unlock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+
+	if(idx_file >= 0)	{
+		pthread_mutex_lock(&ht_stripe_lock);
+		p_Hash_LargeFile->DictDelete(szFileName, &elt_list_LargeFile, &ht_table_LargeFile);	// remove hash table record
+		pthread_mutex_unlock(&ht_stripe_lock);
+	}
+}
+
 int Truncate_File(int file_idx, size_t size)
 {
 	long int nSize=0;
@@ -932,7 +1055,7 @@ int Truncate_File(int file_idx, size_t size)
 	if(pFileMetaInfo->st_size == 0)	return 0;
 
 //	pthread_mutex_lock(&(file_lock[file_idx & MAX_NUM_FILE_OP_LOCK_M1]));
-
+/*
 	pDirectPointer = pFileMetaInfo->DiretData;
 	pExtraPointer = pFileMetaInfo->pExtraData;
 
@@ -1097,148 +1220,171 @@ int Truncate_File(int file_idx, size_t size)
 			}
 			pFileMetaInfo->nDirectPointer = idx_block + 1;
 */
+/*
 			pFileMetaInfo->nSizeAllocated = pFileMetaInfo->pExtraData[idx_block-NUM_DIRCT_PT].FileOffset + pFileMetaInfo->pExtraData[idx_block-NUM_DIRCT_PT].DataBlockSize;
 			pFileMetaInfo->st_size = size;
 			pFileMetaInfo->st_blocks = (pFileMetaInfo->nSizeAllocated) >> 9;
 		}
 	}
-
+*/
 //	pthread_mutex_unlock(&(file_lock[file_idx & MAX_NUM_FILE_OP_LOCK_M1]));
 
 	return 0;
 }
-/*
-void * my_memcpy(void *destination, const void *source, size_t num)
+
+
+void Append_DirectPointer_List(STRIPE_DATA_INFO *pStripeData, const ULongInt addr_newly_allocated, const size_t File_Offset, const ULongInt size_Allocated)
 {
-	size_t i;
-	unsigned char *pDest=(unsigned char *)destination, *pSrc=(unsigned char *)source;
-	unsigned long int Addr_Old;
+	__m256i Stripe_Data;
+	int nExtraPointer, nMaxExtraPointer;
+	size_t nExtraPointerNewlyAllocated;
+	DirectPointer *pExtraDataNew=NULL, *pExtraDataOrg;
+	STRIPE_DATA_INFO *pStripeDataNew;
+	size_t residue;
+	
+	nExtraPointer = pStripeData->nExtraPointer;
+	nMaxExtraPointer = pStripeData->nMaxExtraPointer;
+	pExtraDataOrg = pStripeData->pExtraData;
 
-//	if( destination & 0x3)	{	// not a multipler of 4
-//		printf("");
-//	}
+	Stripe_Data = _mm256_loadu_si256((__m256i *)pStripeData);	// make a local copy
+	pStripeDataNew = (STRIPE_DATA_INFO *)(&Stripe_Data);
 
-	if( (nFile>=2) && (pMetaData[1].nExtraPointer > 0) )	Addr_Old = pMetaData[1].pExtraData[0].AddressofData;
+	if( nMaxExtraPointer < ( nExtraPointer + 1) )	{	// need to expand the array of pStripeData[]
+		nExtraPointerNewlyAllocated = nMaxExtraPointer + max((nMaxExtraPointer>>2), DEFAULT_NUM_EXTRA_PT);
+		pExtraDataNew = (DirectPointer *)ncx_slab_alloc(sp_ExtraPointers, nExtraPointerNewlyAllocated*sizeof(DirectPointer));
+		pExtraDataNew[nExtraPointer].AddressofData = addr_newly_allocated;
+		pExtraDataNew[nExtraPointer].FileOffset = File_Offset;
+		pExtraDataNew[nExtraPointer].DataBlockSize = size_Allocated;
+		if(nExtraPointer)	memcpy(pExtraDataNew, pExtraDataOrg, sizeof(DirectPointer)*nExtraPointer);
 
-	for(i=0; i<num; i++)	{
-		pDest[i] = pSrc[i];
+		pStripeDataNew->nExtraPointer ++;
+		pStripeDataNew->nMaxExtraPointer = nExtraPointerNewlyAllocated;
+		if( ( (pStripeDataNew->MaxOffset) >> SHIFT_FOR_DIV_FILE_STRIPE_SIZE) != ( (pStripeDataNew->MaxOffset + size_Allocated) >> SHIFT_FOR_DIV_FILE_STRIPE_SIZE) )	{	// crossed
+			pStripeDataNew->MaxOffset += (size_Allocated + Stripe_Offset_Shift);
+			residue = pStripeDataNew->MaxOffset & FILE_STRIPE_SIZE_M1;
+			if(residue)	{
+				pStripeDataNew->MaxOffset -= residue;
+				pExtraDataNew[nExtraPointer].DataBlockSize -= residue;
+			}
+		}
+		else	{
+			pStripeDataNew->MaxOffset += size_Allocated;
+		}
+		pStripeDataNew->MaxDataRange = pStripeDataNew->MaxOffset;
+		pStripeDataNew->pExtraData = pExtraDataNew;
+		_mm256_storeu_si256 ((__m256i *)pStripeData, Stripe_Data);
+
+		if(pExtraDataOrg)	ncx_slab_free(sp_ExtraPointers, pExtraDataOrg);
+	}
+	else	{
+		pExtraDataOrg[nExtraPointer].AddressofData = addr_newly_allocated;
+		pExtraDataOrg[nExtraPointer].FileOffset = File_Offset;
+		pExtraDataOrg[nExtraPointer].DataBlockSize = size_Allocated;
+
+		pStripeDataNew->nExtraPointer ++;
+		if( ( (pStripeDataNew->MaxOffset) >> SHIFT_FOR_DIV_FILE_STRIPE_SIZE) != ( (pStripeDataNew->MaxOffset + size_Allocated) >> SHIFT_FOR_DIV_FILE_STRIPE_SIZE) )	{	// crossed
+			pStripeDataNew->MaxOffset += (size_Allocated + Stripe_Offset_Shift);
+			residue = pStripeDataNew->MaxOffset & FILE_STRIPE_SIZE_M1;
+			if(residue)	{
+				pStripeDataNew->MaxOffset -= residue;
+				pExtraDataOrg[nExtraPointer].DataBlockSize -= residue;
+			}
+		}
+		else	{
+			pStripeDataNew->MaxOffset += size_Allocated;
+		}
+		pStripeDataNew->MaxDataRange = pStripeDataNew->MaxOffset;
+		_mm256_storeu_si256 ((__m256i *)pStripeData, Stripe_Data);
 	}
 
-	if( (nFile>=2) && (pMetaData[1].nExtraPointer > 0) )	{
-		if(Addr_Old != pMetaData[1].pExtraData[0].AddressofData)	{
-			if(pMetaData[1].pExtraData[0].AddressofData == 0)	{
-				printf("DBG> Gotcha! %ld %ld\n", Addr_Old, pMetaData[1].pExtraData[0].AddressofData);
-			}
+	if(nExtraPointer > 0)	{
+		if(pStripeData->pExtraData[nExtraPointer].FileOffset == pStripeData->pExtraData[nExtraPointer-1].FileOffset)	{
+			printf("DBG> Something really wrong!\n");
 		}
 	}
 
-	return destination;
 }
-*/
 
-size_t my_write(int fd, const void *buf, size_t count, off_t offset)
+size_t my_write_stripe(int fd, const char *szFileName, int server_shift, const void *buf, size_t count, off_t offset)
 {
-	int Done = 0, i, nDirectPointer, nExtraPointer, nExtraPointerNewlyAllocated, idx_file;
-	size_t nBytes_ToWrite, nBytes_Written, nBytes_Written_OneTime, nOffsetMax, nAllocatedSize, nBytesJustAllocated, nPrevOffset, count_save;
-	META_INFO *pFileMetaInfo;
+	int Done = 0, i, nExtraPointer, nExtraPointerNewlyAllocated, idx_file, idx_Block, nBytesResidue, bInsertNewRecord;
+	size_t nBytes_ToWrite, nBytes_Written, nBytes_Written_OneTime, nBytesToAllocate, nBytesJustAllocated, count_save;
+	STRIPE_DATA_INFO *pStripeDataLocal=NULL;
 	void *pNewBuff=NULL;
-	DirectPointer *pExtraDataNew, *pExtraDataOrg;
-//	Determine_Index_StorageBlock_for_Offset(fd, fd_List[fd].Offset);
+	unsigned long long fn_hash=0, fn_hash_2=0;
+	size_t BaseOffset, offset_Loc=offset, nOffsetMax;
 
 	count_save = count;
 	nBytes_ToWrite = count;
-	idx_file = fd_List[fd].idx_file;
-	pFileMetaInfo = &(pMetaData[idx_file]);
-
-//	pthread_mutex_lock(&(file_lock[fd & MAX_NUM_FILE_OP_LOCK_M1]));
-	pthread_mutex_lock(&(file_lock[idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
-
-	nAllocatedSize = pFileMetaInfo->nSizeAllocated;
+	fn_hash = XXH64(szFileName, strlen(szFileName), 0);
 	nOffsetMax = offset + count;
-//	nOffsetMax = fd_List[fd].Offset + count;	// the tentative end of this file
-	nDirectPointer = pFileMetaInfo->nDirectPointer;
-	if(nOffsetMax > nAllocatedSize)	{	// need allocate new pages to accomodate new incoming data.
-		pNewBuff = pMem_Allocator->Mem_Alloc(nOffsetMax - nAllocatedSize, &nBytesJustAllocated);
-		assert( (pNewBuff != NULL) && (nBytesJustAllocated > 0) );
+	BaseOffset = server_shift * FILE_STRIPE_SIZE;
 
-		if(nDirectPointer < NUM_DIRCT_PT)	{	// append this pointer
-			pFileMetaInfo->DiretData[nDirectPointer].AddressofData = (ULongInt)pNewBuff;
-			pFileMetaInfo->DiretData[nDirectPointer].FileOffset = (nDirectPointer > 0) ? (pFileMetaInfo->DiretData[nDirectPointer-1].FileOffset + pFileMetaInfo->DiretData[nDirectPointer-1].DataBlockSize) : (0L);
-			pFileMetaInfo->DiretData[nDirectPointer].DataBlockSize = nBytesJustAllocated;
-			pFileMetaInfo->nDirectPointer++;
-		}
-		else	{
-			nExtraPointer = pFileMetaInfo->nExtraPointer;
-			if(pFileMetaInfo->nMaxExtraPointer <= nExtraPointer)	{	// Need to reallocate the storage for pExtraData[]
-//				pExtraData_Org = pFileMetaInfo->pExtraData;
-				nExtraPointerNewlyAllocated = pFileMetaInfo->nMaxExtraPointer + max((pFileMetaInfo->nMaxExtraPointer)>>2, DEFAULT_NUM_EXTRA_PT);
-//				pFileMetaInfo->pExtraData = (DirectPointer *)ncx_slab_alloc(sp_ExtraPointers, nExtraPointerNewlyAllocated*sizeof(DirectPointer));
-				pExtraDataNew = (DirectPointer *)ncx_slab_alloc(sp_ExtraPointers, nExtraPointerNewlyAllocated*sizeof(DirectPointer));
-				pExtraDataOrg = pFileMetaInfo->pExtraData;
-				if(nExtraPointer)	memcpy(pExtraDataNew, pExtraDataOrg, sizeof(DirectPointer)*nExtraPointer);
-				pFileMetaInfo->pExtraData = pExtraDataNew;
-				pFileMetaInfo->nMaxExtraPointer = nExtraPointerNewlyAllocated;
-				if(pExtraDataOrg)	ncx_slab_free(sp_ExtraPointers, pExtraDataOrg);
-//				printf("DBG> Resizing ExtraData. %d --> %d. Checking, pExtraData[0] = %x in my_write().\n", pFileMetaInfo->nMaxExtraPointer, nExtraPointerNewlyAllocated, pFileMetaInfo->pExtraData[0].AddressofData);
-			}
-			pFileMetaInfo->pExtraData[nExtraPointer].AddressofData = (ULongInt)pNewBuff;
-			pFileMetaInfo->pExtraData[nExtraPointer].FileOffset = (nExtraPointer > 0) ? (pFileMetaInfo->pExtraData[nExtraPointer-1].FileOffset + pFileMetaInfo->pExtraData[nExtraPointer-1].DataBlockSize) : (pFileMetaInfo->DiretData[NUM_DIRCT_PT-1].FileOffset + pFileMetaInfo->DiretData[NUM_DIRCT_PT-1].DataBlockSize);
-			pFileMetaInfo->pExtraData[nExtraPointer].DataBlockSize = nBytesJustAllocated;
-			pFileMetaInfo->nExtraPointer++;
-		}
-		pFileMetaInfo->nSizeAllocated += nBytesJustAllocated;
-		pFileMetaInfo->st_blocks = (pFileMetaInfo->nSizeAllocated) >> 9;	// the number of blocks of 512 bytes
+	pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+	if(fd >= 0)	{	// The right server
+		idx_file = fd_List[fd].idx_file;
+		pStripeDataLocal = (STRIPE_DATA_INFO *)(&(pMetaData[idx_file].nExtraPointer));
 	}
-	pFileMetaInfo->st_size = max(pFileMetaInfo->st_size, nOffsetMax);	// update file size
-	Determine_Index_StorageBlock_for_Offset(fd, offset);
-//	if( (pFileMetaInfo->nExtraPointer > 0) && ( fd_List[fd].idx_block >= (pFileMetaInfo->nExtraPointer + NUM_DIRCT_PT) ) )	{
-//		printf("DBG> Something wrong!\n");
-//	}
-	pthread_mutex_unlock(&(file_lock[idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
+	else	{	// extended server
+		idx_file = p_Hash_LargeFile->DictSearch(szFileName, &elt_list_LargeFile, &ht_table_LargeFile, &fn_hash_2);
+		if(idx_file < 0)	{	// No record. Need to create an entry. 
+			pthread_mutex_lock(&ht_stripe_lock);
+			idx_file = p_Hash_LargeFile->DictSearchAndInsertAuto(szFileName, &elt_list_LargeFile, &ht_table_LargeFile, &bInsertNewRecord);
+			pthread_mutex_unlock(&ht_stripe_lock);
+			if(bInsertNewRecord)	{	// a newly inserted record. Not existing previously. 
+				pStripeDataLocal = &(pStripeData[idx_file]);
+				pStripeDataLocal->nExtraPointer = 0;
+				pStripeDataLocal->nMaxExtraPointer = DEFAULT_NUM_EXTRA_PT;
+				pStripeDataLocal->MaxOffset = BaseOffset;
+				pStripeDataLocal->MaxDataRange = BaseOffset;
+				pStripeDataLocal->pExtraData = (DirectPointer *)ncx_slab_alloc(sp_ExtraPointers, DEFAULT_NUM_EXTRA_PT*sizeof(DirectPointer));
+			}
+		}
+		else	pStripeDataLocal = &(pStripeData[idx_file]);
+	}
+
+	nExtraPointer = pStripeDataLocal->nExtraPointer;
+
+	while(nOffsetMax > pStripeDataLocal->MaxOffset)	{
+		nBytesResidue = pStripeDataLocal->MaxOffset & FILE_STRIPE_SIZE_M1;
+		nBytesToAllocate = min(nOffsetMax - pStripeDataLocal->MaxOffset, (FILE_STRIPE_SIZE-nBytesResidue));
+		pNewBuff = pMem_Allocator->Mem_Alloc( nBytesToAllocate, &nBytesJustAllocated);
+		assert( (pNewBuff != NULL) && (nBytesJustAllocated > 0) );
+		Append_DirectPointer_List(pStripeDataLocal, (const ULongInt)pNewBuff, (const size_t)pStripeDataLocal->MaxOffset, (const ULongInt)nBytesJustAllocated);
+	}
+
+	idx_Block = Query_Index_StorageBlock_with_Offset_Stripe(pStripeDataLocal, offset);
+	pthread_mutex_unlock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 
 	nBytes_Written = 0;
-
-	if(nDirectPointer == 0)	{	// a new file
-//		memcpy(pNewBuff, buf, count);
-		memcpy((char*)pNewBuff+offset, buf, count);
-		fd_List[fd].Offset += count;
+	if(nExtraPointer == 0)	{	// a new file
+		memcpy((char*)pStripeDataLocal->pExtraData[idx_Block].AddressofData + (offset-pStripeDataLocal->pExtraData[idx_Block].FileOffset), buf, count);
+//		my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, count, (void*)((char*)pStripeDataLocal->pExtraData[idx_Block].AddressofData + (offset-pStripeDataLocal->pExtraData[idx_Block].FileOffset)));
+//		pStripeDataLocal->MaxDataRange = max(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
+//		Atomic_Increase(offset_Loc+nBytes_Written_OneTime, &(pStripeDataLocal->MaxDataRange));
 		nBytes_Written = count;
 		nBytes_ToWrite -= count;
-		if(count == pFileMetaInfo->DiretData[0].DataBlockSize)	fd_List[fd].idx_block++;
 	}
 	else	{
 		while(Done == 0)	{
-			if(fd_List[fd].idx_block < NUM_DIRCT_PT)	{
-				if( (pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset + pFileMetaInfo->DiretData[fd_List[fd].idx_block].DataBlockSize - fd_List[fd].Offset) <= nBytes_ToWrite)	{	// need to go on
-					nBytes_Written_OneTime = pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset + pFileMetaInfo->DiretData[fd_List[fd].idx_block].DataBlockSize - fd_List[fd].Offset;
-					memcpy((void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
-//					my_memcpy((void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
-					fd_List[fd].idx_block++;	// move to next block!!!
+			if(idx_Block < pStripeDataLocal->nExtraPointer)	{
+				if( (pStripeDataLocal->pExtraData[idx_Block].FileOffset + pStripeDataLocal->pExtraData[idx_Block].DataBlockSize - offset_Loc) <= nBytes_ToWrite)	{	// need to go on
+					nBytes_Written_OneTime = pStripeDataLocal->pExtraData[idx_Block].FileOffset + pStripeDataLocal->pExtraData[idx_Block].DataBlockSize - offset_Loc;
+					memcpy((void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
+//					my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, nBytes_Written_OneTime, (void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset));
+//					pStripeDataLocal->MaxDataRange = max(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
+//					Atomic_Increase(offset_Loc+nBytes_Written_OneTime, &(pStripeDataLocal->MaxDataRange));
+					idx_Block++;	// move to next block!!!
 				}
 				else	{
 					nBytes_Written_OneTime = nBytes_ToWrite;
-					memcpy((void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
-//					my_memcpy((void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
-				}
-//				nBytes_Written_OneTime = min(pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset + pFileMetaInfo->DiretData[fd_List[fd].idx_block].DataBlockSize - fd_List[fd].Offset, count);
-				nBytes_Written += nBytes_Written_OneTime;
-				fd_List[fd].Offset += nBytes_Written_OneTime;
-				nBytes_ToWrite -= nBytes_Written_OneTime;
-			}
-			if( (fd_List[fd].idx_block >= NUM_DIRCT_PT) && (pFileMetaInfo->nExtraPointer > 0) )	{	// within extra blocks!!!
-				if( (pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset + pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].DataBlockSize - fd_List[fd].Offset) <= nBytes_ToWrite)	{	// need to go on
-					nBytes_Written_OneTime = pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset + pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].DataBlockSize - fd_List[fd].Offset;
-					memcpy((void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
-//					my_memcpy((void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
-					fd_List[fd].idx_block++;	// move to next block!!!
-				}
-				else	{
-					nBytes_Written_OneTime = nBytes_ToWrite;
-					memcpy((void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
-//					my_memcpy((void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
+					memcpy((void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
+//					my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, nBytes_Written_OneTime, (void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset));
+//					pStripeDataLocal->MaxDataRange = max(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
+//					Atomic_Increase(offset_Loc+nBytes_Written_OneTime, &(pStripeDataLocal->MaxDataRange));
 				}
 				nBytes_Written += nBytes_Written_OneTime;
-				fd_List[fd].Offset += nBytes_Written_OneTime;
+				offset_Loc += nBytes_Written_OneTime;
 				nBytes_ToWrite -= nBytes_Written_OneTime;
 			}
 			if( nBytes_Written >= count_save )	{
@@ -1247,12 +1393,129 @@ size_t my_write(int fd, const void *buf, size_t count, off_t offset)
 			}
 		}
 	}
-//	pthread_mutex_lock(&file_lock);
-//	pFileMetaInfo->st_size = max(pFileMetaInfo->st_size, nOffsetMax);	// update file size
-//	pthread_mutex_unlock(&file_lock);
 
 	return nBytes_Written;
 }
+
+/*
+size_t my_write_stripe(int fd, const char *szFileName, int server_shift, const void *buf, size_t count, off_t offset)
+{
+	int Done = 0, i, nExtraPointer, nExtraPointerNewlyAllocated, idx_file, idx_Block, nBytesResidue, bInsertNewRecord;
+	size_t nBytes_ToWrite, nBytes_Written, nBytes_Written_OneTime, nOffsetMax, nBytesToAllocate, nBytesJustAllocated, count_save, MaxOffsetNew;
+	STRIPE_DATA_INFO *pStripeDataLocal=NULL;
+	void *pNewBuff=NULL;
+	unsigned long long fn_hash=0, fn_hash_2=0;
+	off_t BaseOffset, offset_Loc=offset;
+
+	BaseOffset = server_shift * FILE_STRIPE_SIZE;
+	count_save = count;
+	nBytes_ToWrite = count;
+	fn_hash = XXH64(szFileName, strlen(szFileName), 0);
+	nOffsetMax = offset + count;
+
+	pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+	if(fd >= 0)	{	// The right server
+		idx_file = fd_List[fd].idx_file;
+		pStripeDataLocal = (STRIPE_DATA_INFO *)(&(pMetaData[idx_file].nExtraPointer));
+	}
+	else	{	// extended server
+		idx_file = p_Hash_LargeFile->DictSearch(szFileName, &elt_list_LargeFile, &ht_table_LargeFile, &fn_hash_2);
+		if(idx_file < 0)	{	// No record. Need to create an entry. 
+			pthread_mutex_lock(&ht_stripe_lock);
+			idx_file = p_Hash_LargeFile->DictSearchAndInsertAuto(szFileName, &elt_list_LargeFile, &ht_table_LargeFile, &bInsertNewRecord);
+			pthread_mutex_unlock(&ht_stripe_lock);
+			if(bInsertNewRecord)	{
+				pStripeDataLocal = &(pStripeData[idx_file]);
+				pStripeDataLocal->nExtraPointer = 0;
+				pStripeDataLocal->nMaxExtraPointer = DEFAULT_NUM_EXTRA_PT;
+				pStripeDataLocal->MaxOffset = BaseOffset;
+				pStripeDataLocal->MaxDataRange = BaseOffset;
+				pStripeDataLocal->pExtraData = (DirectPointer *)ncx_slab_alloc(sp_ExtraPointers, DEFAULT_NUM_EXTRA_PT*sizeof(DirectPointer));
+			}
+		}
+		else	pStripeDataLocal = &(pStripeData[idx_file]);
+
+	}
+
+	nExtraPointer = pStripeDataLocal->nExtraPointer;
+	MaxOffsetNew = pStripeDataLocal->MaxOffset;
+	if(nOffsetMax > pStripeDataLocal->MaxOffset)	{	// Need to allocate memory to accommodate new data
+		nBytesResidue = pStripeDataLocal->MaxOffset % FILE_STRIPE_SIZE;
+		if(nBytesResidue)	{
+			nBytesToAllocate = min(nOffsetMax - pStripeDataLocal->MaxOffset, FILE_STRIPE_SIZE-nBytesResidue);
+			pNewBuff = pMem_Allocator->Mem_Alloc( nBytesToAllocate, &nBytesJustAllocated);
+			assert( (pNewBuff != NULL) && (nBytesJustAllocated > 0) );
+			MaxOffsetNew += nBytesToAllocate;
+//			pStripeDataLocal->MaxOffset = pStripeDataLocal->MaxOffset + nBytesJustAllocated;
+			pStripeDataLocal->MaxDataRange = pStripeDataLocal->MaxDataRange + nBytesToAllocate;
+			Append_DirectPointer_List(pStripeDataLocal, (const ULongInt)pNewBuff, (const ULongInt)(pStripeDataLocal->MaxOffset), (const ULongInt)min(nBytesJustAllocated, FILE_STRIPE_SIZE-nBytesResidue));
+			MaxOffsetNew = pStripeDataLocal->MaxOffset;
+		}
+		// now the allocated memory block should be FILE_STRIPE_SIZE aligned. 
+
+		while(1)	{
+			if(nOffsetMax > MaxOffsetNew)	{	// Need to allocate memory to accommodate new data
+				nBytesToAllocate = min(nOffsetMax - MaxOffsetNew, FILE_STRIPE_SIZE);
+				pNewBuff = pMem_Allocator->Mem_Alloc( nBytesToAllocate, &nBytesJustAllocated);
+				assert( (pNewBuff != NULL) && (nBytesJustAllocated > 0) );
+				pStripeDataLocal->MaxDataRange = MaxOffsetNew + nBytesToAllocate;
+				if( (pStripeDataLocal->MaxOffset % FILE_STRIPE_SIZE == 0) && (pStripeDataLocal->nExtraPointer > 0) )	{
+					pStripeDataLocal->MaxOffset += (File_Strip_Size_All_server - FILE_STRIPE_SIZE);
+					pStripeDataLocal->MaxDataRange += (File_Strip_Size_All_server - FILE_STRIPE_SIZE);
+					MaxOffsetNew = pStripeDataLocal->MaxOffset;
+//					printf("DBG> offset = %ld size = %ld MaxDataRange = %ld\n", offset, count, pStripeDataLocal->MaxOffset);
+				}
+				Append_DirectPointer_List(pStripeDataLocal, (const ULongInt)pNewBuff, (const ULongInt)MaxOffsetNew, (const ULongInt)min(nBytesJustAllocated, FILE_STRIPE_SIZE-nBytesResidue));
+				MaxOffsetNew = pStripeDataLocal->MaxOffset;
+				// now the allocated memory block should be FILE_STRIPE_SIZE aligned. 
+			}
+			else	{
+				break;
+			}
+		}
+	}
+
+
+	idx_Block = Query_Index_StorageBlock_with_Offset_Stripe(pStripeDataLocal, offset);
+	pthread_mutex_unlock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+
+	nBytes_Written = 0;
+
+	if(nExtraPointer == 0)	{	// a new file
+		memcpy((char*)pStripeDataLocal->pExtraData[idx_Block].AddressofData + (offset-pStripeDataLocal->pExtraData[idx_Block].FileOffset), buf, count);
+
+		nBytes_Written = count;
+		nBytes_ToWrite -= count;
+	}
+	else	{
+		while(Done == 0)	{
+			if(idx_Block < pStripeDataLocal->nExtraPointer)	{
+				if( (pStripeDataLocal->pExtraData[idx_Block].FileOffset + pStripeDataLocal->pExtraData[idx_Block].DataBlockSize - offset_Loc) <= nBytes_ToWrite)	{	// need to go on
+					nBytes_Written_OneTime = pStripeDataLocal->pExtraData[idx_Block].FileOffset + pStripeDataLocal->pExtraData[idx_Block].DataBlockSize - offset_Loc;
+					memcpy((void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
+					pStripeDataLocal->MaxDataRange = max(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
+					idx_Block++;	// move to next block!!!
+				}
+				else	{
+					nBytes_Written_OneTime = nBytes_ToWrite;
+					memcpy((void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
+					pStripeDataLocal->MaxDataRange = max(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
+				}
+				nBytes_Written += nBytes_Written_OneTime;
+				offset_Loc += nBytes_Written_OneTime;
+				nBytes_ToWrite -= nBytes_Written_OneTime;
+			}
+			if( nBytes_Written >= count_save )	{
+				Done = 1;
+				break;
+			}
+		}
+	}
+
+	return nBytes_Written;
+}
+*/
+
 
 // loc_buf - the buffer was registered. rem_buf - the address on client side. dest_buf - the destination address in file system. 
 inline void my_Adaptive_Write(int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, void *dest_buf)
@@ -1274,7 +1537,7 @@ inline void my_Adaptive_Write(int idx_qp, void *loc_buf, unsigned int lkey, void
 			assert(mr_tmp != NULL);
 			Server_qp.IB_Get(idx_qp, (void*)pDest, mr_tmp->lkey, (void*)((char*)rem_buf+offset), rkey, MAX_SIZE_MR_BLOCK);
 
-//			nSizeReg -= mr_tmp->length;
+			nSizeReg -= mr_tmp->length;
 //			printf("DBG> nSizeReg = %ld\n", nSizeReg);
 
 			ibv_dereg_mr(mr_tmp);
@@ -1287,7 +1550,7 @@ inline void my_Adaptive_Write(int idx_qp, void *loc_buf, unsigned int lkey, void
 			assert(mr_tmp != NULL);
 			Server_qp.IB_Get(idx_qp, (void*)pDest, mr_tmp->lkey, (void*)((char*)rem_buf+offset), rkey, BlockSize);
 
-//			nSizeReg -= mr_tmp->length;
+			nSizeReg -= mr_tmp->length;
 //			printf("DBG> nSizeReg = %ld\n", nSizeReg);
 
 			ibv_dereg_mr(mr_tmp);
@@ -1302,7 +1565,7 @@ inline void my_Adaptive_Write(int idx_qp, void *loc_buf, unsigned int lkey, void
 		assert(mr_tmp != NULL);
 		Server_qp.IB_Get(idx_qp, (void*)dest_buf, mr_tmp->lkey, (void*)rem_buf, rkey, count);
 
-//			nSizeReg -= mr_tmp->length;
+			nSizeReg -= mr_tmp->length;
 //			printf("DBG> nSizeReg = %ld\n", nSizeReg);
 
 			ibv_dereg_mr(mr_tmp);
@@ -1313,110 +1576,83 @@ inline void my_Adaptive_Write(int idx_qp, void *loc_buf, unsigned int lkey, void
 	}
 }
 
-size_t my_write_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset)
+size_t my_write_stripe_RDMA(int fd, const char *szFileName, int server_shift, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset)
 {
-	int Done = 0, i, nDirectPointer, nExtraPointer, nExtraPointerNewlyAllocated, idx_file;
-	size_t nBytes_Written, nBytes_ToWrite, nBytes_Written_OneTime, nOffsetMax, nAllocatedSize, nBytesJustAllocated, nPrevOffset, count_save;
-	META_INFO *pFileMetaInfo;
+	int Done = 0, i, nExtraPointer, nExtraPointerNewlyAllocated, idx_file, idx_Block, bInsertNewRecord, nBytesResidue;
+	size_t nBytes_ToWrite, nBytes_Written, nBytes_Written_OneTime, nBytesToAllocate, nBytesJustAllocated, count_save;
+	STRIPE_DATA_INFO *pStripeDataLocal=NULL;
 	void *pNewBuff=NULL;
-//	DirectPointer *pExtraData_Org;
-	DirectPointer *pExtraDataNew, *pExtraDataOrg;
+	unsigned long long fn_hash=0, fn_hash_2=0;
+	off_t BaseOffset, offset_Loc=offset, nOffsetMax;
 
 	count_save = count;
 	nBytes_ToWrite = count;
-	idx_file = fd_List[fd].idx_file;
-	pFileMetaInfo = &(pMetaData[idx_file]);
-
-//	pthread_mutex_lock(&(file_lock[fd & MAX_NUM_FILE_OP_LOCK_M1]));
-	pthread_mutex_lock(&(file_lock[idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
-
-	nAllocatedSize = pFileMetaInfo->nSizeAllocated;
+	fn_hash = XXH64(szFileName, strlen(szFileName), 0);
 	nOffsetMax = offset + count;
-//	nOffsetMax = fd_List[fd].Offset + count;	// the tentative end of this file
-	nDirectPointer = pFileMetaInfo->nDirectPointer;
-	if(nOffsetMax > nAllocatedSize)	{	// need allocate new pages to accomodate new incoming data.
-		pNewBuff = pMem_Allocator->Mem_Alloc(nOffsetMax - nAllocatedSize, &nBytesJustAllocated);
-		assert( (pNewBuff != NULL) && (nBytesJustAllocated > 0) );
-//		pFileMetaInfo->nSizeAllocated += nBytesJustAllocated;
-//		pFileMetaInfo->st_blocks = (pFileMetaInfo->nSizeAllocated) >> 9;	// the number of blocks of 512 bytes
+	BaseOffset = server_shift * FILE_STRIPE_SIZE;
 
-		if(nDirectPointer < NUM_DIRCT_PT)	{	// append this pointer
-			pFileMetaInfo->DiretData[nDirectPointer].AddressofData = (ULongInt)pNewBuff;
-			pFileMetaInfo->DiretData[nDirectPointer].FileOffset = (nDirectPointer > 0) ? (pFileMetaInfo->DiretData[nDirectPointer-1].FileOffset + pFileMetaInfo->DiretData[nDirectPointer-1].DataBlockSize) : (0L);
-			pFileMetaInfo->DiretData[nDirectPointer].DataBlockSize = nBytesJustAllocated;
-			pFileMetaInfo->nDirectPointer++;
-		}
-		else	{
-			nExtraPointer = pFileMetaInfo->nExtraPointer;
-			if(pFileMetaInfo->nMaxExtraPointer <= nExtraPointer)	{	// Need to reallocate the storage for pExtraData[]
-//				pExtraData_Org = pFileMetaInfo->pExtraData;
-				nExtraPointerNewlyAllocated = pFileMetaInfo->nMaxExtraPointer + max((pFileMetaInfo->nMaxExtraPointer)>>2, DEFAULT_NUM_EXTRA_PT);
-//				pFileMetaInfo->pExtraData = (DirectPointer *)ncx_slab_alloc(sp_ExtraPointers, nExtraPointerNewlyAllocated*sizeof(DirectPointer));
-				pExtraDataNew = (DirectPointer *)ncx_slab_alloc(sp_ExtraPointers, nExtraPointerNewlyAllocated*sizeof(DirectPointer));
-				pExtraDataOrg = pFileMetaInfo->pExtraData;
-				if(nExtraPointer)	memcpy(pExtraDataNew, pExtraDataOrg, sizeof(DirectPointer)*nExtraPointer);
-//				printf("DBG> Resizing ExtraData. %d --> %d. Checking, pExtraData[0] = %x in my_write_RDMA().\n", pFileMetaInfo->nMaxExtraPointer, nExtraPointerNewlyAllocated, pFileMetaInfo->pExtraData[0].AddressofData);
-				pFileMetaInfo->pExtraData = pExtraDataNew;
-				pFileMetaInfo->nMaxExtraPointer = nExtraPointerNewlyAllocated;
-				if(pExtraDataOrg)	ncx_slab_free(sp_ExtraPointers, pExtraDataOrg);
+	pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+	if(fd >= 0)	{	// The right server
+		idx_file = fd_List[fd].idx_file;
+		pStripeDataLocal = (STRIPE_DATA_INFO *)(&(pMetaData[idx_file].nExtraPointer));
+	}
+	else	{	// extended server
+		idx_file = p_Hash_LargeFile->DictSearch(szFileName, &elt_list_LargeFile, &ht_table_LargeFile, &fn_hash_2);
+		if(idx_file < 0)	{	// No record. Need to create an entry. 
+			pthread_mutex_lock(&ht_stripe_lock);
+			idx_file = p_Hash_LargeFile->DictSearchAndInsertAuto(szFileName, &elt_list_LargeFile, &ht_table_LargeFile, &bInsertNewRecord);
+			pthread_mutex_unlock(&ht_stripe_lock);
+			if(bInsertNewRecord)	{	// a newly inserted record. Not existing previously. 
+				pStripeDataLocal = &(pStripeData[idx_file]);
+				pStripeDataLocal->nExtraPointer = 0;
+				pStripeDataLocal->nMaxExtraPointer = DEFAULT_NUM_EXTRA_PT;
+				pStripeDataLocal->MaxOffset = BaseOffset;
+				pStripeDataLocal->MaxDataRange = BaseOffset;
+				pStripeDataLocal->pExtraData = (DirectPointer *)ncx_slab_alloc(sp_ExtraPointers, DEFAULT_NUM_EXTRA_PT*sizeof(DirectPointer));
 			}
-			pFileMetaInfo->pExtraData[nExtraPointer].AddressofData = (ULongInt)pNewBuff;
-			pFileMetaInfo->pExtraData[nExtraPointer].FileOffset = (nExtraPointer > 0) ? (pFileMetaInfo->pExtraData[nExtraPointer-1].FileOffset + pFileMetaInfo->pExtraData[nExtraPointer-1].DataBlockSize) : (pFileMetaInfo->DiretData[NUM_DIRCT_PT-1].FileOffset + pFileMetaInfo->DiretData[NUM_DIRCT_PT-1].DataBlockSize);
-			pFileMetaInfo->pExtraData[nExtraPointer].DataBlockSize = nBytesJustAllocated;
-			pFileMetaInfo->nExtraPointer++;
 		}
-		pFileMetaInfo->nSizeAllocated += nBytesJustAllocated;
-		pFileMetaInfo->st_blocks = (pFileMetaInfo->nSizeAllocated) >> 9;	// the number of blocks of 512 bytes
+		else	pStripeDataLocal = &(pStripeData[idx_file]);
 	}
 
-	pFileMetaInfo->st_size = max(pFileMetaInfo->st_size, nOffsetMax);	// update file size
-	Determine_Index_StorageBlock_for_Offset(fd, offset);
+	nExtraPointer = pStripeDataLocal->nExtraPointer;
+	
+	while(nOffsetMax > pStripeDataLocal->MaxOffset)	{
+		nBytesResidue = pStripeDataLocal->MaxOffset & FILE_STRIPE_SIZE_M1;
+		nBytesToAllocate = min(nOffsetMax - pStripeDataLocal->MaxOffset, (FILE_STRIPE_SIZE-nBytesResidue));
+		pNewBuff = pMem_Allocator->Mem_Alloc( nBytesToAllocate, &nBytesJustAllocated);
+		assert( (pNewBuff != NULL) && (nBytesJustAllocated > 0) );
+		Append_DirectPointer_List(pStripeDataLocal, (const ULongInt)pNewBuff, (const size_t)pStripeDataLocal->MaxOffset, (const ULongInt)nBytesJustAllocated);
+	}
 
-	pthread_mutex_unlock(&(file_lock[idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
+	idx_Block = Query_Index_StorageBlock_with_Offset_Stripe(pStripeDataLocal, offset);
+	pthread_mutex_unlock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 
 	nBytes_Written = 0;
-
-	if(nDirectPointer == 0)	{	// a new file
-//		memcpy(pNewBuff, buf, count);
-		my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, count, (void*)((char*)pNewBuff + offset));
-		fd_List[fd].Offset += count;
+	if(nExtraPointer == 0)	{	// a new file
+		my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, count, (void*)((char*)pStripeDataLocal->pExtraData[idx_Block].AddressofData + (offset-pStripeDataLocal->pExtraData[idx_Block].FileOffset)));
+//		pStripeDataLocal->MaxDataRange = max(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
+//		Atomic_Increase(offset_Loc+nBytes_Written_OneTime, &(pStripeDataLocal->MaxDataRange));
 		nBytes_Written = count;
 		nBytes_ToWrite -= count;
-		if(count == pFileMetaInfo->DiretData[0].DataBlockSize)	fd_List[fd].idx_block++;
 	}
 	else	{
 		while(Done == 0)	{
-			if(fd_List[fd].idx_block < NUM_DIRCT_PT)	{
-				if( (pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset + pFileMetaInfo->DiretData[fd_List[fd].idx_block].DataBlockSize - fd_List[fd].Offset) <= nBytes_ToWrite)	{	// need to go on
-					nBytes_Written_OneTime = pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset + pFileMetaInfo->DiretData[fd_List[fd].idx_block].DataBlockSize - fd_List[fd].Offset;
-//					memcpy((void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
-					my_Adaptive_Write(idx_qp, loc_buf, lkey, (char*)rem_buf+nBytes_Written, rkey, nBytes_Written_OneTime, (void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset));
-					fd_List[fd].idx_block++;	// move to next block!!!
+			if(idx_Block < pStripeDataLocal->nExtraPointer)	{
+				if( (pStripeDataLocal->pExtraData[idx_Block].FileOffset + pStripeDataLocal->pExtraData[idx_Block].DataBlockSize - offset_Loc) <= nBytes_ToWrite)	{	// need to go on
+					nBytes_Written_OneTime = pStripeDataLocal->pExtraData[idx_Block].FileOffset + pStripeDataLocal->pExtraData[idx_Block].DataBlockSize - offset_Loc;
+					my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, nBytes_Written_OneTime, (void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset));
+//					pStripeDataLocal->MaxDataRange = max(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
+//					Atomic_Increase(offset_Loc+nBytes_Written_OneTime, &(pStripeDataLocal->MaxDataRange));
+					idx_Block++;	// move to next block!!!
 				}
 				else	{
 					nBytes_Written_OneTime = nBytes_ToWrite;
-//					memcpy((void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
-					my_Adaptive_Write(idx_qp, loc_buf, lkey, (char*)rem_buf+nBytes_Written, rkey, nBytes_Written_OneTime, (void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset));
-				}
-//				nBytes_Written_OneTime = min(pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset + pFileMetaInfo->DiretData[fd_List[fd].idx_block].DataBlockSize - fd_List[fd].Offset, count);
-				nBytes_Written += nBytes_Written_OneTime;
-				fd_List[fd].Offset += nBytes_Written_OneTime;
-				nBytes_ToWrite -= nBytes_Written_OneTime;
-			}
-			if( (fd_List[fd].idx_block >= NUM_DIRCT_PT) && (pFileMetaInfo->nExtraPointer > 0) )	{	// within extra blocks!!!
-				if( (pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset + pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].DataBlockSize - fd_List[fd].Offset) <= nBytes_ToWrite)	{	// need to go on
-					nBytes_Written_OneTime = pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset + pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].DataBlockSize - fd_List[fd].Offset;
-					my_Adaptive_Write(idx_qp, loc_buf, lkey, (char*)rem_buf+nBytes_Written, rkey, nBytes_Written_OneTime, (void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset));
-//					memcpy((void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
-					fd_List[fd].idx_block++;	// move to next block!!!
-				}
-				else	{
-					nBytes_Written_OneTime = nBytes_ToWrite;
-//					memcpy((void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
-					my_Adaptive_Write(idx_qp, loc_buf, lkey, (char*)rem_buf+nBytes_Written, rkey, nBytes_Written_OneTime, (void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset));
+					my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, nBytes_Written_OneTime, (void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset));
+//					pStripeDataLocal->MaxDataRange = max(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
+//					Atomic_Increase(offset_Loc+nBytes_Written_OneTime, &(pStripeDataLocal->MaxDataRange));
 				}
 				nBytes_Written += nBytes_Written_OneTime;
-				fd_List[fd].Offset += nBytes_Written_OneTime;
+				offset_Loc += nBytes_Written_OneTime;
 				nBytes_ToWrite -= nBytes_Written_OneTime;
 			}
 			if( nBytes_Written >= count_save )	{
@@ -1425,13 +1661,227 @@ size_t my_write_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void 
 			}
 		}
 	}
-//	pthread_mutex_lock(&file_lock);
-//	pFileMetaInfo->st_size = max(pFileMetaInfo->st_size, nOffsetMax);	// update file size
-//	pthread_mutex_unlock(&file_lock);
-	
+
 	return nBytes_Written;
 }
 
+size_t my_read_stripe(int fd, const char *szFileName, int server_shift, void *buf, size_t count, off_t offset)
+{
+	int Done = 0, i, nExtraPointer, idx_file, idx_Block;
+	size_t nBytes_Read, nBytes_ToRead, nBytes_Read_OneTime, nAllocatedSize, nPrevOffset, count_save, nFileSize, nBytesLeft, nBytesLeftInThisBlock;
+	STRIPE_DATA_INFO *pStripeDataLocal=NULL;
+	DirectPointer *pExtraData=NULL;
+	off_t BaseOffset, offset_Loc=offset, MaxDataRange;
+	unsigned long long fn_hash=0, fn_hash2=0;
+
+	BaseOffset = server_shift * FILE_STRIPE_SIZE;
+	count_save = count;
+	nBytes_Read = 0;
+	nBytes_ToRead = count;
+
+	fn_hash = XXH64(szFileName, strlen(szFileName), 0);
+	pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+	if(fd >= 0)	{	// The right server
+		idx_file = fd_List[fd].idx_file;
+		pStripeDataLocal = (STRIPE_DATA_INFO *)(&(pMetaData[idx_file].nExtraPointer));
+	}
+	else	{	// extended server
+		idx_file = p_Hash_LargeFile->DictSearch(szFileName, &elt_list_LargeFile, &ht_table_LargeFile, &fn_hash2);
+		if(idx_file < 0)	{	// No record. Need to create an entry. 
+			printf("Warning> Failed to find file %s on server %d in my_read_stripe().\n", szFileName, mpi_rank);
+			pthread_mutex_unlock(&(file_lock[idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
+			return 0;
+		}
+		else	pStripeDataLocal = &(pStripeData[idx_file]);
+	}
+
+	idx_Block = Query_Index_StorageBlock_with_Offset_Stripe(pStripeDataLocal, offset);
+	MaxDataRange = pStripeDataLocal->MaxDataRange;
+	pthread_mutex_unlock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+
+	nBytesLeft = MaxDataRange - offset;
+
+	nExtraPointer = pStripeDataLocal->nExtraPointer;
+	pExtraData = pStripeDataLocal->pExtraData;
+	if(nExtraPointer == 0)	{	// a new empty file
+		return 0;	// no data available
+	}
+	else	{
+		while(Done == 0)	{
+			if(idx_Block < nExtraPointer)	{
+				nBytesLeftInThisBlock = min(pExtraData[idx_Block].FileOffset + pExtraData[idx_Block].DataBlockSize, MaxDataRange) - offset_Loc;
+				if(nBytes_ToRead < nBytesLeftInThisBlock)	{	// no more blocks are needed. 
+					nBytes_Read_OneTime = min(nBytes_ToRead, nBytesLeft);
+					memcpy((char*)buf+nBytes_Read, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset), nBytes_Read_OneTime);
+				}
+				else	{
+					if(nBytesLeft > nBytesLeftInThisBlock)	{	// Need to access next block!!!
+						nBytes_Read_OneTime = nBytesLeftInThisBlock;
+						memcpy((char*)buf+nBytes_Read, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset), nBytes_Read_OneTime);
+						idx_Block++;	// move to next block!!!
+					}
+					else	{	// No need to access next block!!!
+						nBytes_Read_OneTime = nBytesLeft;
+						memcpy((char*)buf+nBytes_Read, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset), nBytes_Read_OneTime);
+					}
+				}
+				nBytes_Read += nBytes_Read_OneTime;
+				offset_Loc += nBytes_Read_OneTime;
+				nBytes_ToRead -= nBytes_Read_OneTime;
+				nBytesLeft -= nBytes_Read_OneTime;
+				if( (nBytesLeft == 0) || (nBytes_Read >= count_save) )	{	// reaching the end of file or finished reading requested size
+					Done = 1;
+					break;
+				}
+			}
+			else break;
+		}
+	}
+
+	return nBytes_Read;
+}
+
+// loc_buf - the buffer was registered. rem_buf - the address on client side. src_buf - the source address in file system. 
+inline void my_Adaptive_Read(int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, void *src_buf)
+{
+	unsigned long int offset;
+	int i, nBlocks, nBlocksM1, BlockSize;
+	struct ibv_mr *mr_tmp;
+	char *pSrc;
+
+	if(count > MAX_SIZE_MR_BLOCK)	{	// multiple times RDMA
+		nBlocks = (count % MAX_SIZE_MR_BLOCK) ? ( (count / MAX_SIZE_MR_BLOCK) + 1) : (count / MAX_SIZE_MR_BLOCK);
+		nBlocksM1 = nBlocks - 1;
+
+		offset = 0;
+		for(i=0; i<nBlocksM1; i++)	{
+			offset += MAX_SIZE_MR_BLOCK;
+			pSrc = (char*)src_buf + offset;
+			mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote(pSrc, MAX_SIZE_MR_BLOCK);
+			assert(mr_tmp != NULL);
+			Server_qp.IB_Put(idx_qp, (void*)pSrc, mr_tmp->lkey, (void*)((char*)rem_buf+offset), rkey, MAX_SIZE_MR_BLOCK);
+
+			nSizeReg -= mr_tmp->length;
+//			printf("DBG> nSizeReg = %ld\n", nSizeReg);
+
+			ibv_dereg_mr(mr_tmp);
+		}
+		BlockSize = count % MAX_SIZE_MR_BLOCK;
+		offset += MAX_SIZE_MR_BLOCK;
+		pSrc = (char*)src_buf + offset;
+		if(BlockSize > DATA_COPY_THRESHOLD_SIZE)	{
+			mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote(pSrc, BlockSize);
+			assert(mr_tmp != NULL);
+			Server_qp.IB_Put(idx_qp, (void*)pSrc, mr_tmp->lkey, (void*)((char*)rem_buf+offset), rkey, BlockSize);
+
+
+			nSizeReg -= mr_tmp->length;
+//			printf("DBG> nSizeReg = %ld\n", nSizeReg);
+
+			ibv_dereg_mr(mr_tmp);
+		}
+		else	{
+			memcpy(loc_buf, pSrc, BlockSize);
+			Server_qp.IB_Put(idx_qp, loc_buf, lkey, (void*)((char*)rem_buf+offset), rkey, BlockSize);	// loc_buf was registered previously. Will do later
+		}
+	}
+	else if(count > DATA_COPY_THRESHOLD_SIZE)	{	// RDMA
+		mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote(src_buf, count);
+		assert(mr_tmp != NULL);
+		Server_qp.IB_Put(idx_qp, (void*)src_buf, mr_tmp->lkey, (void*)rem_buf, rkey, count);
+
+
+			nSizeReg -= mr_tmp->length;
+//			printf("DBG> nSizeReg = %ld\n", nSizeReg);
+
+		ibv_dereg_mr(mr_tmp);
+	}
+	else	{	// use register local buffer RMDA then memcpy. 
+		memcpy(loc_buf, src_buf, count);
+		Server_qp.IB_Put(idx_qp, loc_buf, lkey, rem_buf, rkey, count);	// loc_buf was registered previously. 
+	}
+}
+
+size_t my_read_stripe_RDMA(int fd, const char *szFileName, int server_shift, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset)
+{
+	int Done = 0, i, nExtraPointer, idx_file, idx_Block;
+	size_t nBytes_Read, nBytes_ToRead, nBytes_Read_OneTime, nAllocatedSize, nPrevOffset, count_save, nFileSize, nBytesLeft, nBytesLeftInThisBlock;
+	STRIPE_DATA_INFO *pStripeDataLocal=NULL;
+	DirectPointer *pExtraData=NULL;
+	off_t BaseOffset, offset_Loc=offset, MaxDataRange;
+	unsigned long long fn_hash=0, fn_hash2=0;
+
+	BaseOffset = server_shift * FILE_STRIPE_SIZE;
+	count_save = count;
+	nBytes_Read = 0;
+	nBytes_ToRead = count;
+
+	fn_hash = XXH64(szFileName, strlen(szFileName), 0);
+	pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+	if(fd >= 0)	{	// The right server
+		idx_file = fd_List[fd].idx_file;
+		pStripeDataLocal = (STRIPE_DATA_INFO *)(&(pMetaData[idx_file].nExtraPointer));
+	}
+	else	{	// extended server
+		idx_file = p_Hash_LargeFile->DictSearch(szFileName, &elt_list_LargeFile, &ht_table_LargeFile, &fn_hash2);
+		if(idx_file < 0)	{	// No record. Need to create an entry. 
+			printf("Warning> Failed to find file %s on server %d in my_read_stripe().\n", szFileName, mpi_rank);
+			pthread_mutex_unlock(&(file_lock[idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
+			return 0;
+		}
+		else	pStripeDataLocal = &(pStripeData[idx_file]);
+	}
+
+	idx_Block = Query_Index_StorageBlock_with_Offset_Stripe(pStripeDataLocal, offset);
+	MaxDataRange = pStripeDataLocal->MaxDataRange;
+	pthread_mutex_unlock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+
+	nBytesLeft = MaxDataRange - offset;
+
+	nExtraPointer = pStripeDataLocal->nExtraPointer;
+	pExtraData = pStripeDataLocal->pExtraData;
+	if(nExtraPointer == 0)	{	// a new empty file
+		return 0;	// no data available
+	}
+	else	{
+		while(Done == 0)	{
+			if(idx_Block < nExtraPointer)	{
+				nBytesLeftInThisBlock = min(pExtraData[idx_Block].FileOffset + pExtraData[idx_Block].DataBlockSize, MaxDataRange) - offset_Loc;
+				if(nBytes_ToRead < nBytesLeftInThisBlock)	{	// no more blocks are needed. 
+					nBytes_Read_OneTime = min(nBytes_ToRead, nBytesLeft);
+//					memcpy((char*)buf+nBytes_Read, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset), nBytes_Read_OneTime);
+					my_Adaptive_Read(idx_qp, loc_buf, lkey, (void*)((char*)rem_buf+nBytes_Read), rkey, nBytes_Read_OneTime, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset));
+				}
+				else	{
+					if(nBytesLeft > nBytesLeftInThisBlock)	{	// Need to access next block!!!
+						nBytes_Read_OneTime = nBytesLeftInThisBlock;
+//						memcpy((char*)buf+nBytes_Read, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset), nBytes_Read_OneTime);
+						my_Adaptive_Read(idx_qp, loc_buf, lkey, (void*)((char*)rem_buf+nBytes_Read), rkey, nBytes_Read_OneTime, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset));
+						idx_Block++;	// move to next block!!!
+					}
+					else	{	// No need to access next block!!!
+						nBytes_Read_OneTime = nBytesLeft;
+//						memcpy((char*)buf+nBytes_Read, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset), nBytes_Read_OneTime);
+						my_Adaptive_Read(idx_qp, loc_buf, lkey, (void*)((char*)rem_buf+nBytes_Read), rkey, nBytes_Read_OneTime, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset));
+					}
+				}
+				nBytes_Read += nBytes_Read_OneTime;
+				offset_Loc += nBytes_Read_OneTime;
+				nBytes_ToRead -= nBytes_Read_OneTime;
+				nBytesLeft -= nBytes_Read_OneTime;
+				if( (nBytesLeft == 0) || (nBytes_Read >= count_save) )	{	// reaching the end of file or finished reading requested size
+					Done = 1;
+					break;
+				}
+			}
+			else break;
+		}
+	}
+
+	return nBytes_Read;
+}
+
+/*
 size_t my_read(int fd, void *buf, size_t count, off_t offset)
 {
 	int Done = 0, i, nExtraPointer, idx_file;
@@ -1520,68 +1970,10 @@ size_t my_read(int fd, void *buf, size_t count, off_t offset)
 
 	return nBytes_Read;
 }
-
-// loc_buf - the buffer was registered. rem_buf - the address on client side. src_buf - the source address in file system. 
-inline void my_Adaptive_Read(int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, void *src_buf)
-{
-	unsigned long int offset;
-	int i, nBlocks, nBlocksM1, BlockSize;
-	struct ibv_mr *mr_tmp;
-	char *pSrc;
-
-	if(count > MAX_SIZE_MR_BLOCK)	{	// multiple times RDMA
-		nBlocks = (count % MAX_SIZE_MR_BLOCK) ? ( (count / MAX_SIZE_MR_BLOCK) + 1) : (count / MAX_SIZE_MR_BLOCK);
-		nBlocksM1 = nBlocks - 1;
-
-		offset = 0;
-		for(i=0; i<nBlocksM1; i++)	{
-			offset += MAX_SIZE_MR_BLOCK;
-			pSrc = (char*)src_buf + offset;
-			mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote(pSrc, MAX_SIZE_MR_BLOCK);
-			assert(mr_tmp != NULL);
-			Server_qp.IB_Put(idx_qp, (void*)pSrc, mr_tmp->lkey, (void*)((char*)rem_buf+offset), rkey, MAX_SIZE_MR_BLOCK);
-
-//			nSizeReg -= mr_tmp->length;
-//			printf("DBG> nSizeReg = %ld\n", nSizeReg);
-
-			ibv_dereg_mr(mr_tmp);
-		}
-		BlockSize = count % MAX_SIZE_MR_BLOCK;
-		offset += MAX_SIZE_MR_BLOCK;
-		pSrc = (char*)src_buf + offset;
-		if(BlockSize > DATA_COPY_THRESHOLD_SIZE)	{
-			mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote(pSrc, BlockSize);
-			assert(mr_tmp != NULL);
-			Server_qp.IB_Put(idx_qp, (void*)pSrc, mr_tmp->lkey, (void*)((char*)rem_buf+offset), rkey, BlockSize);
+*/
 
 
-//			nSizeReg -= mr_tmp->length;
-//			printf("DBG> nSizeReg = %ld\n", nSizeReg);
-
-			ibv_dereg_mr(mr_tmp);
-		}
-		else	{
-			memcpy(loc_buf, pSrc, BlockSize);
-			Server_qp.IB_Put(idx_qp, loc_buf, lkey, (void*)((char*)rem_buf+offset), rkey, BlockSize);	// loc_buf was registered previously. Will do later
-		}
-	}
-	else if(count > DATA_COPY_THRESHOLD_SIZE)	{	// RDMA
-		mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote(src_buf, count);
-		assert(mr_tmp != NULL);
-		Server_qp.IB_Put(idx_qp, (void*)src_buf, mr_tmp->lkey, (void*)rem_buf, rkey, count);
-
-
-//			nSizeReg -= mr_tmp->length;
-//			printf("DBG> nSizeReg = %ld\n", nSizeReg);
-
-		ibv_dereg_mr(mr_tmp);
-	}
-	else	{	// use register local buffer RMDA then memcpy. 
-		memcpy(loc_buf, src_buf, count);
-		Server_qp.IB_Put(idx_qp, loc_buf, lkey, rem_buf, rkey, count);	// loc_buf was registered previously. 
-	}
-}
-
+/*
 size_t my_read_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset)
 {
 	int Done = 0, i, nExtraPointer, idx_file;
@@ -1677,7 +2069,8 @@ size_t my_read_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void *
 
 	return nBytes_Read;
 }
-
+*/
+/*
 void Determine_Index_StorageBlock_for_Offset(int fd, off_t offset)
 {
 	int i, nDirectPointer, nExtraPointer, left, mid, right, Done = 0;
@@ -1815,7 +2208,59 @@ int Query_Index_StorageBlock_with_Offset(int idx_file, off_t offset)	// return i
 		}
 	}
 }
+*/
 
+int Query_Index_StorageBlock_with_Offset_Stripe(STRIPE_DATA_INFO *pStripeData, off_t offset)
+{
+	int i, left, mid, right, Done = 0, nExtraPointer = pStripeData->nExtraPointer;
+//	long int nAllocatedSize;
+	DirectPointer *pExtraData = pStripeData->pExtraData;
+
+	if(nExtraPointer < 1)	{	// empty file! 
+		return 0;	// New size is larger than zero since zero size has been handled already. 
+	}
+
+//	nAllocatedSize = pExtraData[nExtraPointer-1].FileOffset + pExtraData[nExtraPointer-1].DataBlockSize;
+	if(offset >= pStripeData->MaxOffset)	{	// Should never happen!!!
+		printf("DBG> Unexpected condition in Query_Index_StorageBlock_with_Offset_Stripe().\n");
+		return nExtraPointer;
+	}
+	else	{
+		left = 0;
+		right = nExtraPointer - 1;
+		mid = (left + right) >> 1;	// (left + right)/2
+		Done = 0;
+		while(1)	{
+			if(offset < pExtraData[mid].FileOffset)	{
+				right = mid;
+			}
+			else	{
+				left = mid;
+			}
+			mid = (left + right) >> 1;
+			if( (left + 1) >= right )	{
+				if( (offset>=pExtraData[left].FileOffset) && ( offset < (pExtraData[left].FileOffset + pExtraData[left].DataBlockSize) ) )	{
+					Done = 1;
+					return left;
+				}
+				else if( (offset>=pExtraData[right].FileOffset) && ( offset < (pExtraData[right].FileOffset + pExtraData[right].DataBlockSize) ) )	{
+					Done = 1;
+					return right;
+				}
+				if(! Done)	{
+					char szHostName[128];
+					gethostname(szHostName, 63);
+					printf("ERROR> Fail to determine the index of data block! (pExtraData = %p, nExtraPointer = %d Offset = %td)\n", pExtraData, nExtraPointer, offset);
+					printf("DBG> Hostname = %s pid = %d\n", szHostName, getpid());
+					fflush(stdout);
+					sleep(300);
+				}
+				break;
+			}
+		}
+	}
+}
+/*
 off_t my_lseek(int fd, off_t offset, int whence)
 {
 	int i;
@@ -1851,6 +2296,7 @@ off_t my_lseek(int fd, off_t offset, int whence)
 		return new_offset;
 	}
 }
+*/
 
 void my_RemoveEntryInfo_Remote_Request(char szEntryName_ToRemove[], int idx_Parent_dir, int nLenParentDirName)
 {
@@ -1861,6 +2307,7 @@ void my_RemoveEntryInfo_Remote_Request(char szEntryName_ToRemove[], int idx_Pare
 	assert(idx_Parent_dir>=0);
 
 	pthread_mutex_lock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
+
 	pDirMetaData[idx_Parent_dir].p_Hash_DirEntry->DictDelete(szEntryName_ToRemove, &(pDirMetaData[idx_Parent_dir].elt_list_DirEntry), &(pDirMetaData[idx_Parent_dir].ht_table_DirEntry));
 	pDirMetaData[idx_Parent_dir].nLenAllEntries -= (strlen(szEntryName_ToRemove) + 2);
 	pDirMetaData[idx_Parent_dir].nEntries--;
@@ -1883,7 +2330,7 @@ void my_RemoveEntryInfo_Remote_Request(char szEntryName_ToRemove[], int idx_Pare
 			}
 		}
 		pthread_mutex_unlock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
-		ncx_slab_free(sp_DirEntryHashTableBuff, elt_list_DirEntry_Save);	// free the old HT
+		ncx_slab_free(sp_DirEntryHashTableBuff, pHT_DirEntrySave);	// free the old HT
 	}
 	else	pthread_mutex_unlock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
 }
@@ -1907,6 +2354,7 @@ void my_RemoveEntryInfo(int my_file_idx)
 	idx_Parent_dir = pMetaData[my_file_idx].idx_Parent_Dir;
 
 	pthread_mutex_lock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
+
 	pDirMetaData[idx_Parent_dir].p_Hash_DirEntry->DictDelete(szEntryName_ToRemove, &(pDirMetaData[idx_Parent_dir].elt_list_DirEntry), &(pDirMetaData[idx_Parent_dir].ht_table_DirEntry));
 	pDirMetaData[idx_Parent_dir].nLenAllEntries -= (strlen(szEntryName_ToRemove) + 2);
 	pDirMetaData[idx_Parent_dir].nEntries--;
@@ -1929,7 +2377,7 @@ void my_RemoveEntryInfo(int my_file_idx)
 			}
 		}
 		pthread_mutex_unlock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
-		ncx_slab_free(sp_DirEntryHashTableBuff, elt_list_DirEntry_Save);	// free the old HT
+		ncx_slab_free(sp_DirEntryHashTableBuff, pHT_DirEntrySave);	// free the old HT
 	}
 	else	pthread_mutex_unlock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
 
@@ -1965,7 +2413,7 @@ void my_UpdateEntryIndex_in_ParentDir(char szPath[], int NewIdxEntry_in_Dir)
 int my_rmdir(char szDirName[])
 {
 	int dir_idx, file_idx;
-	unsigned long long fn_hash=0;
+	unsigned long long fn_hash=0, fn_hash_2=0;
 
 //	printf("DBG> rmdir(%s)\n", szDirName);
 //	if(strcmp(szDirName, "/myfs/mdtets_S00/test-dir.0-0/mdtest_tree.0/mdtest_tree.1/dir.mdtest.0.3")==0)	{
@@ -1975,7 +2423,7 @@ int my_rmdir(char szDirName[])
 	fn_hash = XXH64(szDirName, strlen(szDirName), 0);
 	pthread_mutex_lock(&(unlink_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 
-	dir_idx = p_Hash_Dir->DictSearch(szDirName, &elt_list_dir, &ht_table_dir, &fn_hash);
+	dir_idx = p_Hash_Dir->DictSearch(szDirName, &elt_list_dir, &ht_table_dir, &fn_hash_2);
 	if(dir_idx < 0)	{
 		pthread_mutex_unlock(&(unlink_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 		errno = ENOENT;
@@ -1988,50 +2436,60 @@ int my_rmdir(char szDirName[])
 			return -1;
 		}
 
-		file_idx = p_Hash_File->DictSearch(szDirName, &elt_list_file, &ht_table_file, &fn_hash);
+		file_idx = p_Hash_File->DictSearch(szDirName, &elt_list_file, &ht_table_file, &fn_hash_2);
 		assert(file_idx>0);
 //	printf("DBG> Rank = %d rmdir(%s) idx_Server_Parent_Dir = %d idx_Parent_Dir = %d IdxEntry_in_Dir = %d\n", mpi_rank, szDirName, pMetaData[file_idx].idx_Server_Parent_Dir, pMetaData[file_idx].idx_Parent_Dir);
 		my_RemoveEntryInfo(file_idx);
 		ncx_slab_free(sp_DirEntryHashTableBuff, (void*)(pDirMetaData[dir_idx].p_Hash_DirEntry));
 
-		pthread_mutex_lock(&ht_lock);
+		pthread_mutex_lock(&ht_file_lock);
 		p_Hash_File->DictDelete(szDirName, &elt_list_file, &ht_table_file);	// remove hash table record
 		nFile--;
+		pthread_mutex_unlock(&ht_file_lock);
+
+		pthread_mutex_lock(&ht_dir_lock);
 		p_Hash_Dir->DictDelete(szDirName, &elt_list_dir, &ht_table_dir);	// remove hash table record
 		nDir--;
-		pthread_mutex_unlock(&ht_lock);
+		pthread_mutex_unlock(&ht_dir_lock);
+
 		pthread_mutex_unlock(&(unlink_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 	}
 	return 0;
 }
 
-int my_unlink(char szFileName[])	// remove a regular file!
+int my_unlink(char szFileName[], size_t *nFileSize)	// remove a regular file!
 {
-	int file_idx;
-	unsigned long long fn_hash=0;
+	int file_idx=-1;
+	unsigned long long fn_hash=0, fn_hash_2=0;
 
 //	printf("DBG> unlink(%s)\n", szFileName);
 
 	fn_hash = XXH64(szFileName, strlen(szFileName), 0);
 	pthread_mutex_lock(&(unlink_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
-	file_idx = p_Hash_File->DictSearch(szFileName, &elt_list_file, &ht_table_file, &fn_hash);
+	file_idx = p_Hash_File->DictSearch(szFileName, &elt_list_file, &ht_table_file, &fn_hash_2);
 	if(file_idx < 0)	{
+		*nFileSize = 0;
+		szFileName[0] = 0;
 		pthread_mutex_unlock(&(unlink_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 		errno = ENOENT;
 		return (-1);
 	}
 	else	{
-//		printf("DBG> unlink(%s)\n", szFileName);
-		Truncate_File(file_idx, 0);	// Release storage.
-//		printf("DBG> Rank = %d unlink(%s) idx_Server_Parent_Dir = %d idx_Parent_Dir = %d IdxEntry_in_Dir = %d\n", mpi_rank, szFileName, pMetaData[file_idx].idx_Server_Parent_Dir, pMetaData[file_idx].idx_Parent_Dir, pMetaData[file_idx].IdxEntry_in_Dir);
-		my_RemoveEntryInfo(file_idx);
+		*nFileSize = pMetaData[file_idx].st_size;	// return file size
+		if(pMetaData[file_idx].nExtraPointer)	my_Free_Stripe_Data_Common(pMetaData[file_idx].pExtraData, pMetaData[file_idx].nExtraPointer);
 
-		pthread_mutex_lock(&ht_lock);
-		p_Hash_File->DictDelete(szFileName, &elt_list_file, &ht_table_file);	// remove hash table record
-		nFile--;
-		pthread_mutex_unlock(&ht_lock);
+		my_RemoveEntryInfo(file_idx);
 	}
 	pthread_mutex_unlock(&(unlink_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+
+	if(file_idx >= 0)	{
+		pthread_mutex_lock(&ht_file_lock);
+		p_Hash_File->DictDelete(pMetaData[file_idx].szFileName, &elt_list_file, &ht_table_file);	// remove hash table record
+//		pMetaData[file_idx].szFileName[0] = 0;
+		nFile--;
+		pthread_mutex_unlock(&ht_file_lock);
+	}
+
 	return 0;
 }
 
@@ -2102,7 +2560,8 @@ int my_AddEntryInfo(int my_file_idx, int dir_idx)
 //		pDirMetaData[dir_idx].nOffset_To_EntryNameOffsetList = (long int)p_nEntryNameOffsetNew - (long int)p_DirEntryNameOffsetBuff;
 
 		pthread_mutex_unlock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
-		ncx_slab_free(sp_DirEntryHashTableBuff, elt_list_DirEntry_Save);	// free the old HT
+//		ncx_slab_free(sp_DirEntryHashTableBuff, elt_list_DirEntry_Save);	// free the old HT
+		ncx_slab_free(sp_DirEntryHashTableBuff, pHT_DirEntrySave);	// free the old HT
 //		ncx_slab_free(sp_DirEntryNameOffset, (void*)p_nEntryNameOffset);	// free in memory pool
 	}
 	else	pthread_mutex_unlock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
@@ -2161,7 +2620,7 @@ int my_AddEntryInfo_Remote_Request(char *szFullName, int nLenParentDirName, int 
 		}
 
 		pthread_mutex_unlock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
-		ncx_slab_free(sp_DirEntryHashTableBuff, elt_list_DirEntry_Save);	// free the old HT
+		ncx_slab_free(sp_DirEntryHashTableBuff, pHT_DirEntrySave);	// free the old HT
 	}
 	else	pthread_mutex_unlock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
 
@@ -2262,12 +2721,186 @@ int my_fdopendir(int fd, void *loc_buf)
 	int dir_idx;
 
 	dir_idx = fd_List[fd].idx_file;
-	return my_opendir_by_index(dir_idx, loc_buf);
+	return my_opendir_by_index(dir_idx, loc_buf, 0, MAX_SIZE_DIR_ENTRY_BUFF_PER_REQUEST);
 }
 
+int my_opendir_by_index(int dir_idx, void *loc_buf, long int offset, long int nBuffSize)
+{
+	int i, nEntry, nEntryToSend, nEntry_Save, nMaxEntry, nEntryCount=0, IdxLast=-1, NewLen, nEntryThreshold, bUseTmpBuff=1;
+	size_t nDirEntryListBuffSize;
+	int *p_nDirEntries, *p_DirEntryOffset, nBytesDirEntryNameAccu=0, nBytesDirEntryNameAccuMax, nBytesEntryName, *p_nEntryNameOffset, *pIdxMin, *pIdxMax;
+	char *p_szDirEntryName, *pResult_buf, *pResult_New_Allocated=NULL;
+	struct elt_CharEntry *elt_list_DirEntry;
+	RW_FUNC_RETURN_EXT *pResult_Ext;
+	
+	nEntryThreshold = (IO_RESULT_BUFFER_SIZE - sizeof(RW_FUNC_RETURN) - 3*sizeof(int))/(sizeof(int) + MAX_ENTRY_NAME_LEN);
+	nEntry = pDirMetaData[dir_idx].nEntries;
+	nEntryToSend = min(MAX_NUM_DIR_ENTRY_PER_REQUEST, max(0, nEntry - offset) );	// limit the number of entries
+
+	nDirEntryListBuffSize = pDirMetaData[dir_idx].nLenAllEntries + sizeof(int)*(3 + nEntryToSend);
+	nDirEntryListBuffSize = min(min(nDirEntryListBuffSize, MAX_SIZE_DIR_ENTRY_BUFF_PER_REQUEST), nBuffSize);	// limit the size of buffer
+	nBytesDirEntryNameAccuMax = nDirEntryListBuffSize - sizeof(int)*(3 + nEntryToSend);
+
+	if(nEntryToSend <= nEntryThreshold)	{	// Returning buffer is sufficient
+		pResult_buf = (char*)loc_buf;
+		bUseTmpBuff = 0;
+	}
+	else	{	// Otherwise always setup a buffer		
+		pResult_New_Allocated = (char *)ncx_slab_alloc(sp_OpenDirEntryBuff, nDirEntryListBuffSize + sizeof(int));
+		assert(pResult_New_Allocated != NULL);
+		pResult_Ext = (RW_FUNC_RETURN_EXT *)((long int)loc_buf + sizeof(int) - sizeof(RW_FUNC_RETURN));
+		pResult_Ext->nEntry = pDirMetaData[dir_idx].nEntries;
+		pResult_buf = (char*)pResult_New_Allocated + sizeof(int);
+	}
+	
+	p_nDirEntries = (int*)( pResult_buf );
+	pIdxMin = (int*)( pResult_buf + sizeof(int));
+	pIdxMax = (int*)( pResult_buf + sizeof(int)*2);
+	p_DirEntryOffset = (int*)( pResult_buf + sizeof(int)*3 );
+	p_szDirEntryName = (char*)pResult_buf + sizeof(int) * (3 + nEntryToSend);
+
+	*p_nDirEntries = pDirMetaData[dir_idx].nEntries;
+	if(offset < nEntry)	{
+		*pIdxMin = offset & 0xFFFFFFFF;
+	}
+	else	{
+		*pIdxMin = nEntry + 1;
+	}
+//	printf("DBG> %d entries under directory %s\n", nEntry, pDirMetaData[dir_idx].szDirName);
+	nMaxEntry = pDirMetaData[dir_idx].nMaxEntry;
+	elt_list_DirEntry = pDirMetaData[dir_idx].elt_list_DirEntry;
+	nEntry_Save = nEntry;
+
+	nEntry = 0;
+	for(i=0; i<nMaxEntry; i++)	{
+		if(elt_list_DirEntry[i].key[0])	{	// a valid entry. 
+			nEntry++;
+			if(nEntry > offset)	{
+				break;
+			}
+		}
+	}
+
+	nEntry = 0;
+	for(; i<nMaxEntry; i++)	{
+		if(elt_list_DirEntry[i].key[0])	{	// a valid entry. 
+			nBytesEntryName = strlen(elt_list_DirEntry[i].key);
+			NewLen = nBytesDirEntryNameAccu + 2 + nBytesEntryName;
+			if(NewLen > nBytesDirEntryNameAccuMax)	{	// buffer is full
+				break;
+			}
+			else	{
+				strcpy(p_szDirEntryName + nBytesDirEntryNameAccu + 1, elt_list_DirEntry[i].key);
+				p_szDirEntryName[nBytesDirEntryNameAccu] = (char)(elt_list_DirEntry[i].value & 0xFF);
+				p_DirEntryOffset[nEntry] = nBytesDirEntryNameAccu;
+				nBytesDirEntryNameAccu += (nBytesEntryName + 2);
+				nEntry++;
+				if(nEntry >= nEntryToSend)	break;
+			}
+		}
+	}
+	*pIdxMax = offset + nEntry - 1;	// last entry in the list
+
+	nDirEntryListBuffSize = sizeof(int)*(3 + nEntryToSend) + nBytesDirEntryNameAccu;	// the real buff size needed
+	if(nDirEntryListBuffSize > (IO_RESULT_BUFFER_SIZE - sizeof(RW_FUNC_RETURN)) )	{	// too large to fit in result buffer (loc_buf)
+		pResult_Ext->mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote((void*)pResult_New_Allocated, nDirEntryListBuffSize + sizeof(int));
+		assert(pResult_Ext->mr_tmp != NULL);
+	}
+	else	{
+		if(bUseTmpBuff)	memcpy(loc_buf, pResult_buf, nDirEntryListBuffSize);	// copy entry data from tmp buffer to result buffer
+	}
+
+	return nDirEntryListBuffSize;	// always larger than zero. 
+}
+
+/*
+int my_opendir_by_index(int dir_idx, void *loc_buf, long int offset, long int nBuffSize)
+{
+	int i, nEntry, nEntryToSend, nEntry_Save, nMaxEntry, nEntryCount=0, IdxLast=-1, NewLen;
+	size_t nDirEntryListBuffSize;
+	int *p_nDirEntries, *p_DirEntryOffset, nBytesDirEntryNameAccu=0, nBytesDirEntryNameAccuMax, nBytesEntryName, *p_nEntryNameOffset, *pIdxMin, *pIdxMax;
+	char *p_szDirEntryName, *pResult_buf, *pResult_New_Allocated=NULL;
+	struct elt_CharEntry *elt_list_DirEntry;
+	RW_FUNC_RETURN_EXT *pResult_Ext;
+	
+	nEntry = pDirMetaData[dir_idx].nEntries;
+	nEntryToSend = min(MAX_NUM_DIR_ENTRY_PER_REQUEST, max(0, nEntry - offset) );	// limit the number of entries
+
+	nDirEntryListBuffSize = pDirMetaData[dir_idx].nLenAllEntries + sizeof(int)*(3 + nEntryToSend);
+	nDirEntryListBuffSize = min(min(nDirEntryListBuffSize, MAX_SIZE_DIR_ENTRY_BUFF_PER_REQUEST), nBuffSize);	// limit the size of buffer
+	nBytesDirEntryNameAccuMax = nDirEntryListBuffSize - sizeof(int)*(3 + nEntryToSend);
+	
+	if(nDirEntryListBuffSize > (IO_RESULT_BUFFER_SIZE - sizeof(RW_FUNC_RETURN)) )	{	// too large to fit in result buffer (loc_buf)
+		pResult_New_Allocated = (char *)ncx_slab_alloc(sp_OpenDirEntryBuff, nDirEntryListBuffSize + sizeof(int));
+		assert(pResult_New_Allocated != NULL);
+		pResult_Ext = (RW_FUNC_RETURN_EXT *)((long int)loc_buf + sizeof(int) - sizeof(RW_FUNC_RETURN));
+		pResult_Ext->mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote((void*)pResult_New_Allocated, nDirEntryListBuffSize + sizeof(int));
+		assert(pResult_Ext->mr_tmp != NULL);
+		pResult_Ext->nEntry = pDirMetaData[dir_idx].nEntries;
+
+		pResult_buf = (char*)pResult_New_Allocated + sizeof(int);
+	}
+	else	{
+		pResult_buf = (char*)loc_buf;
+	}
+
+	p_nDirEntries = (int*)( pResult_buf );
+	pIdxMin = (int*)( pResult_buf + sizeof(int));
+	pIdxMax = (int*)( pResult_buf + sizeof(int)*2);
+	p_DirEntryOffset = (int*)( pResult_buf + sizeof(int)*3 );
+	p_szDirEntryName = (char*)pResult_buf + sizeof(int) * (3 + nEntry);
+
+	*p_nDirEntries = pDirMetaData[dir_idx].nEntries;
+	if(offset < nEntry)	{
+		*pIdxMin = offset & 0xFFFFFFFF;
+	}
+	else	{
+		*pIdxMin = nEntry + 1;
+	}
+//	printf("DBG> %d entries under directory %s\n", nEntry, pDirMetaData[dir_idx].szDirName);
+	nMaxEntry = pDirMetaData[dir_idx].nMaxEntry;
+	elt_list_DirEntry = pDirMetaData[dir_idx].elt_list_DirEntry;
+	nEntry_Save = nEntry;
+
+	nEntry = 0;
+	for(i=0; i<nMaxEntry; i++)	{
+		if(elt_list_DirEntry[i].key[0])	{	// a valid entry. 
+			nEntry++;
+			if(nEntry > offset)	{
+				break;
+			}
+		}
+	}
+
+	nEntry = 0;
+	for(; i<nMaxEntry; i++)	{
+		if(elt_list_DirEntry[i].key[0])	{	// a valid entry. 
+			nBytesEntryName = strlen(elt_list_DirEntry[i].key);
+			NewLen = nBytesDirEntryNameAccu + 2 + nBytesEntryName;
+			if(NewLen > nBytesDirEntryNameAccuMax)	{	// buffer is full
+				break;
+			}
+			else	{
+				strcpy(p_szDirEntryName + nBytesDirEntryNameAccu + 1, elt_list_DirEntry[i].key);
+				p_szDirEntryName[nBytesDirEntryNameAccu] = (char)(elt_list_DirEntry[i].value & 0xFF);
+				p_DirEntryOffset[nEntry] = nBytesDirEntryNameAccu;
+				nBytesDirEntryNameAccu += (nBytesEntryName + 2);
+				nEntry++;
+				if(nEntry >= nEntryToSend)	break;
+			}
+		}
+	}
+	*pIdxMax = offset + nEntry - 1;	// last entry in the list
+
+	return (sizeof(int)*(3 + nEntryToSend) + nBytesDirEntryNameAccu);	// always larger than zero. 
+}
+*/
+
+/*
 int my_opendir_by_index(int dir_idx, void *loc_buf)
 {
-	int i, nEntry, nEntry_Save, nMaxEntry, nDirEntryListBuffSize;
+	int i, nEntry, nEntry_Save, nMaxEntry;
+	size_t nDirEntryListBuffSize;
 //	unsigned char *szDirEntryBuff=NULL;// entry data buffer
 	int *p_nDirEntries, *p_DirEntryOffset, nBytesDirEntryNameAccu=0, nBytesEntryName, *p_nEntryNameOffset;
 	char *p_szDirEntryName, *pResult_buf, *pResult_New_Allocated=NULL;
@@ -2314,6 +2947,8 @@ int my_opendir_by_index(int dir_idx, void *loc_buf)
 	
 	return (nDirEntryListBuffSize);	// always larger than zero. 
 }
+*/
+
 
 int my_opendir(char szDirName[], void *loc_buf)
 {
@@ -2325,7 +2960,7 @@ int my_opendir(char szDirName[], void *loc_buf)
 		errno = ENOENT;
 		return (-1);	// fail
 	}
-	return my_opendir_by_index(dir_idx, loc_buf);
+	return my_opendir_by_index(dir_idx, loc_buf, 0, MAX_SIZE_DIR_ENTRY_BUFF_PER_REQUEST);
 }
 
 int my_chmod(char szFileName[], int mode)
@@ -2401,7 +3036,7 @@ void Test_File_System_Local(void)
 	Readin_All_File();
 
 	fd = my_openfile("/myfs/3/k.rnd", O_RDONLY);
-	my_close(fd);
+	my_close(fd, NULL);
 
 //	printf("DBG> After my_mkdir(). sp_DirEntryName\n");
 //	ncx_slab_stat(sp_DirEntryName, &ncx_stat);
@@ -2688,13 +3323,13 @@ static void Readin_All_File(void)
 				}
 			}
 			else	{
-				nWriteBytes = my_write(fd_out, pBuff, nBytes_to_Read, 0);
+//				nWriteBytes = my_write(fd_out, pBuff, nBytes_to_Read, 0);	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 				
 				if(nWriteBytes != nBytes_to_Read)	{
 					printf("Error in writing file for %s. nWriteBytes (%d) != nBytes_to_Read (%d)\nQuit\n", szNameOut, nWriteBytes, nBytes_to_Read);
 					exit(1);
 				}
-				my_close(fd_out);
+				my_close(fd_out, NULL);
 				my_chmod(szNameOut, file_stat.st_mode);
 				//					printf("Rank = %d Write file %s, size_packed = %d\n", rank, p_filerec_local[nFileLocal].szName, p_filerec_local[nFileLocal].size_packed);
 				nBytesAllFiles += file_stat.st_size;
@@ -2726,3 +3361,13 @@ static void Readin_All_File(void)
 	free(pBuff);
 }
 
+void my_statfs(FS_STAT *pFS_Stat)
+{
+	pFS_Stat->fs_nblocks = _NPAGES;
+	pFS_Stat->fs_bfreeblocks = pMem_Allocator->Get_Num_Free_Page();
+
+	pFS_Stat->fs_ninode = MAX_NUM_FILE;
+	pFS_Stat->fs_nfreeinode = MAX_NUM_FILE - nFile;
+
+	pFS_Stat->f_namelen = DEFAULT_FULL_FILE_NAME_LEN;
+}
