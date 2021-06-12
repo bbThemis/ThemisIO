@@ -115,7 +115,7 @@ static inline unsigned long __cmpxchg(volatile unsigned long *ptr, unsigned long
 }
 */
 
-static inline int __cmpxchg(volatile int *ptr, int old, int new_value, int size)
+static inline size_t __cmpxchg(volatile size_t *ptr, size_t old, size_t new_value, int size)
 {
         int prev;
         switch (size) {
@@ -160,6 +160,19 @@ static inline int fetch_and_add(int* variable, int value)
 inline void clflush(volatile void *p)
 {
         asm volatile ("clflush (%0)" :: "r"(p));
+}
+
+inline void Atomic_Increase(size_t new_value, size_t *pAddr)	// compare new_value with *pAddr, update *pAddr = new_value if (new_value > *pAddr). 
+{
+	size_t value;
+	size_t old_value = *pAddr;
+	while (old_value < new_value) {
+		value = __cmpxchg(pAddr, old_value, new_value, 8);
+		if (value != old_value) {
+			old_value = value;
+			continue;
+		}
+	}
 }
 
 #endif

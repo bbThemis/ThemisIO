@@ -76,20 +76,9 @@ int fd_stdin=-1, fd_stdout=-1, fd_stderr=-1, Is_in_shell=0;
 
 //atic __thread unsigned char __attribute__((aligned(16))) rem_buff[DATA_COPY_THRESHOLD_SIZE + 4096], loc_buff[DATA_COPY_THRESHOLD_SIZE + 4096]; 
 static __thread unsigned char *rem_buff=NULL, *loc_buff=NULL; 
+static struct ibv_mr *mr_rem = NULL, *mr_loc = NULL;
 
 void Finalize_Client();
-
-inline void Allocate_loc_rem_buff(void)
-{
-	if(rem_buff == NULL)	{
-		rem_buff = (unsigned char *)memalign(64, IO_RESULT_BUFFER_SIZE + 4096);
-//		rem_buff = (unsigned char *)memalign(64, DATA_COPY_THRESHOLD_SIZE + 4096);
-		assert(rem_buff != NULL);
-		loc_buff = (unsigned char *)memalign(64, IO_RESULT_BUFFER_SIZE + 4096);
-//		loc_buff = (unsigned char *)memalign(64, DATA_COPY_THRESHOLD_SIZE + 4096);
-		assert(loc_buff != NULL);
-	}
-}
 
 // file server info is stored at /dev/shm/myfs. Use bcast_dir to share this file across nodes. 
 typedef	struct	{
@@ -140,24 +129,20 @@ private:
 	pthread_mutex_t qp_put_get_lock;
 	int sock = 0;
 	
-	void Init_IB_Env(void);
 	void IB_modify_qp(void);
 	void IB_CreateQueuePair(void);
 	void Setup_Socket(char szServerIP[]);
 	
 public:
-//	static struct ibv_device** dev_list_;
-//	static struct ibv_context* context_;
-//	static struct ibv_pd* pd_;
-//	static struct ibv_port_attr port_attr_;
-	struct ibv_device** dev_list_;
-	struct ibv_context* context_;
-	struct ibv_pd* pd_;
-	struct ibv_port_attr port_attr_;
-	int Done_IB_PD_Init;
+	static struct ibv_pd* pd_;
+	static struct ibv_device** dev_list_;
+	static struct ibv_context* context_;
+	static struct ibv_port_attr port_attr_;
+	static int Done_IB_PD_Init;
+	static void Init_IB_Env(void);
 
 	IB_MEM_DATA pal_remote_mem;
-	struct ibv_mr *mr_rem = NULL, *mr_loc = NULL;
+//	struct ibv_mr *mr_rem = NULL, *mr_loc = NULL;
 	struct ibv_mr *mr_loc_qp_Obj = NULL;
 	struct ibv_qp *queue_pair = NULL;
 	time_t qp_heart_beat_t = 0;
@@ -170,7 +155,7 @@ public:
 	
 	void Close_QueuePair(void);
 	void Setup_QueuePair(int IdxServer, char loc_buff[], size_t size_loc_buff, char rem_buff[], size_t size_rem_buff);
-	struct ibv_mr* IB_RegisterBuf_RW_Local_Remote(void* buf, size_t len);
+	static struct ibv_mr* IB_RegisterBuf_RW_Local_Remote(void* buf, size_t len);
 	int IB_Put(void* loc_buf, uint32_t lkey, void* rem_buf, uint32_t rkey, size_t len);
 	int IB_Get(void* loc_buf, uint32_t lkey, void* rem_buf, uint32_t rkey, size_t len);
 };
@@ -252,17 +237,17 @@ void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t si
 
 	Idx_fs = IdxServer;
 	
-	dev_list_ = NULL;
-	context_ = NULL;
-	pd_ = NULL;
-	Done_IB_PD_Init = 0;
+//	dev_list_ = NULL;
+//	context_ = NULL;
+//	pd_ = NULL;
+//	Done_IB_PD_Init = 0;
 
 	send_complete_queue = NULL;
 //	recv_complete_queue = NULL;
 	nPut = nPut_Done = 0;
 	nGet = nGet_Done = 0;
 	sock = 0;
-	mr_rem = mr_loc = mr_loc_qp_Obj = NULL;
+	mr_loc_qp_Obj = NULL;
 	queue_pair = NULL;
 	qp_heart_beat_t = 0;
 	
@@ -280,7 +265,7 @@ void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t si
 	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
-	Init_IB_Env();
+//	Init_IB_Env();
 	IB_CreateQueuePair();
 
 	gethostname(szHostName, 63);
@@ -309,10 +294,10 @@ void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t si
 	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	
 	mr_loc_qp_Obj = IB_RegisterBuf_RW_Local_Remote((void*)this, sizeof(CLIENT_QUEUEPAIR));
-	mr_loc = IB_RegisterBuf_RW_Local_Remote((void*)loc_buff, size_loc_buff);
-	assert(mr_loc != NULL);
-	mr_rem = IB_RegisterBuf_RW_Local_Remote((void*)rem_buff, size_rem_buff);
-	assert(mr_rem != NULL);
+//	mr_loc = IB_RegisterBuf_RW_Local_Remote((void*)loc_buff, size_loc_buff);
+//	assert(mr_loc != NULL);
+//	mr_rem = IB_RegisterBuf_RW_Local_Remote((void*)rem_buff, size_rem_buff);
+//	assert(mr_rem != NULL);
 	my_remote_mem.addr = (unsigned long int)(mr_rem->addr);
 	my_remote_mem.key = mr_rem->rkey;
 
@@ -412,11 +397,11 @@ void CLIENT_QUEUEPAIR::Setup_Socket(char szServerIP[])
     if (setsockopt(sock, SOL_TCP, TCP_NODELAY, &one, sizeof(one)) < 0)	perror("setsockopt(2) error");
 }
 
-//struct ibv_device** CLIENT_QUEUEPAIR::dev_list_=NULL;
-//struct ibv_context* CLIENT_QUEUEPAIR::context_=NULL;
-//struct ibv_pd* CLIENT_QUEUEPAIR::pd_=NULL;
-//struct ibv_port_attr CLIENT_QUEUEPAIR::port_attr_={};
-//int CLIENT_QUEUEPAIR::Done_IB_PD_Init = 0;
+struct ibv_device** CLIENT_QUEUEPAIR::dev_list_=NULL;
+struct ibv_context* CLIENT_QUEUEPAIR::context_=NULL;
+struct ibv_pd* CLIENT_QUEUEPAIR::pd_=NULL;
+struct ibv_port_attr CLIENT_QUEUEPAIR::port_attr_={};
+int CLIENT_QUEUEPAIR::Done_IB_PD_Init = 0;
 
 void CLIENT_QUEUEPAIR::Init_IB_Env(void)
 {
@@ -488,6 +473,9 @@ void CLIENT_QUEUEPAIR::Init_IB_Env(void)
 	}
 	pthread_mutex_unlock(&process_lock);
 	
+	ibv_free_device_list(dev_list_);
+	dev_list_ = NULL;
+
 //	nPut = 0;
 //	nGet = 0;
 //	nPut_Done = 0;
@@ -521,17 +509,16 @@ void CLIENT_QUEUEPAIR::Close_QueuePair(void)
 		ibv_destroy_cq(send_complete_queue);
 	
 	// release memory region which is nonblocking-io but not freed.
-	ibv_dereg_mr(mr_rem);
-	ibv_dereg_mr(mr_loc);
+	if(mr_rem)	{
+		ibv_dereg_mr(mr_rem);
+		ibv_dereg_mr(mr_loc);
+		mr_rem = NULL;
+	}
 	ibv_dereg_mr(mr_loc_qp_Obj);
 
 //	gettimeofday(&tm2, NULL);
 //	t = 1000000 * (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec);
 //	printf("DBG> t_release = %lld\n", t);
-	
-	if (pd_ != NULL) ibv_dealloc_pd(pd_);
-	if (context_ != NULL)	ibv_close_device(context_);
-	if (dev_list_ != NULL)	ibv_free_device_list(dev_list_);
 }
 
 void CLIENT_QUEUEPAIR::IB_modify_qp(void)
@@ -897,6 +884,7 @@ void Init_Client()
 	void *p_shm;
 	char *szEnvJobID=NULL, *szEnvNNode=NULL, *szEnvDebug=NULL;
 	
+	CLIENT_QUEUEPAIR::Init_IB_Env();
 
 	pHT_qp = (CHASHTABLE_INT *)malloc(CHASHTABLE_INT::GetStorageSize(MAX_QP_PER_PROCESS));
 	pHT_qp->DictCreate(MAX_QP_PER_PROCESS, &elt_list_qp, &ht_table_qp);	// init hash table

@@ -11,6 +11,7 @@
 
 extern int mpi_rank, nFSServer;
 extern int nFile, nDir;
+extern long int nSizeReg;
 //extern ncx_slab_pool_t *sp_DirEntryName, *sp_DirEntryNameOffset;
 extern pthread_attr_t thread_attr;
 extern CCreatedUniqueThread Unique_Thread;
@@ -68,6 +69,7 @@ void RW_Close(IO_CMD_MSG *pRF_Op_Msg)
 	RW_FUNC_RETURN *pResult;
 	struct ibv_mr *mr_shm_global;
 	void *rem_buff;
+	META_DATA_ON_CLOSE *pMetaData_OnClose;
 	unsigned int rkey;
 
 	rkey = pRF_Op_Msg->rkey;
@@ -78,7 +80,8 @@ void RW_Close(IO_CMD_MSG *pRF_Op_Msg)
 	pResult = (RW_FUNC_RETURN *)( (char*)(Server_qp.p_shm_IO_Result) + pRF_Op_Msg->tid*IO_RESULT_BUFFER_SIZE);
 
 	pResult->nDataSize = sizeof(RW_FUNC_RETURN);
-	pResult->ret_value = my_close(pRF_Op_Msg->fd);
+	pMetaData_OnClose = (META_DATA_ON_CLOSE *)(pRF_Op_Msg->szName);
+	pResult->ret_value = my_close(pRF_Op_Msg->fd, pMetaData_OnClose);
 	pResult->myerrno = errno;
 
 	pResult->Tag_Ini = (int)((long int)rem_buff & 0xFFFFFFFF);
@@ -163,10 +166,65 @@ void RW_Opendir(IO_CMD_MSG *pRF_Op_Msg)
 		while( (*pDoneCopy) == 0 )	{	// wait until client finishes data transfer
 		}
 		// free buffer
+		nSizeReg -= pResult_Ext->mr_tmp->length;
 		ibv_dereg_mr(pResult_Ext->mr_tmp);
 		ncx_slab_free(sp_OpenDirEntryBuff, (void*)(pResult_Ext->addr));
 	}
+}
 
+void RW_Read_Dir_Entries(IO_CMD_MSG *pRF_Op_Msg)
+{
+	int idx_qp, tag_magic, *pTag_End, *pDoneCopy, dir_idx;
+	char *szBuff;
+	RW_FUNC_RETURN *pResult;
+	RW_FUNC_RETURN_EXT *pResult_Ext;
+	struct ibv_mr *mr_shm_global;
+	void *rem_buff;
+	unsigned int rkey;
+	unsigned long long fn_hash=0;
+
+	rkey = pRF_Op_Msg->rkey;
+	rem_buff = pRF_Op_Msg->rem_buff;
+	tag_magic = pRF_Op_Msg->tag_magic;
+	idx_qp = pRF_Op_Msg->idx_qp;
+	mr_shm_global = Server_qp.mr_shm_global;
+	pResult = (RW_FUNC_RETURN *)( (char*)(Server_qp.p_shm_IO_Result) + pRF_Op_Msg->tid*IO_RESULT_BUFFER_SIZE);
+
+	dir_idx = p_Hash_Dir->DictSearch(pRF_Op_Msg->szName, &elt_list_dir, &ht_table_dir, &fn_hash);
+	if(dir_idx < 0)	{
+		pResult->myerrno = ENOENT;
+		pResult->ret_value = -1;	// fail
+	}
+	else	{
+		pResult->myerrno = errno;
+		pResult->ret_value = my_opendir_by_index(dir_idx, (void*)((char*)pResult + sizeof(RW_FUNC_RETURN) - sizeof(int)), pRF_Op_Msg->offset, pRF_Op_Msg->nLen);
+	}
+	pResult->nDataSize = (pResult->ret_value >= 0) ? (sizeof(RW_FUNC_RETURN)+pResult->ret_value) : (sizeof(RW_FUNC_RETURN));
+	pResult->Tag_Ini = (int)((long int)rem_buff & 0xFFFFFFFF);
+
+	if(pResult->nDataSize <= IO_RESULT_BUFFER_SIZE)	{
+		pTag_End = (int*)( (char*)pResult + pResult->nDataSize - sizeof(int) );
+		*pTag_End = (pResult->Tag_Ini) ^ tag_magic;
+		Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
+	}
+	else	{
+		pResult_Ext = (RW_FUNC_RETURN_EXT *)pResult;
+		pDoneCopy = (int *)(pResult_Ext->mr_tmp->addr);
+		*pDoneCopy = 0;
+
+		pResult_Ext->addr = (long int)(pResult_Ext->mr_tmp->addr);
+		pResult_Ext->rkey = (long int)(pResult_Ext->mr_tmp->rkey);
+
+		pTag_End = (int*)( (char*)pResult + sizeof(RW_FUNC_RETURN_EXT) - sizeof(int) );
+		*pTag_End = (pResult->Tag_Ini) ^ tag_magic;
+		Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, sizeof(RW_FUNC_RETURN_EXT));
+		while( (*pDoneCopy) == 0 )	{	// wait until client finishes data transfer
+		}
+		// free buffer
+		nSizeReg -= pResult_Ext->mr_tmp->length;
+		ibv_dereg_mr(pResult_Ext->mr_tmp);
+		ncx_slab_free(sp_OpenDirEntryBuff, (void*)(pResult_Ext->addr));
+	}
 }
 
 void RW_Read(IO_CMD_MSG *pRF_Op_Msg)
@@ -188,13 +246,14 @@ void RW_Read(IO_CMD_MSG *pRF_Op_Msg)
 //	Determine_Index_StorageBlock_for_Offset(pRF_Op_Msg->fd, pRF_Op_Msg->offset);
 
 	if(pRF_Op_Msg->nLen <= DATA_COPY_THRESHOLD_SIZE)	{
-		if(pRF_Op_Msg->offset >= pMetaData[fd_List[pRF_Op_Msg->fd].idx_file].st_size)	{	// out of range
-			pResult->ret_value = 0;
-		}
-		else	{
-			pResult->ret_value = my_read(pRF_Op_Msg->fd, (char*)pResult+sizeof(RW_FUNC_RETURN)-sizeof(int), pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
+//		if(pRF_Op_Msg->offset >= pMetaData[fd_List[pRF_Op_Msg->fd].idx_file].st_size)	{	// out of range
+//			pResult->ret_value = 0;
+//		}
+//		else	{
+//			pResult->ret_value = my_read(pRF_Op_Msg->fd, (char*)pResult+sizeof(RW_FUNC_RETURN)-sizeof(int), pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
+			pResult->ret_value = my_read_stripe(pRF_Op_Msg->fd, pRF_Op_Msg->szName, pRF_Op_Msg->mode, (char*)pResult+sizeof(RW_FUNC_RETURN)-sizeof(int), pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
 			pResult->myerrno = errno;
-		}
+//		}
 		pResult->nDataSize = (pResult->ret_value>0) ? (sizeof(RW_FUNC_RETURN) + pResult->ret_value) : (sizeof(RW_FUNC_RETURN));
 
 		pResult->Tag_Ini = (int)((long int)rem_buff & 0xFFFFFFFF);
@@ -203,13 +262,15 @@ void RW_Read(IO_CMD_MSG *pRF_Op_Msg)
 		Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 	}
 	else	{
-		if(pRF_Op_Msg->offset >= pMetaData[fd_List[pRF_Op_Msg->fd].idx_file].st_size)   {       // out of range
-			pResult->ret_value = 0;
-		}
-		else    {
-			pResult->ret_value = my_read_RDMA(pRF_Op_Msg->fd, idx_qp, (void*)((char*)pResult+sizeof(RW_FUNC_RETURN)), mr_shm_global->lkey, rem_buff, rkey, pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
+//		if(pRF_Op_Msg->offset >= pMetaData[fd_List[pRF_Op_Msg->fd].idx_file].st_size)   {       // out of range
+//			pResult->ret_value = 0;
+//		}
+//		else    {
+//			pResult->ret_value = my_read_RDMA(pRF_Op_Msg->fd, idx_qp, (void*)((char*)pResult+sizeof(RW_FUNC_RETURN)), mr_shm_global->lkey, rem_buff, rkey, pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
+//			pResult->ret_value = my_read_stripe(pRF_Op_Msg->fd, pRF_Op_Msg->szName, (char*)pResult+sizeof(RW_FUNC_RETURN)-sizeof(int), pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
+			pResult->ret_value = my_read_stripe_RDMA(pRF_Op_Msg->fd, pRF_Op_Msg->szName, pRF_Op_Msg->mode, idx_qp, (void*)((char*)pResult+sizeof(RW_FUNC_RETURN)), mr_shm_global->lkey, rem_buff, rkey, pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
 			pResult->myerrno = errno;
-		}
+//		}
 		
 		rem_buff = (void*)(Server_qp.pQP_Data[idx_qp].rem_addr);
 		rkey = Server_qp.pQP_Data[idx_qp].rem_key;
@@ -243,10 +304,11 @@ void RW_Write(IO_CMD_MSG *pRF_Op_Msg)
 
 	if(pRF_Op_Msg->nLen <= DATA_COPY_THRESHOLD_SIZE)	{
 		Server_qp.IB_Get(idx_qp, (void*)((char*)pResult+sizeof(RW_FUNC_RETURN)), mr_shm_global->lkey, (void*)((char*)rem_buff+sizeof(RW_FUNC_RETURN)), rkey, pRF_Op_Msg->nLen);
-		pResult->ret_value = my_write(pRF_Op_Msg->fd, (char*)pResult+sizeof(RW_FUNC_RETURN), pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
+		pResult->ret_value = my_write_stripe(pRF_Op_Msg->fd, pRF_Op_Msg->szName, pRF_Op_Msg->mode, (const void *)((char*)pResult+sizeof(RW_FUNC_RETURN)), pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
+//		pResult->ret_value = my_write(pRF_Op_Msg->fd, (char*)pResult+sizeof(RW_FUNC_RETURN), pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
 	}
 	else	{
-		pResult->ret_value = my_write_RDMA(pRF_Op_Msg->fd, idx_qp, (void*)((char*)pResult+sizeof(RW_FUNC_RETURN)), mr_shm_global->lkey, rem_buff, rkey, pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
+		pResult->ret_value = my_write_stripe_RDMA(pRF_Op_Msg->fd, pRF_Op_Msg->szName, pRF_Op_Msg->mode, idx_qp, (void*)((char*)pResult+sizeof(RW_FUNC_RETURN)), mr_shm_global->lkey, rem_buff, rkey, pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
 	}
 	pResult->nDataSize = (sizeof(RW_FUNC_RETURN));
 	pResult->myerrno = errno;
@@ -258,10 +320,11 @@ void RW_Write(IO_CMD_MSG *pRF_Op_Msg)
 	Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].rem_addr), Server_qp.pQP_Data[idx_qp].rem_key, pResult->nDataSize);
 }
 
-void RW_PRead(IO_CMD_MSG *pRF_Op_Msg)
-{
-}
+//void RW_PRead(IO_CMD_MSG *pRF_Op_Msg)
+//{
+//}
 
+/*
 void RW_Seek(IO_CMD_MSG *pRF_Op_Msg)
 {
 	int idx_qp, tag_magic;
@@ -285,6 +348,7 @@ void RW_Seek(IO_CMD_MSG *pRF_Op_Msg)
 
 	Server_qp.IB_Put(idx_qp, (void*)pResult, Server_qp.mr_shm_global->lkey, rem_buff, rkey, sizeof(RW_FUNC_RETURN));
 }
+*/
 
 void RW_LStat(IO_CMD_MSG *pRF_Op_Msg)
 {
@@ -360,13 +424,14 @@ void RW_Dir_Exist(IO_CMD_MSG *pRF_Op_Msg)
 
 void RW_Unlink(IO_CMD_MSG *pRF_Op_Msg)
 {
-	int idx_qp, tag_magic, *pTag_End;
+	int idx_qp, tag_magic, *pTag_End, idx_Server_Shift, nExtStripeServers, IdxServer;
+	unsigned int rkey;
 	char *szBuff;
 	RW_FUNC_RETURN *pResult;
 	struct ibv_mr *mr_shm_global;
 	void *rem_buff;
-	unsigned int rkey;
 	unsigned long long fn_hash;
+	size_t nFileSize, Offset;
 
 	rkey = pRF_Op_Msg->rkey;
 	rem_buff = pRF_Op_Msg->rem_buff;
@@ -377,14 +442,31 @@ void RW_Unlink(IO_CMD_MSG *pRF_Op_Msg)
 
 	pResult->nDataSize = sizeof(RW_FUNC_RETURN);
 
-	pResult->ret_value = my_unlink(pRF_Op_Msg->szName);
+	pResult->ret_value = my_unlink(pRF_Op_Msg->szName, &nFileSize);
 	if(pResult->ret_value < 0)	pResult->myerrno = errno;
 
 	pResult->Tag_Ini = (int)((long int)rem_buff & 0xFFFFFFFF);
 	pTag_End = (int*)( (char*)pResult + pResult->nDataSize - sizeof(int) );
 	*pTag_End = (pResult->Tag_Ini) ^ tag_magic;
 
+	if(nFileSize > FILE_STRIPE_SIZE)	{	// more than one strip. Send requests to other following servers
+		if(nFSServer > 1)	{
+			nExtStripeServers = min( (nFileSize + FILE_STRIPE_SIZE -1) / FILE_STRIPE_SIZE, nFSServer - 1);
+			idx_Server_Shift = 1;
+			while(idx_Server_Shift <= nExtStripeServers)	{
+				Request_Free_Stripe_Data( (mpi_rank + idx_Server_Shift)%nFSServer, pRF_Op_Msg->szName);
+				idx_Server_Shift++;
+			}
+		}
+	}
+
 	Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
+	// Let the client keep going. Server needs to send requests to other server to release stripe storage if necessary. 
+}
+
+void RW_Free_Stripe_Data(IO_CMD_MSG *pRF_Op_Msg)
+{
+	my_Free_Stripe_Data_Ext_Server(pRF_Op_Msg->szName);	// Just need to release storage. No need to return result/data. 
 }
 
 void RW_Remove_Dir(IO_CMD_MSG *pRF_Op_Msg)
@@ -671,6 +753,36 @@ void RW_Hello(IO_CMD_MSG *pRF_Op_Msg)
 	pResult->Tag_End = (pResult->Tag_Ini) ^ tag_magic;
 
 	Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, sizeof(RW_FUNC_RETURN));
+}
+
+void RW_StatFS(IO_CMD_MSG *pRF_Op_Msg)
+{
+	int idx_qp, tag_magic, *pTag_End;
+	char *szBuff;
+	RW_FUNC_RETURN *pResult;
+	struct ibv_mr *mr_shm_global;
+	void *rem_buff;
+	unsigned int rkey;
+	FS_STAT *pFS_Stat;
+
+	idx_qp = pRF_Op_Msg->idx_qp;
+	rkey = pRF_Op_Msg->rkey;
+	rem_buff = pRF_Op_Msg->rem_buff;
+	tag_magic = pRF_Op_Msg->tag_magic;
+	mr_shm_global = Server_qp.mr_shm_global;
+	pResult = (RW_FUNC_RETURN *)( (char*)(Server_qp.p_shm_IO_Result) + pRF_Op_Msg->tid*IO_RESULT_BUFFER_SIZE);
+
+	pResult->nDataSize = sizeof(RW_FUNC_RETURN) + sizeof(FS_STAT);
+	pResult->ret_value = 0;
+
+	pResult->Tag_Ini = (int)((long int)rem_buff & 0xFFFFFFFF);
+	pTag_End = (int*)( (char*)pResult + pResult->nDataSize - sizeof(int) );
+	*pTag_End = (pResult->Tag_Ini) ^ tag_magic;
+
+	pFS_Stat = (FS_STAT *)( (char*)pResult + sizeof(RW_FUNC_RETURN) - sizeof(int) );
+	my_statfs(pFS_Stat);
+
+	Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 }
 
 void RW_File_AddEntry_ParentDir(IO_CMD_MSG *pRF_Op_Msg)

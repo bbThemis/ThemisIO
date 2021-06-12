@@ -10,6 +10,10 @@
 #define FD_DIR_BASE			(0x40000000)
 #define DUMMY_FD_DIR		(0x50000000)
 
+#define MAX_NUM_DIR_ENTRY_PER_REQUEST	(1024*1024)
+#define MAX_SIZE_DIR_ENTRY_BUFF_PER_REQUEST	(40*MAX_NUM_DIR_ENTRY_PER_REQUEST)	// the max length of each entry is 40 bytes right now. 
+
+#define	BBTHEMIS_SUPER_MAGIC	0x5566
 // max allowed 512 file servers
 //#define SetFSIdx(fd,idx_fs)     ( fd = ( fd | (idx_fs << 20 ) ) )
 //#define GetFileFSIdx(fd)            ( ( (fd-FD_FILE_BASE) & 0x1FF00000) >> 20  )
@@ -27,18 +31,24 @@
 #define DEFAULT_FILE_STAT_BLOCKSIZE   (1048576)
 //#define DEFAULT_FILE_STAT_BLOCKSIZE	(4194304)
 
-#define MAX_SIZE_MR_BLOCK     (36*1024*1024)
+#define MAX_SIZE_MR_BLOCK     (8*1024*1024)
 //#define MAX_SIZE_MR_BLOCK	(512*1024*1024)
 //#define MAX_SIZE_MR_BLOCK	(1024*1024*1024)
 //#define IO_RESULT_BUFFER_SIZE		(1024*1024)
 #define IO_RESULT_BUFFER_SIZE		(2048*1024)
+
+//#define FILE_STRIPE_SIZE                      (512*1024*1024)
+//#define SHIFT_FOR_DIV_FILE_STRIPE_SIZE        (30)
+#define FILE_STRIPE_SIZE			(IO_RESULT_BUFFER_SIZE)
+#define FILE_STRIPE_SIZE_M1		(FILE_STRIPE_SIZE - 1)
+#define SHIFT_FOR_DIV_FILE_STRIPE_SIZE	(21)	// 2^SHIFT_FOR_DIV_FILE_STRIPE_SIZE == IO_RESULT_BUFFER_SIZE
+
 //#define DATA_COPY_THRESHOLD_SIZE	(8*1024)	// 328 KB. (Maybe need to be measured and tuned later. Done tuning.)
 #define DATA_COPY_THRESHOLD_SIZE	(328*1024)	// 328 KB. (Maybe need to be measured and tuned later. Done tuning.)
 //#define DATA_COPY_THRESHOLD_SIZE	(1200*1024)	// 328 KB. (Maybe need to be measured and tuned later. Done tuning.)
 // Copy data if size is smaller than this threshold. RDMA if large data need to be transfered. Register destination block and pass the receiving buffer address. 
 
 #define TAG_NEW_REQUEST	(0x80)
-//#define TAG_RESULT_MAGIC	(0x20212021)
 
 #define IO_OP_MAGIC		(0x78563400)
 #define RF_RO_OP_OPEN	(0x0)	// read only file.
@@ -72,6 +82,9 @@
 #define RF_RW_OP_PWRITE	(0x29)
 #define RF_RW_OP_FUTIMENS	(0x2A)
 #define RF_RW_OP_UTIMES		(0x2B)
+#define RF_RW_OP_FREE_STRIPE_DATA	(0x2C)
+#define RF_RW_OP_STAT_FS	(0x2D)
+#define RF_RW_OP_READ_DIR_ENTRIES	(0x2E)
 //#define RF_RW_OP_UTIMES		(0x2B)
 #define RF_RW_OP_HELLO			(0x4E)
 #define RF_RW_OP_PRINT_MEM		(0x4F)
@@ -164,6 +177,17 @@ typedef struct {
 	int idx_Parent_Dir;		// the index of parent dir in hash table
 //	int IdxEntry_in_Dir;	// the index of entry in the parent dir entry list
 }PARENTDIR_FUNC_RETURN, *PPARENTDIR_FUNC_RETURN;
+
+typedef	struct {
+	off_t MaxDataRange;	// the largest offset in write(). 
+	struct timespec modification_time;	// most recent modification time. 16 bytes. 
+}META_DATA_ON_CLOSE, *PMETA_DATA_ON_CLOSE;
+
+typedef	struct {
+	size_t fs_nblocks, fs_bfreeblocks;	// the total number of data blocks, the total number of free data blocks
+	size_t fs_ninode, fs_nfreeinode;	// the total number of inode, the total number of free inode
+	int f_namelen;
+}FS_STAT, *PFS_STAT;
 
 /*
 typedef struct	{

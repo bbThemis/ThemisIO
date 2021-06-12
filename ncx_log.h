@@ -1,7 +1,7 @@
 #ifndef _NCX_LOG_H_
 #define _NCX_LOG_H_
 
-#define LOG_LEVEL 16
+#define LOG_LEVEL 4
 
 #define LV_TRACE 1
 #define LV_DEBUG 2

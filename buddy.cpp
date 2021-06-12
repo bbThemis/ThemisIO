@@ -138,10 +138,11 @@ static struct page *__alloc_page(unsigned long order,
 void * CMEM_ALLOCATOR::Mem_Alloc(unsigned long size, size_t *nBytesAllocated)
 {
     struct page *page = NULL;
-    unsigned long order, nPageAV;
+//    unsigned long order, nPageAV;
+    unsigned long order;
     void *ret;
 	
-	nPageAV = Get_Num_Free_Page();
+//	nPageAV = Get_Num_Free_Page();
 	order = Cal_Order(size);
     if (order >= BUDDY_MAX_ORDER)
     {

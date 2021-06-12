@@ -527,7 +527,7 @@ int CHASHTABLE_CHAR::DictInsertAuto(const char *key, struct elt_Char ** p_elt_li
     (*p_ht_table)[h] = first_av_Save;
     n++;
 	
-    /* grow table if there is not enough room */
+    // grow table if there is not enough room
 //    if(n >= (size * MAX_LOAD_FACTOR) ) {
 //		printf("Hash table is FULL.\nQuit.\n");
 //		exit(1);
@@ -535,6 +535,57 @@ int CHASHTABLE_CHAR::DictInsertAuto(const char *key, struct elt_Char ** p_elt_li
 //    }
 	return first_av_Save;	// the unit saving the data
 }
+
+
+// search to find whether key already exists! If not, insert current key! 
+int CHASHTABLE_CHAR::DictSearchAndInsertAuto(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table, int *bNewRecord)
+{
+    struct elt_Char *e;
+    unsigned long long h;
+    int first_av_Save, nLen, idx;
+	
+	assert(key);
+	nLen = strlen(key);
+	if(nLen >= MAX_NAME_LEN)        printf("ERROR> nLen (%d) >= MAX_NAME_LEN\n", nLen);
+	h = XXH64(key, nLen, 0) & size;
+
+	*bNewRecord = 0;
+
+	idx = (*p_ht_table)[h & size];
+	if(idx == -1)	{
+		*bNewRecord = 1;
+	}
+	else	{
+		e = &( (*p_elt_list)[idx] );
+		while(1) {
+			if(!strcmp(e->key, key)) {
+				return e->value;
+			}
+			else	{
+				idx = e->next;
+				if(idx == -1)	{	// end
+					*bNewRecord = 1;
+					break;
+				}
+				e = &( (*p_elt_list)[idx] );
+			}
+		}
+	}
+	
+	first_av_Save = first_av;
+	e = &( (*p_elt_list)[first_av]);	// first available unit
+	strcpy(e->key, key);
+    e->value = first_av_Save;
+	
+	first_av = e->next;	// pointing to the next available unit
+	
+    e->next = (*p_ht_table)[h];
+    (*p_ht_table)[h] = first_av_Save;
+    n++;
+	
+	return first_av_Save;	// the unit saving the data
+}
+
 /* return the most recently inserted value associated with a key */
 /* or 0 if no matching key is present */
 int CHASHTABLE_CHAR::DictSearch(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table, unsigned long long *fn_hash)
@@ -545,10 +596,7 @@ int CHASHTABLE_CHAR::DictSearch(const char *key, struct elt_Char ** p_elt_list, 
 	if(n == 0) return (-1);
 	assert(key);
 	
-//	*fn_hash = fast_hash(size, key);
-//	idx = (*p_ht_table)[*fn_hash];
 	*fn_hash = XXH64(key, strlen(key), 0);
-//	if( (*fn_hash) == 0)	*fn_hash = XXH64(key, strlen(key), 0);
 
 	idx = (*p_ht_table)[(*fn_hash) & size];
 	if(idx == -1)	{
