@@ -8,7 +8,7 @@ Compile server and wrapper.so, <br>
 `./compile.sh`<br>
 <br>
 
-You need to reivse the impi path in Makefile.<br>
+You need to revise the impi path in Makefile.<br>
 
 Run a server, <br>
 `cd TBD`<br>
