@@ -176,8 +176,9 @@ typedef struct	{
 	int pad;
 	off_t offset;
 	off_t MaxDataRange;	// the largest offset in write(). 
+	size_t st_ino, FileSize;	// inode and file size
 	struct timespec modification_time;	// most recent modification time. 16 bytes. 
-	char szFileName[208];
+	char szFileName[192];
 //	SEEK_OP_PARAM SeekList[MAX_DEFERRED_SEEK_OP];		// current status
 }FILESTATUS, *PFILESTATUS;
 
@@ -640,6 +641,7 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 	RW_FUNC_RETURN *pResult;
 	unsigned long long fn_hash;
 	DIR *pDir;
+	size_t *pInode_and_FileSize;
 
 	if (oflags & O_CREAT)	{
 		va_list arg;
@@ -731,6 +733,7 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 //			return (idx_fd+FD_DIR_BASE);
 //		}
 //		else	{	// regular file
+			pInode_and_FileSize = (size_t *)( (char*)pResult + sizeof(RW_FUNC_RETURN) - sizeof(int) );
 			idx_fd = Find_Next_Available_fd();
 			assert(idx_fd >= 0);
 			FileList[idx_fd].fd = fd;
@@ -738,9 +741,14 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 			FileList[idx_fd].OpenFlag = oflags;
 			FileList[idx_fd].offset = 0;	// NEED to set at the end of file if O_APPEND!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			FileList[idx_fd].MaxDataRange = 0;
+			FileList[idx_fd].st_ino = idx_fs;
+			FileList[idx_fd].st_ino = FileList[idx_fd].st_ino << 32;
+			FileList[idx_fd].st_ino |= pInode_and_FileSize[0];
+			FileList[idx_fd].FileSize = pInode_and_FileSize[1];
 			FileList[idx_fd].modification_time.tv_sec = 0;
 			FileList[idx_fd].modification_time.tv_nsec = 0;
 			strcpy(FileList[idx_fd].szFileName, szFullPath);
+//			printf("DBG> File %s inode = %lx size = %ld\n", szFullPath, FileList[idx_fd].st_ino, FileList[idx_fd].FileSize);
 			return (idx_fd+FD_FILE_BASE);
 //		}
 	}
