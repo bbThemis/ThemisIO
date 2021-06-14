@@ -38,12 +38,13 @@ extern ncx_slab_pool_t *sp_OpenDirEntryBuff;
 
 void RW_Open(IO_CMD_MSG *pRF_Op_Msg)
 {
-	int idx_qp, tag_magic;
+	int idx_qp, tag_magic, *pTag_End;
 	char *szBuff;
 	RW_FUNC_RETURN *pResult;
 	struct ibv_mr *mr_shm_global;
 	void *rem_buff;
 	unsigned int rkey;
+	size_t *pInode_and_FileSize;
 
 	rkey = pRF_Op_Msg->rkey;
 	rem_buff = pRF_Op_Msg->rem_buff;
@@ -52,14 +53,18 @@ void RW_Open(IO_CMD_MSG *pRF_Op_Msg)
 	mr_shm_global = Server_qp.mr_shm_global;
 	pResult = (RW_FUNC_RETURN *)( (char*)(Server_qp.p_shm_IO_Result) + pRF_Op_Msg->tid*IO_RESULT_BUFFER_SIZE);
 
-	pResult->nDataSize = sizeof(RW_FUNC_RETURN);
-	pResult->ret_value = my_openfile(pRF_Op_Msg->szName, pRF_Op_Msg->flag);
+	pResult->nDataSize = sizeof(RW_FUNC_RETURN) + 2*sizeof(size_t);	// add inode info and file size info!!!
+	pInode_and_FileSize = (size_t *)( (char*)pResult + sizeof(RW_FUNC_RETURN) - sizeof(int) );
+
+	pResult->ret_value = my_openfile(pInode_and_FileSize, pRF_Op_Msg->szName, pRF_Op_Msg->flag);
 	pResult->myerrno = errno;
 
 	pResult->Tag_Ini = (int)((long int)rem_buff & 0xFFFFFFFF);
-	pResult->Tag_End = (pResult->Tag_Ini) ^ tag_magic;
+//	pResult->Tag_End = (pResult->Tag_Ini) ^ tag_magic;
+	pTag_End = (int*)( (char*)pResult + pResult->nDataSize - sizeof(int) );
+	*pTag_End = (pResult->Tag_Ini) ^ tag_magic;
 
-	Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, sizeof(RW_FUNC_RETURN));
+	Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 }
 
 void RW_Close(IO_CMD_MSG *pRF_Op_Msg)

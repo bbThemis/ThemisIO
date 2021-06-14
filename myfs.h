@@ -130,7 +130,7 @@ typedef struct {
 void Init_Memory(void);
 int Query_Parent_Dir(char szDirName[], int *nLenParentDirName, int *nLenFileName);
 int my_mkdir(char szDirName[], int mode, int uid, int gid);
-int my_openfile(char szFileName[], int oflags, ...);
+int my_openfile(size_t DataReturn[], char szFileName[], int oflags, ...);
 int openfile_by_index(int idx_file, int bAppend);
 int my_close(int fd, META_DATA_ON_CLOSE *pMetaData_OnClose);
 //size_t my_read(int fd, void *buf, size_t count, off_t offset);

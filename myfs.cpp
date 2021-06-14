@@ -726,7 +726,7 @@ int my_mkdir(char szDirName[], int mode, int uid, int gid)
 	}
 }
 
-int my_openfile(char szFileName[], int oflags, ...)
+int my_openfile(size_t DataReturn[], char szFileName[], int oflags, ...)
 {
 	char szParentDir[512];
 	int file_idx, dir_idx, bFlagCreate=0, bFlagTrunc=0, bAppend=0, nLenParentDirName, nLenFileName, idx_server_ParentDir, bParentDirExisting, nEntryType;
@@ -847,6 +847,8 @@ int my_openfile(char szFileName[], int oflags, ...)
 				else	{
 					pMetaData[file_idx].idx_Parent_Dir = dir_idx;
 				}
+				DataReturn[0] = file_idx;	// for inode
+				DataReturn[1] = 0;			// size of the file
 
 //				printf("DBG> Rank = %d open(%s) idx_dir_entry = %d idx_server_ParentDir = %d\n", mpi_rank, pMetaData[file_idx].szFileName, pMetaData[file_idx].IdxEntry_in_Dir, idx_server_ParentDir);
 
@@ -863,6 +865,8 @@ int my_openfile(char szFileName[], int oflags, ...)
 				Truncate_File(file_idx, 0);
 			}
 			pthread_mutex_unlock(&(create_new_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+			DataReturn[0] = file_idx;	// for inode
+			DataReturn[1] = pMetaData[file_idx].st_size;			// size of the file
 			return openfile_by_index(file_idx, bAppend);
 		}
 	}
@@ -873,6 +877,8 @@ int my_openfile(char szFileName[], int oflags, ...)
 			return (-1);
 		}
 		else	{
+			DataReturn[0] = file_idx;	// for inode
+			DataReturn[1] = pMetaData[file_idx].st_size;			// size of the file
 			return openfile_by_index(file_idx, bAppend);
 		}
 	}
@@ -3009,6 +3015,7 @@ void Test_File_System_Local(void)
 {
 	int fd;
 	ncx_slab_stat_t ncx_stat;
+	size_t DataReturn[2];
 
 //	printf("DBG> Before my_mkdir(). sp_DirEntryName\n");
 //	ncx_slab_stat(sp_DirEntryName, &ncx_stat);
@@ -3035,7 +3042,7 @@ void Test_File_System_Local(void)
 	Readin_All_Dir();
 	Readin_All_File();
 
-	fd = my_openfile("/myfs/3/k.rnd", O_RDONLY);
+	fd = my_openfile(DataReturn, "/myfs/3/k.rnd", O_RDONLY);
 	my_close(fd, NULL);
 
 //	printf("DBG> After my_mkdir(). sp_DirEntryName\n");
@@ -3256,6 +3263,7 @@ static void Readin_All_File(void)
 	int *p_nFileLocalList=NULL, *displs, *recvcounts;
 	long int nBytesAllFiles=0, nBytesPacked_Sum=0, nBytesPacked, nBytes_to_Read;
 	int fd_org, k;
+	size_t DataReturn[2];
 
 	pBuff = (unsigned char *)malloc(MAX_FILE_SIZE);
 	if(!pBuff)	{
@@ -3313,7 +3321,7 @@ static void Readin_All_File(void)
 			}
 
 			sprintf(szNameOut, "%s/%s", szFSRoot, szFileName);
-			fd_out = my_openfile(szNameOut, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
+			fd_out = my_openfile(DataReturn, szNameOut, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
 			if(fd_out == -1)	{
 				if( ( (file_stat.st_mode & S_IFMT) == S_IFDIR) )	{	// Existing dir. Expected behavior.
 				}
