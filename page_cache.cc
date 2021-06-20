@@ -17,26 +17,6 @@
 PageCache::Implementation PageCache::system_implementation;
 
 /*
-  TODO: with VISIBLE_AFTER_WRITE, in each call to read() the
-  last-modified field is checked, and if it has changed, then all
-  cached pages for this file are dumped. With the current data
-  structure, that requires scanning everything in the 'entries'
-  vector. That could be improved. 
-   - Have each file retains a linked list of all its pages.
-     Space overhead: 2 links per entry.
-   - Keep a count of the current number of entries for each file,
-     so if the count is 0 no scan is required. This will only help
-     if the file currently has 0 cached pages.
-     Space overhead: 1 counter per file
-   - Timestamp or counter on each entry. Each time the file is read,
-     the last-modifield field will be checked. If it has changed,
-     save the new value or increment a counter. When a cache entry
-     is to be used, if its timestamp or counter is out of date then
-     entry will be ignored. 
-*/
-
-
-/*
   O_APPEND
 
   All writes occur at the end of the file, after which the file
@@ -121,7 +101,6 @@ PageCache::~PageCache() {
 */  
 int PageCache::open(const char *pathname, int flags, ...) {
   Lock lock(mtx);
-  int two_args = 1;
   mode_t mode = 0;
   int fd = -1;
   OpenFile *open_file = nullptr;
@@ -132,7 +111,6 @@ int PageCache::open(const char *pathname, int flags, ...) {
     va_start(arg, flags);
     mode = va_arg(arg, mode_t);
     va_end(arg);
-    two_args=0;
   }
 
   // Keep the canonical path for debugging
@@ -148,24 +126,14 @@ int PageCache::open(const char *pathname, int flags, ...) {
   }
   */
 
-  if (two_args) {
-    fd = impl.open(pathname, flags);
-  } else {
-    fd = impl.open(pathname, flags, mode);
-  }
+  // get the inode, length, and last_modified
+  struct stat statbuf = {0};
+  fd = impl.openAndStat(pathname, flags, mode, &statbuf);
 
   // fail
   if (fd == -1)
     return -1;
 
-  // get the inode and length
-  // TODO for efficiency, make a combined open/fstat function in bbThemis
-  struct stat statbuf = {0};
-  if (impl.fstat(fd, &statbuf)) {
-    fprintf(stderr, "Error calling stat() in PageCache::OpenFile::needLength "
-            " on %s: %s\n", canonical_path.c_str(), strerror(errno));
-  }
-  
   // see if this file has already been opened
   auto open_it = open_files_by_inode.find(statbuf.st_ino);
   if (open_it == open_files_by_inode.end()) {
@@ -190,7 +158,7 @@ int PageCache::open(const char *pathname, int flags, ...) {
     fprintf(stderr, "Error opening %s: got file descriptor %d, which is in use\n",
             pathname, fd);
   } else {
-    filedes = new FileDescriptor(open_file, fd, flags & O_ACCMODE);
+    filedes = new FileDescriptor(open_file, fd, flags);
     /* not implemented yet
     if (deferred_open) {
       // save the canonical path in case the current directory changes before we open the file
@@ -239,7 +207,7 @@ ssize_t PageCache::pread(int fd, void *buf, size_t count, off_t offset) {
 ssize_t PageCache::pread(FileDescriptor *filedes, void *buf, size_t count, off_t offset) {
   if (count == 0) return 0;
 
-  if (filedes->access == O_WRONLY) {
+  if (!filedes->isReadable()) {
     errno = EBADF;
     return -1;
   }
@@ -321,7 +289,7 @@ ssize_t PageCache::pwrite(int fd, const void *buf, size_t count, off_t offset) {
 ssize_t PageCache::pwrite(FileDescriptor *filedes, const void *buf, size_t count, off_t offset) {
   if (count == 0) return 0;
 
-  if (filedes->access == O_RDONLY) {
+  if (!filedes->isWritable()) {
     errno = EBADF;
     return -1;
   }
@@ -357,7 +325,7 @@ ssize_t PageCache::pwrite(FileDescriptor *filedes, const void *buf, size_t count
     // page, then write it directly.
     if (entry_id == -1) {
       if (copy_len < page_size
-          && filedes->access == O_WRONLY) {
+          && filedes->getAccess() == O_WRONLY) {
         long file_offset = offset + (buf_pos - (const char*)buf);
         ssize_t result = impl.pwrite(filedes->fd, buf_pos, copy_len, file_offset);
         if (result != copy_len) {
@@ -1056,6 +1024,16 @@ int PageCache::Implementation::open(const char *pathname, int flags, ...) {
   } else {
     return ::open(pathname, flags);
   }
+}
+
+
+int PageCache::Implementation::openAndStat
+(const char *pathname, int flags, mode_t mode, struct stat *statbuf) {
+  int fd = ::open(pathname, flags, mode);
+  if (fd != -1 && statbuf) {
+    ::fstat(fd, statbuf);
+  }
+  return fd;
 }
 
 

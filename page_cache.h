@@ -235,8 +235,8 @@ public:
   class Implementation {
   public:
     virtual int open(const char *pathname, int flags, ...);
-    // this would be nice, a combined open/fstat:
-    // virtual int openStat(struct stat *statbuf, const char *pathname, int flags, ...);
+    virtual int openAndStat(const char *pathname, int flags, mode_t mode,
+                            struct stat *statbuf);
     virtual int openat(int dirfd, const char *pathname, int flags, ...);
     virtual ssize_t write(int fd, const void *buf, size_t count);
     virtual ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset);
@@ -525,35 +525,49 @@ private:
     OpenFile * const open_file;
     long position;
     int fd;
-    int access; // O_RDONLY, O_RDWR, or O_WRONLY
+    int open_flags;  // the "flags" argument to open()
+    mode_t open_mode;  // the "mode" argument to open(), if O_CREAT
 
     /* if open is deferred (consistency = VISIBLE_AFTER_EXIT), then
        open_is_deferred will be true, and the arguments to open() will
        be saved in these fields. */
     bool open_is_deferred;
     int dirfd;  // >= 0 iff openat() was called
+    
     /* canonical version of the pathname argument to open, in case the
        current directory is changed before the file is opened. */
-    std::string path;  
-    int flags;
-    mode_t mode;
+    std::string path;
 
-    FileDescriptor(OpenFile *f, int fd_, int access_) : 
-      open_file(f), position(0), fd(fd_), access(access_),
-      open_is_deferred(false), dirfd(-1), mode(0) {}
+    FileDescriptor(OpenFile *f, int fd_, int open_flags_) : 
+      open_file(f), position(0), fd(fd_), open_flags(open_flags_),
+      open_mode(0), open_is_deferred(false), dirfd(-1) {}
 
-    void setDeferred(int dirfd_, const std::string &path_, int flags_,
+    void setDeferred(int dirfd_, const std::string &path_,
                      mode_t mode_) {
       open_is_deferred = true;
       dirfd = dirfd_;
-      flags = flags_;
       path = path_;
-      mode = mode_;
+      open_mode = mode_;
     }
 
     // use impl.fstat() to check st_mtim to check if my OpenFile has changed.
     // Flush the cache if it has.
     bool checkLastModified(Implementation &impl);
+
+    // return file access: O_RDONLY, O_RDWR, or O_WRONLY
+    int getAccess() {
+      return open_flags & O_ACCMODE;
+    }
+    
+    bool isReadable() {
+      int access = getAccess();
+      return access == O_RDONLY || access == O_RDWR;
+    }
+
+    bool isWritable() {
+      int access = getAccess();
+      return access == O_WRONLY || access == O_RDWR;
+    }
   };
 
   /* Each cache entry can be on one of three lists:
