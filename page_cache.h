@@ -225,6 +225,13 @@ public:
   // Used for testing, this returns true if the data at this offset
   // of the file is cached and the page is dirty.
   bool isPageDirty(int fd, long file_offset) const;
+
+
+  /* TODO: add diagnostics? */
+  int cacheHitCount();
+  int cacheMissCount();
+  
+  
   
   static std::string currentDir();
 
@@ -488,6 +495,7 @@ private:
     }
 
     void close(Implementation &impl) {
+      assert(clean_list.empty() && dirty_list.empty());
       if (read_fd != -1)
         impl.close(read_fd);
       if (write_fd != -1 && write_fd != read_fd)
@@ -818,21 +826,30 @@ private:
      another OpenFile. */
   void removeEntry(int entry_id, bool clear_ptrs = false);
 
+  /* Given a dirty entry, write it to disk, mark it clean, and move it
+     to the clean list. */
+  int writeDirtyEntry(int entry_id);
+
   /* If the active list is much longer than the inactive list, move
      some of the older entries from active to inactive. */
   void balanceEntryLists();
 
-  // write dirty entry to disk and mark it clean
-  int writeDirtyEntry(int entry_id);
+  /* Find every cache entry associated with this file.  If
+     dirty_only == true, just write every dirty entry.  Otherwise
+     write every dirty entry and remove all entries. */
+  void flushFilePages(OpenFile *open_file, bool dirty_only);
 
-  // Find every cache entry associated with this file.
-  // If dirty_only == true, just write every dirty entry.
-  // Otherwise write every dirty entry and remove all entries.
-  void flushFilePages(OpenFile *f, bool dirty_only);
+  /* When to delete an OpenFile?
+     if consistency <= ON_CLOSE: 
+       only when close() is called on the last FD
+     if consistency == ON_EXIT: 
+       when the last page (clean an dirty lists are empty) is moved to idle,
+       and all FD's are closed
 
-  // Write every dirty page
-  void flushAllDirty();
-
+     Returns true iff open_file was closed.
+  */
+  bool closeFileIfDone(OpenFile *open_file);
+  
   
   static const int DEFAULT_PAGE_SIZE = 1024 * 1024;
   static const int DEFAULT_MEM_SIZE = 200 * (DEFAULT_PAGE_SIZE + sizeof(Entry));

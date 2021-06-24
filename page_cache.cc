@@ -430,11 +430,12 @@ off_t PageCache::lseek(int fd, off_t offset, int whence) {
 
 
 /*
-  VISIBLE_AFTER_WRITE: no dirty pages are cached, so there's nothing to
-    do when the file is closed. It's to keep clean pages in the cache, because
-    we'll still check last-modified when we re-use them.
-  VISIBLE_AFTER_CLOSE: flush only dirty pages, so all my writes are visible.
-    Remove clean pages only if there are no other FileDescriptors using them.
+  VISIBLE_AFTER_WRITE: no dirty pages are cached, so it's not nececessary
+    to write anything, but remove all pages for this file if this is the
+    last FileDescriptor referencing the file.
+  VISIBLE_AFTER_CLOSE: flush all dirty pages, so all my writes are visible,
+    and remove all clean pages if this is the last FileDescriptor referencing 
+    the file.
   VISIBLE_AFTER_EXIT: flush nothing
 */
 int PageCache::close(int fd) {
@@ -447,14 +448,14 @@ int PageCache::close(int fd) {
   }
 
   OpenFile *open_file = filedes->open_file;
-
-  int other_refs = open_file->rmref();
-
-  if (consistency == VISIBLE_AFTER_WRITE) {
-    // do nothing
-  } else if (consistency == VISIBLE_AFTER_CLOSE) {
-    flushFilePages(open_file, other_refs > 0);
-  }
+  
+  /* If VISIBLE_AFTER_EXIT, don't flush anything.
+     Otherwise, flush all dirty pages. Yes, this may cause a false flush
+     if FD X did the writes and FD Y is the one closing.
+     Don't flush clean pages if there are still other file descriptors
+     that may use them. */
+  if (consistency <= VISIBLE_AFTER_CLOSE)
+    flushFilePages(open_file, open_file->getref() > 1);
 
   int result = 0;
 
@@ -466,12 +467,8 @@ int PageCache::close(int fd) {
   file_fds.erase(fd);
   delete filedes;
 
-  // if no other FileDescriptors reference this OpenFile, close it
-  if (!other_refs && consistency <= VISIBLE_AFTER_CLOSE) {
-    open_file->close(impl);
-    open_files_by_inode.erase(open_file->inode);
-    delete open_file;
-  }
+  open_file->rmref();
+  closeFileIfDone(open_file);
   
   return result;  
 }
@@ -479,6 +476,38 @@ int PageCache::close(int fd) {
 
 void PageCache::exit() {
   flushAll();
+
+  // close all file descriptors
+  auto f_it = file_fds.begin();
+  while (f_it != file_fds.end()) {
+
+    int fd = f_it->first;
+    FileDescriptor *filedes = f_it->second;
+    OpenFile *open_file = filedes->open_file;
+
+    // TODO handle deferred opens
+    assert(!filedes->open_is_deferred);
+    
+    if (!open_file->isFileDescriptorInUse(fd)) {
+      impl.close(fd);
+    }
+    delete filedes;
+
+    open_file->rmref();
+    closeFileIfDone(open_file);
+    f_it = file_fds.erase(f_it);
+  }
+  
+  // check for lingering files
+  auto o_it = open_files_by_inode.begin();
+  while (o_it != open_files_by_inode.end()) {
+    OpenFile *f = o_it->second;
+    printf("in PageCache::exit() lingering open_file \"%s\"\n",
+           f->name().c_str());
+    f->close(impl);
+    delete f;
+    o_it = open_files_by_inode.erase(o_it);
+  }
 }
 
 
@@ -629,15 +658,37 @@ int PageCache::newEntry(OpenFile *f, long page_id) {
 }
 
 
-void PageCache::balanceEntryLists() {
-  // keep the active list and inactive list at about the same length
+/* Writes an entry if it's dirty, disassociates with from its page,
+   and returns it to the idle list. If clear_ptrs is true, then
+   reset the list pointers for the per-file dirty/clean lists.  Only
+   do this if the entry is not going to immediately be reassigned to
+   another OpenFile. */
+void PageCache::removeEntry(int entry_id, bool clear_ptrs) {
+  Entry &e(entries[entry_id]);
+  if (e.isIdle()) return;
 
-  // if imbalanced, move one entry from active to inactive
-  if (active_list.size() > 2*(1+inactive_list.size())) {
-    moveEntryToList(active_list.front(), inactive_list);
+  if (e.isDirty()) {
+    writeDirtyEntry(entry_id);
+    assert(!e.isDirty());
   }
+  e.file->clean_list.removeDirect(entry_id, clear_ptrs);
+  
+  PageKey key(e.file->inode, e.page_id);
+  assert(entry_table[key] == entry_id);
+  entry_table.erase(key);
+
+  // if this was the last thing keeping e.file alive, delete it
+  closeFileIfDone(e.file);
+  
+  e.file = nullptr;
+  e.page_id = -1;
+  
+  moveEntryToList(entry_id, idle_list);
+  assert(!entries[entry_id].isDirty() && entries[entry_id].isIdle());
 }
 
+
+// write dirty entry to disk and mark it clean
 int PageCache::writeDirtyEntry(int entry_id) {
   Entry &e = entries[entry_id];
   int err = 0;
@@ -678,33 +729,19 @@ int PageCache::writeDirtyEntry(int entry_id) {
 }
 
 
-/* Writes an entry if it's dirty, disassociates with from its page,
-   and returns it to the idle list. If clear_ptrs is true, then
-   reset the list pointers for the per-file dirty/clean lists.  Only
-   do this if the entry is not going to immediately be reassigned to
-   another OpenFile. */
-void PageCache::removeEntry(int entry_id, bool clear_ptrs) {
-  Entry &e(entries[entry_id]);
-  if (e.isIdle()) return;
+void PageCache::balanceEntryLists() {
+  // keep the active list and inactive list at about the same length
 
-  if (e.isDirty()) {
-    writeDirtyEntry(entry_id);
-    assert(!e.isDirty());
+  // if imbalanced, move one entry from active to inactive
+  if (active_list.size() > 2*(1+inactive_list.size())) {
+    moveEntryToList(active_list.front(), inactive_list);
   }
-  e.file->clean_list.removeDirect(entry_id, clear_ptrs);
-  
-  PageKey key(e.file->inode, e.page_id);
-  assert(entry_table[key] == entry_id);
-  entry_table.erase(key);
-  
-  e.file = nullptr;
-  e.page_id = -1;
-  
-  moveEntryToList(entry_id, idle_list);
-  assert(!entries[entry_id].isDirty() && entries[entry_id].isIdle());
 }
 
 
+/* Find every cache entry associated with this file.  If dirty_only ==
+   true, just write every dirty entry.  Otherwise write every dirty
+   entry and remove all entries. */
 void PageCache::flushFilePages(OpenFile *f, bool dirty_only) {
   // remove pages on the dirty list
   int entry_id = f->dirty_list.front();
@@ -724,8 +761,38 @@ void PageCache::flushFilePages(OpenFile *f, bool dirty_only) {
       entry_id = next_id;
     }
   }
-  
 }
+
+
+bool PageCache::closeFileIfDone(OpenFile *open_file) {
+
+  /* With VISIBLE_AFTER_EXIT, do nothing if there are still cached pages
+     for this file, or if there are any open file descriptors.
+
+     With VISIBLE_AFTER_WRITE or VISIBLE_AFTER_CLOSE, flush all cached
+     pages if the file descriptor reference count is zero. */
+  if (consistency == VISIBLE_AFTER_EXIT) {
+    if (!open_file->clean_list.empty() || !open_file->dirty_list.empty()) {
+      return false;
+    }
+    if (open_file->getref() > 0) return false;
+  } else {
+    // don't close it if it has open file descriptors using it
+    if (open_file->getref() > 0) return false;
+
+    // otherwise flush all pages
+    flushFilePages(open_file, false);
+  }
+
+  assert(open_file->getref() == 0);
+  assert(open_file->clean_list.empty() && open_file->dirty_list.empty());
+    
+  open_file->close(impl);
+  open_files_by_inode.erase(open_file->inode);
+  delete open_file;
+
+  return true;
+}  
 
 
 int PageCache::flushWriteCache() {
@@ -742,8 +809,6 @@ int PageCache::flushWriteCache() {
 
 
 int PageCache::flushAll() {
-  int any_err = 0;
-
   // flush dirty pages and move everything to the idle list
   for (size_t i=0; i < entries.size(); i++)
     removeEntry(i);
@@ -752,47 +817,7 @@ int PageCache::flushAll() {
   assert(inactive_list.empty());
   assert(active_list.empty());
 
-  auto f_it = file_fds.begin();
-  while (f_it != file_fds.end()) {
-
-    int fd = f_it->first;
-    FileDescriptor *filedes = f_it->second;
-    OpenFile *open_file = filedes->open_file;
-
-    // TODO handle deferred opens
-    assert(!filedes->open_is_deferred);
-    
-    if (!open_file->isFileDescriptorInUse(fd)) {
-      impl.close(fd);
-    }
-    delete filedes;
-
-    int refcount = open_file->rmref();
-    if (refcount == 0) {
-      // all pages should have been flushed
-      assert(open_file->clean_list.empty());
-      assert(open_file->dirty_list.empty());
-
-      open_file->close(impl);
-      open_files_by_inode.erase(open_file->inode);
-      delete open_file;
-    }
-    f_it = file_fds.erase(f_it);
-  }
-
-  auto o_it = open_files_by_inode.begin();
-  while (o_it != open_files_by_inode.end()) {
-    // ino_t inode = o_it->first;
-    OpenFile *f = o_it->second;
-    printf("in PageCache::exit() lingering open_file \"%s\"\n",
-           f->name().c_str());
-    f->close(impl);
-    delete f;
-    o_it = open_files_by_inode.erase(o_it);
-    any_err = 1;
-  }
-  
-  return any_err;
+  return 0;
 }
 
 
@@ -916,7 +941,6 @@ bool PageCache::isPageDirty(int fd, long file_offset) const {
   if (it == entry_table.end()) return false;
   return entries[it->second].isDirty();
 }
-
 
 bool PageCache::OpenFile::fsck(std::vector<Entry> &entries) {
   int len = 0, id = clean_list.front();
