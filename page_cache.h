@@ -106,10 +106,9 @@
     Uniquely identified by the inode of the file.
     Lookup table: open_files_by_inode
 
-  FileDescriptor : one instance of an open file. Uniquely identified
-    by an integer file descriptor returned by open(). Multiple FileDescriptors
-    can reference one OpenFile.
-    Lookup table: file_fds
+  Handle : one instance of an open file. Uniquely identified by an
+    integer file descriptor returned by open(). Multiple Handles can
+    reference one OpenFile.  Lookup table: fd_to_handle
 
   Entry : a slot in which one page of data can be cached. The number of
     available Entry objects is set when the maximum memory usage is set.
@@ -259,28 +258,7 @@ public:
   
 private:
 
-  struct ListPtrs {
-    int prev, next;
-    ListPtrs() {reset();}
-    void reset() {
-      prev = next = -1;
-    }
-  };
-
   class Entry;
-
-  // reference Entry.global_list.{prev,next}
-  struct ListHandlesGlobal {
-    int& prev(Entry &e) {return e.global_list.prev;}
-    int& next(Entry &e) {return e.global_list.next;}
-  };
-
-  // reference Entry.file_list.{prev,next}
-  struct ListHandlesFile {
-    int& prev(Entry &e) {return e.file_list.prev;}
-    int& next(Entry &e) {return e.file_list.next;}
-  };
-
 
   /* Using a template to support multiple independent sets of
      prev/next pointers in each object, so each cache entry can
@@ -394,6 +372,29 @@ private:
     }
   };
 
+  // encapsulate linked list prev and next pointers
+  struct ListPtrs {
+    int prev, next;
+    ListPtrs() {reset();}
+    void reset() {
+      prev = next = -1;
+    }
+  };
+
+  /* For use with MultiList, given an Entry e this accesses
+     e.global_list.{prev,next} */
+  struct ListHandlesGlobal {
+    int& prev(Entry &e) {return e.global_list.prev;}
+    int& next(Entry &e) {return e.global_list.next;}
+  };
+
+  /* For use with MultiList, given an Entry e this accesses
+     e.file_list.{prev,next} */
+  struct ListHandlesFile {
+    int& prev(Entry &e) {return e.file_list.prev;}
+    int& next(Entry &e) {return e.file_list.next;}
+  };
+
   // doubly-linked list of Entry objects using Entry::global_list
   using GlobalListBase = MultiList<ListHandlesGlobal>;
   
@@ -407,10 +408,10 @@ private:
      have been opened via deferred opens, so another call to open can
      use the same data.
 
-     Multiple file descriptors can refer to the same file. To keep
-     cached data consistent across multiple file descriptors, all
-     those file descriptors will reference one OpenFile object if
-     they're all referring to the same file.
+     Multiple Handles can refer to the same file. To keep cached data
+     consistent across multiple Handles, all those Handles will
+     reference one OpenFile object if they're all referring to the
+     same file.
   */
   class OpenFile {
   public:
@@ -420,10 +421,10 @@ private:
     // but this is handy for debugging.
     const std::string canonical_path;
 
-    /* Used to share the length across all file descriptors, because
-       multiple file descriptors may have it opened for O_APPEND.
-       When a file is opened, this will be initialized to -1, and will
-       only be set if the length is needed or discovered. */
+    /* Used to share the length across all Handles, because multiple
+       Handles may have it opened for O_APPEND.  When a file is
+       opened, fstat() will be called right away to get the initial
+       value. */
     long length;
 
     /* Time in nanoseconds file was last modified.
@@ -465,7 +466,7 @@ private:
     // if length still isn't set, use fstat() to set it now
     long needLength(Implementation &impl);
 
-    /* Keep a reference count of each FileDescriptor referencing this,
+    /* Keep a reference count of each Handle referencing this,
        so it can be removed from open_files_by_name and deallocated
        when they're all closed.
        flags: the 'flags' argument from a call to open(). */
@@ -520,15 +521,14 @@ private:
 
 
   private:
-    // Number of file descriptors that have the file open.
-    // Delete this entry when the value drops to 0.
+    // Number of Handles referencing this file
     int refcount;
   };
 
   
-  /* This encapsulates data associated with the file descriptor.
-     Multiple FileDescriptors can point to the same OpenFile. */
-  class FileDescriptor {
+  /* This encapsulates data associated with an open file descriptor.
+     Multiple Handles can point to the same OpenFile. */
+  class Handle {
   public:
     OpenFile * const open_file;
     long position;
@@ -546,7 +546,7 @@ private:
        current directory is changed before the file is opened. */
     std::string path;
 
-    FileDescriptor(OpenFile *f, int fd_, int open_flags_) : 
+    Handle(OpenFile *f, int fd_, int open_flags_) : 
       open_file(f), position(0), fd(fd_), open_flags(open_flags_),
       open_mode(0), open_is_deferred(false), dirfd(-1) {}
 
@@ -648,7 +648,7 @@ private:
   };
 
 
-  // add a fsck function for GlobalLists
+  // This adds a fsck function for GlobalLists
   class GlobalList : public GlobalListBase {
   public:
     GlobalList(std::vector<Entry> &entries, int list_no)
@@ -690,14 +690,14 @@ private:
 
 
   /* Given a file descriptor returned by open, return the associated
-     FileDescriptor*. This value comes from the user application, so
+     Handle*. This value comes from the user application, so
      fd may be invalid. */
-  FileDescriptor *getFileDescriptor(int fd) const;
+  Handle *getHandle(int fd) const;
 
   // internal implementations, after mapping an integer fd to the
-  // FileDescriptor object
-  ssize_t pread(FileDescriptor *filedes, void *buf, size_t count, off_t offset);
-  ssize_t pwrite(FileDescriptor *filedes, const void *buf, size_t count, off_t offset);
+  // Handle object
+  ssize_t pread(Handle *filedes, void *buf, size_t count, off_t offset);
+  ssize_t pwrite(Handle *filedes, const void *buf, size_t count, off_t offset);
 
 
   void lock() {
@@ -877,7 +877,7 @@ private:
   std::unordered_map<ino_t,OpenFile*> open_files_by_inode;
 
   // lookup by file descriptor
-  std::unordered_map<int,FileDescriptor*> file_fds;
+  std::unordered_map<int,Handle*> fd_to_handle;
 
   // lookup entries by OpenFile and page_id
   using EntryTableType = std::unordered_map<PageKey,int,PageKeyHash>;

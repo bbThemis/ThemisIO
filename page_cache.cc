@@ -95,8 +95,7 @@ PageCache::~PageCache() {
     last-modified when we re-use them. So, do nothing.
   VISIBLE_AFTER_CLOSE: flush all pages associated with this file, to pick
     up changes made by another process. There may be clean or dirty pages
-    in the cache because the file may be open under a different file
-    descriptor.
+    in the cache because the file may be open under a different Handle.
   VISIBLE_AFTER_EXIT: flush nothing
 */  
 int PageCache::open(const char *pathname, int flags, ...) {
@@ -104,7 +103,7 @@ int PageCache::open(const char *pathname, int flags, ...) {
   mode_t mode = 0;
   int fd = -1;
   OpenFile *open_file = nullptr;
-  FileDescriptor *filedes = nullptr;
+  Handle *handle = nullptr;
   
   if (flags & O_CREAT)	{
     va_list arg;
@@ -153,19 +152,19 @@ int PageCache::open(const char *pathname, int flags, ...) {
   if (consistency == VISIBLE_AFTER_CLOSE)
     flushFilePages(open_file, false);
   
-  auto fd_iter = file_fds.find(fd);
-  if (fd_iter != file_fds.end()) {
+  auto fd_iter = fd_to_handle.find(fd);
+  if (fd_iter != fd_to_handle.end()) {
     fprintf(stderr, "Error opening %s: got file descriptor %d, which is in use\n",
             pathname, fd);
   } else {
-    filedes = new FileDescriptor(open_file, fd, flags);
+    handle = new Handle(open_file, fd, flags);
     /* not implemented yet
     if (deferred_open) {
       // save the canonical path in case the current directory changes before we open the file
-      filedes->setDeferred(-1, canonical_path, flags, mode);
+      handle->setDeferred(-1, canonical_path, flags, mode);
       }
     */
-    file_fds[fd] = filedes;
+    fd_to_handle[fd] = handle;
   }
 
   return fd;
@@ -177,12 +176,12 @@ int PageCache::creat(const char *pathname, mode_t mode) {
 }
 
 
-PageCache::FileDescriptor* PageCache::getFileDescriptor(int fd) const {
-  auto file_fds_it = file_fds.find(fd);
-  if (file_fds_it == file_fds.end()) {
+PageCache::Handle* PageCache::getHandle(int fd) const {
+  auto it = fd_to_handle.find(fd);
+  if (it == fd_to_handle.end()) {
     return nullptr;
   } else {
-    return file_fds_it->second;
+    return it->second;
   }
 }
   
@@ -190,7 +189,7 @@ PageCache::FileDescriptor* PageCache::getFileDescriptor(int fd) const {
 
 ssize_t PageCache::read(int fd, void *buf, size_t count) {
   Lock lock(mtx);
-  FileDescriptor *f = getFileDescriptor(fd);
+  Handle *f = getHandle(fd);
   if (!f) {errno = EBADF; return -1;};
   return pread(f, buf, count, f->position);
 }
@@ -198,27 +197,27 @@ ssize_t PageCache::read(int fd, void *buf, size_t count) {
 
 ssize_t PageCache::pread(int fd, void *buf, size_t count, off_t offset) {
   Lock lock(mtx);
-  FileDescriptor *f = getFileDescriptor(fd);
+  Handle *f = getHandle(fd);
   if (!f) {errno = EBADF; return -1;};
   return pread(f, buf, count, offset);
 }
 
 
-ssize_t PageCache::pread(FileDescriptor *filedes, void *buf, size_t count, off_t offset) {
+ssize_t PageCache::pread(Handle *handle, void *buf, size_t count, off_t offset) {
   if (count == 0) return 0;
 
-  if (!filedes->isReadable()) {
+  if (!handle->isReadable()) {
     errno = EBADF;
     return -1;
   }
   
-  OpenFile *open_file = filedes->open_file;
+  OpenFile *open_file = handle->open_file;
   
   // with VISIBLE_AFTER_WRITE, use fstat() before every read() to check
   // if another process has modified the file. If so, flush all cached pages,
   // update length, and update last_mod_nanos.
   if (consistency == VISIBLE_AFTER_WRITE) {
-    if (filedes->checkLastModified(impl)) {
+    if (handle->checkLastModified(impl)) {
       flushFilePages(open_file, false);
     }
   }
@@ -262,7 +261,7 @@ ssize_t PageCache::pread(FileDescriptor *filedes, void *buf, size_t count, off_t
 
   // return the number of bytes written to buf
   long bytes_read = buf_pos - (char*)buf;
-  filedes->position += bytes_read;
+  handle->position += bytes_read;
   return bytes_read;
 }
 
@@ -272,7 +271,7 @@ ssize_t PageCache::pread(FileDescriptor *filedes, void *buf, size_t count, off_t
    this processes write can be served by the cache. */
 ssize_t PageCache::write(int fd, const void *buf, size_t count) {
   Lock lock(mtx);
-  FileDescriptor *f = getFileDescriptor(fd);
+  Handle *f = getHandle(fd);
   if (!f) {errno = EBADF; return -1;};
   return pwrite(f, buf, count, f->position);
 }
@@ -280,30 +279,30 @@ ssize_t PageCache::write(int fd, const void *buf, size_t count) {
   
 ssize_t PageCache::pwrite(int fd, const void *buf, size_t count, off_t offset) {
   Lock lock(mtx);
-  FileDescriptor *f = getFileDescriptor(fd);
+  Handle *f = getHandle(fd);
   if (!f) {errno = EBADF; return -1;};
   return pwrite(f, buf, count, offset);
 }
 
 
-ssize_t PageCache::pwrite(FileDescriptor *filedes, const void *buf, size_t count, off_t offset) {
+ssize_t PageCache::pwrite(Handle *handle, const void *buf, size_t count, off_t offset) {
   if (count == 0) return 0;
 
-  if (!filedes->isWritable()) {
+  if (!handle->isWritable()) {
     errno = EBADF;
     return -1;
   }
 
-  OpenFile *open_file = filedes->open_file;
+  OpenFile *open_file = handle->open_file;
 
   // don't cache writes, but do update file position
   // TODO: handle the case where these pages are in the read cache.
   // After I update a page, a subsequent read on this process should
   // see that update in the cached page. Either flush the page or update it.
   if (consistency == VISIBLE_AFTER_WRITE) {
-    ssize_t result = impl.pwrite(filedes->fd, buf, count, offset);
+    ssize_t result = impl.pwrite(handle->fd, buf, count, offset);
     if (result != -1) {
-      filedes->position = offset + result;
+      handle->position = offset + result;
       // Update open_file->length?  No, because we should assume that
       // any other process may change it, so we shouldn't cache a value.
     }
@@ -325,9 +324,9 @@ ssize_t PageCache::pwrite(FileDescriptor *filedes, const void *buf, size_t count
     // page, then write it directly.
     if (entry_id == -1) {
       if (copy_len < page_size
-          && filedes->getAccess() == O_WRONLY) {
+          && handle->getAccess() == O_WRONLY) {
         long file_offset = offset + (buf_pos - (const char*)buf);
-        ssize_t result = impl.pwrite(filedes->fd, buf_pos, copy_len, file_offset);
+        ssize_t result = impl.pwrite(handle->fd, buf_pos, copy_len, file_offset);
         if (result != copy_len) {
           fprintf(stderr, "PageCache::pwrite error ::pwrite(%s, %ld, %ld) "
                   "returned %ld\n", open_file->name().c_str(),
@@ -377,9 +376,9 @@ ssize_t PageCache::pwrite(FileDescriptor *filedes, const void *buf, size_t count
 
   // return the number of bytes written to buf
   long bytes_written = buf_pos - (const char*)buf;
-  filedes->position += bytes_written;
-  if (filedes->position > open_file->length)
-    open_file->length = filedes->position;
+  handle->position += bytes_written;
+  if (handle->position > open_file->length)
+    open_file->length = handle->position;
 
   return bytes_written;
 }
@@ -394,8 +393,8 @@ off_t PageCache::lseek(int fd, off_t offset, int whence) {
   off_t new_position;
   Lock lock(mtx);
 
-  FileDescriptor *filedes = getFileDescriptor(fd);
-  if (!filedes) {
+  Handle *handle = getHandle(fd);
+  if (!handle) {
     errno = EBADF;
     return -1;
   }
@@ -405,12 +404,12 @@ off_t PageCache::lseek(int fd, off_t offset, int whence) {
   }
 
   else if (whence == SEEK_CUR) {
-    new_position = filedes->position + offset;
+    new_position = handle->position + offset;
   }
 
   else if (whence == SEEK_END) {
-    filedes->open_file->needLength(impl);
-    new_position = filedes->open_file->length + offset;
+    handle->open_file->needLength(impl);
+    new_position = handle->open_file->length + offset;
   }
 
   else {
@@ -423,8 +422,8 @@ off_t PageCache::lseek(int fd, off_t offset, int whence) {
     errno = EINVAL;
     return -1;
   } else {
-    filedes->position = new_position;
-    return filedes->position;
+    handle->position = new_position;
+    return handle->position;
   }
 }
 
@@ -432,27 +431,27 @@ off_t PageCache::lseek(int fd, off_t offset, int whence) {
 /*
   VISIBLE_AFTER_WRITE: no dirty pages are cached, so it's not nececessary
     to write anything, but remove all pages for this file if this is the
-    last FileDescriptor referencing the file.
+    last Handle referencing the file.
   VISIBLE_AFTER_CLOSE: flush all dirty pages, so all my writes are visible,
-    and remove all clean pages if this is the last FileDescriptor referencing 
+    and remove all clean pages if this is the last Handle referencing 
     the file.
   VISIBLE_AFTER_EXIT: flush nothing
 */
 int PageCache::close(int fd) {
   Lock lock(mtx);
   
-  FileDescriptor *filedes = getFileDescriptor(fd);
-  if (!filedes) {
+  Handle *handle = getHandle(fd);
+  if (!handle) {
     errno = EBADF;
     return -1;
   }
 
-  OpenFile *open_file = filedes->open_file;
+  OpenFile *open_file = handle->open_file;
   
   /* If VISIBLE_AFTER_EXIT, don't flush anything.
      Otherwise, flush all dirty pages. Yes, this may cause a false flush
-     if FD X did the writes and FD Y is the one closing.
-     Don't flush clean pages if there are still other file descriptors
+     if Handle X did the writes and Handle Y is the one closing.
+     Don't flush clean pages if there are still other Handles
      that may use them. */
   if (consistency <= VISIBLE_AFTER_CLOSE)
     flushFilePages(open_file, open_file->getref() > 1);
@@ -464,8 +463,8 @@ int PageCache::close(int fd) {
     result = impl.close(fd);
   }
 
-  file_fds.erase(fd);
-  delete filedes;
+  fd_to_handle.erase(fd);
+  delete handle;
 
   open_file->rmref();
   closeFileIfDone(open_file);
@@ -477,25 +476,25 @@ int PageCache::close(int fd) {
 void PageCache::exit() {
   flushAll();
 
-  // close all file descriptors
-  auto f_it = file_fds.begin();
-  while (f_it != file_fds.end()) {
+  // close all Handles
+  auto f_it = fd_to_handle.begin();
+  while (f_it != fd_to_handle.end()) {
 
     int fd = f_it->first;
-    FileDescriptor *filedes = f_it->second;
-    OpenFile *open_file = filedes->open_file;
+    Handle *handle = f_it->second;
+    OpenFile *open_file = handle->open_file;
 
     // TODO handle deferred opens
-    assert(!filedes->open_is_deferred);
+    assert(!handle->open_is_deferred);
     
     if (!open_file->isFileDescriptorInUse(fd)) {
       impl.close(fd);
     }
-    delete filedes;
+    delete handle;
 
     open_file->rmref();
     closeFileIfDone(open_file);
-    f_it = file_fds.erase(f_it);
+    f_it = fd_to_handle.erase(f_it);
   }
   
   // check for lingering files
@@ -767,17 +766,17 @@ void PageCache::flushFilePages(OpenFile *f, bool dirty_only) {
 bool PageCache::closeFileIfDone(OpenFile *open_file) {
 
   /* With VISIBLE_AFTER_EXIT, do nothing if there are still cached pages
-     for this file, or if there are any open file descriptors.
+     for this file, or if there are any open Handles.
 
      With VISIBLE_AFTER_WRITE or VISIBLE_AFTER_CLOSE, flush all cached
-     pages if the file descriptor reference count is zero. */
+     pages if the Handle reference count is zero. */
   if (consistency == VISIBLE_AFTER_EXIT) {
     if (!open_file->clean_list.empty() || !open_file->dirty_list.empty()) {
       return false;
     }
     if (open_file->getref() > 0) return false;
   } else {
-    // don't close it if it has open file descriptors using it
+    // don't close it if it has open Handles using it
     if (open_file->getref() > 0) return false;
 
     // otherwise flush all pages
@@ -836,8 +835,8 @@ bool PageCache::fsck() {
     assert(f->fsck(entries));
   }
 
-  // check file_fds
-  for (auto it = file_fds.begin(); it != file_fds.end(); it++) {
+  // check fd_to_handle
+  for (auto it = fd_to_handle.begin(); it != fd_to_handle.end(); it++) {
     assert(it->first == it->second->fd);
   }
 
@@ -923,7 +922,7 @@ bool PageCache::GlobalList::fsck(int list_id, std::vector<Entry> &entries) {
 // of the file is cached.
 bool PageCache::isCached(int fd, long file_offset) const {
   Lock lock(mtx);
-  FileDescriptor *f = getFileDescriptor(fd);
+  Handle *f = getHandle(fd);
   if (!f) return false;
   PageKey key(f->open_file->inode, file_offset / page_size);
   return entry_table.find(key) != entry_table.end();
@@ -934,7 +933,7 @@ bool PageCache::isCached(int fd, long file_offset) const {
 // of the file is cached and the page is dirty.
 bool PageCache::isPageDirty(int fd, long file_offset) const {
   Lock lock(mtx);
-  FileDescriptor *f = getFileDescriptor(fd);
+  Handle *f = getHandle(fd);
   if (!f) return false;
   PageKey key(f->open_file->inode, file_offset / page_size);
   auto it = entry_table.find(key);
@@ -979,10 +978,10 @@ long PageCache::OpenFile::needLength(Implementation &impl) {
 
 
 #if 0
-long PageCache::FileDescriptor::statLength() {
+long PageCache::Handle::statLength() {
   struct stat s;
   if (impl.fstat(fd, &s)) {
-    fprintf(stderr, "Error calling stat in PageCache::FileDescriptor::statLength(): %s\n",
+    fprintf(stderr, "Error calling stat in PageCache::Handle::statLength(): %s\n",
             strerror(errno));
     return 0;
   } else {
@@ -991,10 +990,10 @@ long PageCache::FileDescriptor::statLength() {
 }
 
 
-long PageCache::FileDescriptor::statLastModifiedNanos() {
+long PageCache::Handle::statLastModifiedNanos() {
   struct stat s;
   if (impl.fstat(fd, &s)) {
-    fprintf(stderr, "Error calling stat in PageCache::FileDescriptor::statLength(): %s\n",
+    fprintf(stderr, "Error calling stat in PageCache::Handle::statLength(): %s\n",
             strerror(errno));
     return 0;
   } else {
@@ -1011,10 +1010,10 @@ long PageCache::FileDescriptor::statLastModifiedNanos() {
    FYI, st_mtim is for the last time the contents of a file were
    modified.  st_ctim is for the last time the permissions/metadata
    were modified. */
-bool PageCache::FileDescriptor::checkLastModified(Implementation &impl) {
+bool PageCache::Handle::checkLastModified(Implementation &impl) {
   struct stat statbuf;
   if (impl.fstat(fd, &statbuf)) {
-    fprintf(stderr, "Error calling fstat() in PageCache::FileDescriptor::checkLastModified(): %s\n", strerror(errno));
+    fprintf(stderr, "Error calling fstat() in PageCache::Handle::checkLastModified(): %s\n", strerror(errno));
     return false;
   }
   
