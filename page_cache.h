@@ -102,13 +102,14 @@
 
   -- Structure --
 
-  OpenFile : a file that is currently being managed by the cache.
-    Uniquely identified by the inode of the file.
-    Lookup table: open_files_by_inode
+  File : a file that is currently being managed by the cache.
+    Uniquely identified by the inode of the file. Maintains two lists
+    of cached pages: clean and dirty (either or both may be empty).
+    Lookup table: inode_to_file
 
   Handle : one instance of an open file. Uniquely identified by an
     integer file descriptor returned by open(). Multiple Handles can
-    reference one OpenFile.  Lookup table: fd_to_handle
+    reference one File.  Lookup table: fd_to_handle
 
   Entry : a slot in which one page of data can be cached. The number of
     available Entry objects is set when the maximum memory usage is set.
@@ -263,7 +264,7 @@ private:
   /* Using a template to support multiple independent sets of
      prev/next pointers in each object, so each cache entry can
      be in multiple lists (global idle/inactive/active lists) and
-     (OpenFile clean/dirty lists). */
+     (File clean/dirty lists). */
   template <class ListHandles>
   class MultiList {
   public:
@@ -402,18 +403,18 @@ private:
   using FileList = MultiList<ListHandlesFile>;
 
   
-  /* As part of supporting deferred opens, we need to handle the case
+  /* Encapsulate one file, where a file is uniquely identified by
+     inode number. If a file is opened multiple times, each will yield
+     a different file descriptor and Handle, but all with reference
+     the same File object, and their caches pages will be managed together.
+
+     As part of supporting deferred opens, we need to handle the case
      where a process opens a file for writing and opens it a second
      time for reading. May need to keep a table of name of files that
      have been opened via deferred opens, so another call to open can
      use the same data.
-
-     Multiple Handles can refer to the same file. To keep cached data
-     consistent across multiple Handles, all those Handles will
-     reference one OpenFile object if they're all referring to the
-     same file.
   */
-  class OpenFile {
+  class File {
   public:
     const ino_t inode;
     
@@ -449,8 +450,8 @@ private:
     // all cached pages for this file are either on clean_list or dirty_list
     PageCache::FileList clean_list, dirty_list;
 
-    OpenFile(ino_t inode_, const std::string &canonical_path_,
-             std::vector<Entry> &entries) :
+    File(ino_t inode_, const std::string &canonical_path_,
+         std::vector<Entry> &entries) :
       inode(inode_), canonical_path(canonical_path_), length(-1),
       last_mod_nanos(0),
       read_fd(-1), write_fd(-1),
@@ -527,10 +528,10 @@ private:
 
   
   /* This encapsulates data associated with an open file descriptor.
-     Multiple Handles can point to the same OpenFile. */
+     Multiple Handles can point to the same File. */
   class Handle {
   public:
-    OpenFile * const open_file;
+    File * const file;
     long position;
     int fd;
     int open_flags;  // the "flags" argument to open()
@@ -546,8 +547,8 @@ private:
        current directory is changed before the file is opened. */
     std::string path;
 
-    Handle(OpenFile *f, int fd_, int open_flags_) : 
-      open_file(f), position(0), fd(fd_), open_flags(open_flags_),
+    Handle(File *f, int fd_, int open_flags_) : 
+      file(f), position(0), fd(fd_), open_flags(open_flags_),
       open_mode(0), open_is_deferred(false), dirfd(-1) {}
 
     void setDeferred(int dirfd_, const std::string &path_,
@@ -558,7 +559,7 @@ private:
       open_mode = mode_;
     }
 
-    // use impl.fstat() to check st_mtim to check if my OpenFile has changed.
+    // use impl.fstat() to check st_mtim to check if my File has changed.
     // Flush the cache if it has.
     bool checkLastModified(Implementation &impl);
 
@@ -594,7 +595,7 @@ private:
     Entry() : file(nullptr), page_id(-1), flags(0) {}
               
     
-    OpenFile *file;
+    File *file;
 
     // file offset = page_size * page_id + page_offset
     long page_id;
@@ -603,7 +604,7 @@ private:
          PageCache.idle_list, PageCache.inactive_list, or PageCache.active_list.
          inactive, or active lists
        file_list: prev/next indices for this entry on the clean or
-         dirty lists on the OpenFile object */
+         dirty lists on the File object */
     ListPtrs global_list, file_list;
 
     // bits 0,1: current list 00=idle, 01=inactive, 10=active
@@ -612,7 +613,7 @@ private:
 
     /* Assign file and page_id, and make sure page is marked clean.
        Don't change the listNo(). */
-    void init(OpenFile *file_, long page_id_) {
+    void init(File *file_, long page_id_) {
       file = file_;
       page_id = page_id_;
       setClean();
@@ -800,7 +801,7 @@ private:
 
   /* Look up a cache entry for a given page_id. Returns -1 if
      this page is not currently cached. */
-  int getCachedPageEntry(OpenFile *f, long page_id);
+  int getCachedPageEntry(File *f, long page_id);
 
   /* Look up a cache entry for a given page_id.
      If it's already cached, return the entry_id.
@@ -812,18 +813,18 @@ private:
 
      If known_new is true, then caller has already confirmed that the
      page does not exist, so don't bother looking. */
-  int getPageEntry(OpenFile *f, long page_id, bool fill,
+  int getPageEntry(File *f, long page_id, bool fill,
                    bool known_new = false);
 
   /* Get an unused entry, either by taking one off the idle list or by
      evicting someone else. */
-  int newEntry(OpenFile *f, long page_id);
+  int newEntry(File *f, long page_id);
 
   /* Writes an entry if it's dirty, disassociates it from its page,
      and returns it to the idle list. If clear_ptrs is true, then
      reset the list pointers for the per-file dirty/clean lists.  Only
      do this if the entry is not going to immediately be reassigned to
-     another OpenFile. */
+     another File. */
   void removeEntry(int entry_id, bool clear_ptrs = false);
 
   /* Given a dirty entry, write it to disk, mark it clean, and move it
@@ -837,18 +838,18 @@ private:
   /* Find every cache entry associated with this file.  If
      dirty_only == true, just write every dirty entry.  Otherwise
      write every dirty entry and remove all entries. */
-  void flushFilePages(OpenFile *open_file, bool dirty_only);
+  void flushFilePages(File *file, bool dirty_only);
 
-  /* When to delete an OpenFile?
+  /* When to delete an File?
      if consistency <= ON_CLOSE: 
        only when close() is called on the last FD
      if consistency == ON_EXIT: 
        when the last page (clean an dirty lists are empty) is moved to idle,
        and all FD's are closed
 
-     Returns true iff open_file was closed.
+     Returns true iff file was closed.
   */
-  bool closeFileIfDone(OpenFile *open_file);
+  bool closeFileIfDone(File *file);
   
   
   static const int DEFAULT_PAGE_SIZE = 1024 * 1024;
@@ -874,12 +875,12 @@ private:
   int page_bits;
 
   // lookup by inode
-  std::unordered_map<ino_t,OpenFile*> open_files_by_inode;
+  std::unordered_map<ino_t,File*> inode_to_file;
 
   // lookup by file descriptor
   std::unordered_map<int,Handle*> fd_to_handle;
 
-  // lookup entries by OpenFile and page_id
+  // lookup entries by File and page_id
   using EntryTableType = std::unordered_map<PageKey,int,PageKeyHash>;
   EntryTableType entry_table;
 
