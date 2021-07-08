@@ -13,7 +13,7 @@
 
 /* Static instance of Implementation that is a wrapper around
    POSIX file I/O calls. This is a placeholder for when we switch
-   to using a bbThemis backend. */
+   to using a Themis-IO backend. */
 PageCache::Implementation PageCache::system_implementation;
 
 /*
@@ -125,7 +125,7 @@ int PageCache::open(const char *pathname, int flags, ...) {
   }
   */
 
-  // get the inode, length, and last_modified
+  // get the inode and length
   struct stat statbuf = {0};
   fd = impl.openAndStat(pathname, flags, mode, &statbuf);
 
@@ -138,8 +138,8 @@ int PageCache::open(const char *pathname, int flags, ...) {
   if (file_it == inode_to_file.end()) {
     file = new File(statbuf.st_ino, canonical_path, entries);
     inode_to_file[statbuf.st_ino] = file;
-    const struct timespec &t = statbuf.st_mtim;
-    file->last_mod_nanos = t.tv_sec * (long)1000000000 + t.tv_nsec;
+    // const struct timespec &t = statbuf.st_mtim;
+    // file->last_mod_nanos = t.tv_sec * (long)1000000000 + t.tv_nsec;
     file->length = statbuf.st_size;
   } else {
     file = file_it->second;
@@ -212,19 +212,18 @@ ssize_t PageCache::pread(Handle *handle, void *buf, size_t count, off_t offset) 
   }
   
   File *file = handle->file;
-  
-  // with VISIBLE_AFTER_WRITE, use fstat() before every read() to check
-  // if another process has modified the file. If so, flush all cached pages,
-  // update length, and update last_mod_nanos.
+
+  // don't cache reads, because writes must be immediately visible
   if (consistency == VISIBLE_AFTER_WRITE) {
-    if (handle->checkLastModified(impl)) {
-      flushFilePages(file, false);
+    ssize_t result = impl.pread(handle->fd, buf, count, offset);
+    if (result != -1) {
+      handle->position = offset + result;
     }
+    return result;
   }
 
   // if we're reading from the file, we need to know where EOF is.
   // we should have it from the call to fstat() right after open()
-  // file->needLength(impl);
   assert(file->length >= 0);
 
   // already past the end of the file
@@ -296,15 +295,15 @@ ssize_t PageCache::pwrite(Handle *handle, const void *buf, size_t count, off_t o
   File *file = handle->file;
 
   // don't cache writes, but do update file position
-  // TODO: handle the case where these pages are in the read cache.
-  // After I update a page, a subsequent read on this process should
-  // see that update in the cached page. Either flush the page or update it.
   if (consistency == VISIBLE_AFTER_WRITE) {
     ssize_t result = impl.pwrite(handle->fd, buf, count, offset);
     if (result != -1) {
       handle->position = offset + result;
-      // Update file->length?  No, because we should assume that
-      // any other process may change it, so we shouldn't cache a value.
+      // TODO update file->length, but handle the case where another
+      // process may update it. This is mostly an issue with O_APPEND mode.
+      // What happens when another process changes the file size, either
+      // through an append or a truncate? Does the next O_APPEND write
+      // detect that change immediately?
     }
     return result;
   }
@@ -408,7 +407,8 @@ off_t PageCache::lseek(int fd, off_t offset, int whence) {
   }
 
   else if (whence == SEEK_END) {
-    handle->file->needLength(impl);
+    // handle->file->needLength(impl);
+    assert(handle->file->length >= 0);
     new_position = handle->file->length + offset;
   }
 
@@ -429,9 +429,8 @@ off_t PageCache::lseek(int fd, off_t offset, int whence) {
 
 
 /*
-  VISIBLE_AFTER_WRITE: no dirty pages are cached, so it's not nececessary
-    to write anything, but remove all pages for this file if this is the
-    last Handle referencing the file.
+  VISIBLE_AFTER_WRITE: no pages should be cached, so this shouldn't have to
+    do much.
   VISIBLE_AFTER_CLOSE: flush all dirty pages, so all my writes are visible,
     and remove all clean pages if this is the last Handle referencing 
     the file.
@@ -564,7 +563,7 @@ int PageCache::getPageEntry(File *f, long page_id, bool fill,
   if (fill) {
     // we're actually reading the file, so we need to know where EOF is at
     // f->needLength(impl);
-    assert(f->length != -1);
+    assert(f->length >= 0);
 
     long offset = page_id * page_size;
     char *content = getEntryContent(entry_id);
@@ -961,6 +960,8 @@ bool PageCache::File::fsck(std::vector<Entry> &entries) {
   return true;
 }
 
+/* not needed */
+#if 0
 long PageCache::File::needLength(Implementation &impl) {
   if (length != -1) return length;
 
@@ -976,8 +977,6 @@ long PageCache::File::needLength(Implementation &impl) {
   return length;
 }
 
-
-#if 0
 long PageCache::Handle::statLength() {
   struct stat s;
   if (impl.fstat(fd, &s)) {
@@ -1001,7 +1000,6 @@ long PageCache::Handle::statLastModifiedNanos() {
     return t.tv_sec * (long)1000000000 + t.tv_nsec;
   }
 }
-#endif
 
 
 /* Use fstat() to check if the file has been modified by another
@@ -1030,9 +1028,8 @@ bool PageCache::Handle::checkLastModified(Implementation &impl) {
 
   return true;
 }
-  
-  
 
+#endif  /* end not needed */
 
 
 
@@ -1110,7 +1107,7 @@ int PageCache::Implementation::close(int fd) {
 
 
 std::string PageCache::currentDir() {
-  // TODO this could be fancier, where first we try using a fix-size
+  // TODO this could be fancier, where first we try using a fixed-size
   // buffer, then if that fails, retry with increasingly larger
   // buffers
   char cwd[PATH_MAX];

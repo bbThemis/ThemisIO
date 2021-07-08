@@ -10,25 +10,19 @@
   code and an implementation of POSIX file I/O calls. For testing, an
   application can use this API directly with direct POSIX I/O calls as
   the backend, but the intended target is in the wrapper layer of the
-  bbThemis implementation. POSIX file I/O calls will be
-  intercepted. Anything related to a bbThemis server will be routed to
-  this API, and this API will use the bbThemis server as its backend.
+  Themis-IO implementation. POSIX file I/O calls will be
+  intercepted. Anything related to a Themis-IO server will be routed to
+  this API, and this API will use the Themis-IO server as its backend.
 
   application calls write()
     -> wrapper intercept
     -> PageCache::write
-    -> bbThemis server
+    -> Themis-IO server
 
   visible-after-write
     POSIX default. All writes are guaranteed to be visible after the
-    call to write() completes. All writes are write-through, with
-    clean pages cached.  Every read checks the last-modifield field,
-    and if the value has changed since our last write, the read cache
-    is emptied.
-
-    This will perform poorly when processes make frequent reads or
-    writes, because every call will require contacting the file
-    system.
+    call to write() completes. No pages are cached. All reads and
+    writes contact the file system directly.
 
   visible-after-close
     Writes may be visible immediately, but they are not guaranteed to
@@ -64,7 +58,7 @@
     and reopen the same file.
 
 
-  This cache will store pages of files, use up to some set amount of
+  This cache will store pages of files, using up to some set amount of
   memory. The page size and memory limit will be set in the constructor,
   but the amount of memory can be changed at any time.
   
@@ -131,7 +125,7 @@
 
   Implementation - a layer of virtual functions that is the backend
     implementation.  The static instance sample_implementation
-    references POSIX I/O calls directly. This is where a bbThemis
+    references POSIX I/O calls directly. This is where a Themis-IO
     backend implementation can be incorporated.
 
   Ed Karrels
@@ -432,7 +426,7 @@ private:
        Used when consistency <= VISIBLE_AFTER_WRITE to check if
        someone else has modified the file
        FYI A 64-bit signed long can store 292 years worth of nanoseconds. */
-    long last_mod_nanos;
+    // long last_mod_nanos;
 
     /* The first time this file is opened, this object will retain the
        file descriptor returned by impl.open().
@@ -453,7 +447,7 @@ private:
     File(ino_t inode_, const std::string &canonical_path_,
          std::vector<Entry> &entries) :
       inode(inode_), canonical_path(canonical_path_), length(-1),
-      last_mod_nanos(0),
+      // last_mod_nanos(0),
       read_fd(-1), write_fd(-1),
       clean_list(entries, 0), dirty_list(entries, 1),
       refcount(0) {}
@@ -465,7 +459,7 @@ private:
     bool isReadWrite() {return isReadable() && isWritable();}
 
     // if length still isn't set, use fstat() to set it now
-    long needLength(Implementation &impl);
+    // not-needed long needLength(Implementation &impl);
 
     /* Keep a reference count of each Handle referencing this,
        so it can be removed from open_files_by_name and deallocated
@@ -561,7 +555,7 @@ private:
 
     // use impl.fstat() to check st_mtim to check if my File has changed.
     // Flush the cache if it has.
-    bool checkLastModified(Implementation &impl);
+    // bool checkLastModified(Implementation &impl);
 
     // return file access: O_RDONLY, O_RDWR, or O_WRONLY
     int getAccess() {

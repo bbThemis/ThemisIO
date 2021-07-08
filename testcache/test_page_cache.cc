@@ -108,9 +108,7 @@ void testReadConsistency() {
   PageCache *cache = new PageCache(PageCache::VISIBLE_AFTER_WRITE, 64, 10000);
   
   // VISIBLE_AFTER_WRITE
-  // Even if page is cached, if the file is updated then the next read
-  // will notice the change of last-modified timestamp and invalidate
-  // the cached page.
+  // Pages should never become cached.
   write_fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
   assert(write_fd != -1);
   assert(4 == pwrite(write_fd, "AAAA", 4, 0));
@@ -119,7 +117,7 @@ void testReadConsistency() {
   assert(read_fd != -1);
   assert(4 == cache->pread(read_fd, buf, 4, 0));
   assert(!memcmp(buf, "AAAA", 4));
-  assert(cache->isCached(read_fd, 0));
+  assert(!cache->isCached(read_fd, 0));
   
   // change the data
   assert(4 == pwrite(write_fd, "BBBB", 4, 0));
@@ -127,7 +125,7 @@ void testReadConsistency() {
   // the cache should re-read the data
   assert(4 == cache->pread(read_fd, buf, 4, 0));
   assert(!memcmp(buf, "BBBB", 4));
-  assert(cache->isCached(read_fd, 0));
+  assert(!cache->isCached(read_fd, 0));
   assert(!cache->close(read_fd));
   delete cache;
   
