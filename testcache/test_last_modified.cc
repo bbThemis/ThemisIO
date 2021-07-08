@@ -253,10 +253,6 @@ int main(int argc, char **argv) {
       MPI_Recv(&dummy, 1, MPI_INT, 0, 0, comm, MPI_STATUS_IGNORE);
     } else {
       MPI_Recv(&dummy, 1, MPI_INT, 1, 0, comm, MPI_STATUS_IGNORE);
-      
-      if (file_watcher.hasChanged(FILENAME)) {
-        changes_counted++;
-      }
           
       if (fstat(fd, &statbuf)) {
         printf("[%d] fstat fail\n", rank);
@@ -264,7 +260,13 @@ int main(int argc, char **argv) {
       }
       if (test_no == 0) {
         prev_mod_time = statbuf.st_mtim;
+        file_watcher.hasChanged(FILENAME);
       } else {
+      
+        if (file_watcher.hasChanged(FILENAME)) {
+          changes_counted++;
+        }
+
         if (prev_mod_time == statbuf.st_mtim) no_change_count++;
         double diff = timespecDiffSec(prev_mod_time, statbuf.st_mtim);
         time_diff_stats.add(diff);
