@@ -1,6 +1,6 @@
 default: all
 
-EXECS = test_page_cache test_last_modified
+EXECS = test_page_cache test_last_modified test_inotify
 all: $(EXECS)
 
 OPT = -g
@@ -18,6 +18,9 @@ test_page_cache: test_page_cache.cc page_cache.o
 
 test_last_modified: test_last_modified.cc simple_stats.hh
 	$(MPICXX) $^ -o $@
+
+test_inotify: test_inotify.cc
+	$(CXX) $< -o $@
 
 clean:
 	rm -f $(EXECS) *.exe *.o *~ *.stackdump test_page_cache.out
