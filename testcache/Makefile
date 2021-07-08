@@ -8,7 +8,7 @@ OPT = -g
 CFLAGS = $(OPT) -Wall -Wno-sign-compare -D_GNU_SOURCE
 CC = gcc $(CFLAGS)
 CXX = g++ $(CFLAGS)
-MPICXX = mpic++ $(CFLAGS)
+MPICXX = mpicxx $(CFLAGS)
 
 page_cache.o: ../page_cache.cc ../page_cache.h
 	$(CXX) -c $<
@@ -17,7 +17,7 @@ test_page_cache: test_page_cache.cc page_cache.o
 	$(CXX) $^ -o $@
 
 test_last_modified: test_last_modified.cc simple_stats.hh
-	$(MPICXX) $^ -o $@
+	$(MPICXX) $< -o $@
 
 test_inotify: test_inotify.cc
 	$(CXX) $< -o $@
