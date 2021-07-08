@@ -22,10 +22,10 @@ using std::vector;
 
 
 /* Use inotify to monitor files for modification. */
-class FileModifyNotify {
+class FileModifiedInotify {
 public:
-  FileModifyNotify();
-  ~FileModifyNotify();
+  FileModifiedInotify();
+  ~FileModifiedInotify();
 
   // start watching a new file. On error, set errno and return -1.
   // If the call to inotify_init() failed, this will set errno to EIO.
@@ -56,7 +56,7 @@ private:
 };
 
 
-FileModifyNotify::FileModifyNotify() {
+FileModifiedInotify::FileModifiedInotify() {
   inotify_fd = inotify_init();
   if (inotify_fd < 0) {
     printf("inotify_init failed: %s\n", strerror(errno));
@@ -64,7 +64,7 @@ FileModifyNotify::FileModifyNotify() {
 }
 
 
-FileModifyNotify::~FileModifyNotify() {
+FileModifiedInotify::~FileModifiedInotify() {
   if (inotify_fd < 0) return;
 
   // unwatch everything
@@ -77,7 +77,7 @@ FileModifyNotify::~FileModifyNotify() {
 }
 
 
-int FileModifyNotify::watchFile(const char *filename) {
+int FileModifiedInotify::watchFile(const char *filename) {
   if (inotify_fd < 0) {
     errno = EIO;
     return -1;
@@ -103,7 +103,7 @@ int FileModifyNotify::watchFile(const char *filename) {
 }
 
 
-void FileModifyNotify::unwatchFile(const char *filename) {
+void FileModifiedInotify::unwatchFile(const char *filename) {
   if (inotify_fd < 0) return;
 
   auto it = name_to_watch_id.find(filename);
@@ -123,7 +123,7 @@ void FileModifyNotify::unwatchFile(const char *filename) {
 }
 
 
-bool FileModifyNotify::hasChanged(const char *filename) {
+bool FileModifiedInotify::hasChanged(const char *filename) {
   if (inotify_fd < 0) return false;
 
   auto it = name_to_watch_id.find(filename);
@@ -285,7 +285,7 @@ int main() {
   system("touch " FILE4);
 
   {
-    FileModifyNotify watcher;
+    FileModifiedInotify watcher;
 
     watcher.watchFile(FILE1);
     watcher.watchFile(FILE2);
