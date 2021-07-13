@@ -191,7 +191,10 @@ ssize_t PageCache::read(int fd, void *buf, size_t count) {
   Lock lock(mtx);
   Handle *f = getHandle(fd);
   if (!f) {errno = EBADF; return -1;};
-  return pread(f, buf, count, f->position);
+  ssize_t result = pread(f, buf, count, f->position);
+  if (result > 0)
+    f->position += result;
+  return result;
 }
 
 
@@ -215,11 +218,7 @@ ssize_t PageCache::pread(Handle *handle, void *buf, size_t count, off_t offset) 
 
   // don't cache reads, because writes must be immediately visible
   if (consistency == VISIBLE_AFTER_WRITE) {
-    ssize_t result = impl.pread(handle->fd, buf, count, offset);
-    if (result != -1) {
-      handle->position = offset + result;
-    }
-    return result;
+    return impl.pread(handle->fd, buf, count, offset);
   }
 
   // if we're reading from the file, we need to know where EOF is.
@@ -260,7 +259,7 @@ ssize_t PageCache::pread(Handle *handle, void *buf, size_t count, off_t offset) 
 
   // return the number of bytes written to buf
   long bytes_read = buf_pos - (char*)buf;
-  handle->position += bytes_read;
+  // handle->position += bytes_read;
   return bytes_read;
 }
 
@@ -272,7 +271,10 @@ ssize_t PageCache::write(int fd, const void *buf, size_t count) {
   Lock lock(mtx);
   Handle *f = getHandle(fd);
   if (!f) {errno = EBADF; return -1;};
-  return pwrite(f, buf, count, f->position);
+  ssize_t result = pwrite(f, buf, count, f->position);
+  if (result > 0)
+    f->position += result;
+  return result;
 }
 
   
@@ -296,16 +298,7 @@ ssize_t PageCache::pwrite(Handle *handle, const void *buf, size_t count, off_t o
 
   // don't cache writes, but do update file position
   if (consistency == VISIBLE_AFTER_WRITE) {
-    ssize_t result = impl.pwrite(handle->fd, buf, count, offset);
-    if (result != -1) {
-      handle->position = offset + result;
-      // TODO update file->length, but handle the case where another
-      // process may update it. This is mostly an issue with O_APPEND mode.
-      // What happens when another process changes the file size, either
-      // through an append or a truncate? Does the next O_APPEND write
-      // detect that change immediately?
-    }
-    return result;
+    return impl.pwrite(handle->fd, buf, count, offset);
   }
 
   /* loop through each page of the read */
@@ -366,7 +359,11 @@ ssize_t PageCache::pwrite(Handle *handle, const void *buf, size_t count, off_t o
     char *page_content = getEntryContent(entry_id);
 
     memcpy(page_content + page_offset, buf_pos, copy_len);
-    setEntryDirty(entry_id);
+    if (!isEntryDirty(entry_id)) {
+      setEntryDirty(entry_id);
+      file->clean_list.removeDirect(entry_id, false);
+      file->dirty_list.pushBack(entry_id);
+    }
       
     buf_pos += copy_len;
     page_offset = 0;
@@ -375,9 +372,9 @@ ssize_t PageCache::pwrite(Handle *handle, const void *buf, size_t count, off_t o
 
   // return the number of bytes written to buf
   long bytes_written = buf_pos - (const char*)buf;
-  handle->position += bytes_written;
-  if (handle->position > file->length)
-    file->length = handle->position;
+  long tmp_position = handle->position + bytes_written;
+  if (tmp_position > file->length)
+    file->length = tmp_position;
 
   return bytes_written;
 }
@@ -425,6 +422,13 @@ off_t PageCache::lseek(int fd, off_t offset, int whence) {
     handle->position = new_position;
     return handle->position;
   }
+}
+
+
+int PageCache::ftruncate(int fd, off_t length) {
+  // TODO not implemented yet
+  assert(false);
+  return -1;
 }
 
 
@@ -700,8 +704,11 @@ int PageCache::writeDirtyEntry(int entry_id) {
     return 1;
   }
 
+  long offset = e.page_id * page_size;
+  // if the last page is incomplete, don't write the full page
+  int write_len = std::min((long)page_size, e.file->length - offset);
   int bytes_written = impl.pwrite(e.file->write_fd, getEntryContent(entry_id),
-                                  page_size, e.page_id * page_size);
+                                  write_len, offset);
                                   
   if (bytes_written == -1) {
     fprintf(stderr, "PageCache::writeDirtyEntry error failed to write dirty "
@@ -709,11 +716,11 @@ int PageCache::writeDirtyEntry(int entry_id) {
             e.page_id * page_size, e.file->name().c_str(),
             strerror(errno));
     err = 2;
-  } else if (bytes_written < page_size) {
+  } else if (bytes_written < write_len) {
     fprintf(stderr, "PageCache::writeDirtyEntry error short write at offset "
             "%ld of file %s: %d of %d bytes\n",
-            e.page_id * page_size, e.file->name().c_str(),
-            bytes_written, page_size);
+            offset, e.file->name().c_str(),
+            bytes_written, write_len);
     err = 3;
   }
 

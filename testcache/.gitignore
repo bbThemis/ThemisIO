@@ -3,6 +3,7 @@
 *~
 test_page_cache
 test_page_cache.out
+test_page_cache2.out
 test_last_modified
 test_last_modified.out
 test_inotify

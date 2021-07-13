@@ -10,16 +10,19 @@
 #include <errno.h>
 #include "../page_cache.h"
 
+using std::string;
+using std::vector;
 
 const char *filename = "test_page_cache.out";
+const char *filename2 = "test_page_cache2.out";
 
 
 /* Fill filename with 'length' bytes in the form " 000 001 002..." */
-void writeFile(int length) {
+void writeFile(int length, const char *fn = filename) {
   char buf[1025];
   const int buf_len = 1024;
   int pos = 0, k = 0;
-  int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  int fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0644);
   assert(fd != -1);
 
   while (pos < length) {
@@ -33,6 +36,21 @@ void writeFile(int length) {
     pos += write_len;
   }
   close(fd);
+}
+
+
+string readFile(const char *fn = filename) {
+  string content;
+  char block[10];
+  int fd = open(fn, O_RDONLY);
+  if (fd == -1) return content;
+
+  ssize_t bytes_read;
+  while ((bytes_read = read(fd, block, sizeof block)) > 0) {
+    content.append(block, block + bytes_read);
+  }
+  close(fd);
+  return content;
 }
 
 
@@ -230,11 +248,160 @@ void testReadConsistency() {
 }
 
 
+void testLengthUpdates() {
+  printf("testLengthUpdates "); fflush(stdout);
+
+  remove(filename);
+  writeFile(16);
+  writeFile(16, filename2);
+  
+  int fd, fd2;
+  char buf[1024] = {0};
+  string contents;
+  PageCache *cache = new PageCache(PageCache::VISIBLE_AFTER_WRITE, 64, 10000);
+
+  fd = cache->open(filename, O_RDWR);
+  fd2 = open(filename2, O_RDWR);
+
+  // the file is currently 16 bytes long
+  assert(pread(fd2, buf, 1024, 0) == 16);
+  assert(cache->pread(fd, buf, 1024, 0) == 16);
+
+  // check the file position--it should still be 0, not 1024
+  assert(0 == lseek(fd2, 0, SEEK_CUR));
+  assert(0 == cache->lseek(fd, 0, SEEK_CUR));
+
+  // now try a normal read, which will update the position
+  assert(cache->read(fd, buf, 1024) == 16);
+  assert(read(fd2, buf, 1024) == 16);
+  assert(16 == cache->lseek(fd, 0, SEEK_END));
+  assert(16 == lseek(fd2, 0, SEEK_END));
+
+  // append a few bytes via another file descriptor
+  writeFile(32);
+  writeFile(32, filename2);
+
+  // with VISIBLE_AFTER_WRITE, that append should be visible
+  lseek(fd2, 0, SEEK_SET);
+  cache->lseek(fd, 0, SEEK_SET);
+  assert(read(fd2, buf, 1024) == 32);
+  assert(cache->read(fd, buf, 1024) == 32);
+
+  // make sure my writes change the length too
+  write(fd2, "appendthis", 10);
+  cache->write(fd, "appendthis", 10);
+
+  assert(pread(fd2, buf, 1024, 0) == 42);
+  assert(cache->pread(fd, buf, 1024, 0) == 42);
+
+  contents = readFile();
+  assert(contents == " 000 001 002 003 004 005 006 007appendthis");
+  contents = "";
+  contents = readFile(filename2);
+  assert(contents == " 000 001 002 003 004 005 006 007appendthis");
+  
+  delete cache;
+
+  // do similar tests with VISIBLE_AFTER_CLOSE
+  remove(filename);
+  remove(filename2);
+  writeFile(8);
+  writeFile(8, filename2);
+  
+  cache = new PageCache(PageCache::VISIBLE_AFTER_CLOSE, 64, 10000);
+
+  fd = cache->open(filename, O_RDWR);
+  assert(!cache->isCached(fd, 0));
+  fd2 = open(filename2, O_RDWR);
+
+  // the file is currently 8 bytes long
+  assert(cache->read(fd, buf, 1024) == 8);
+  assert(cache->isCached(fd, 0));
+  assert(read(fd2, buf, 1024) == 8);
+
+  // check the file position--it should be 8, not 1024
+  assert(8 == cache->lseek(fd, 0, SEEK_CUR));
+  assert(8 == cache->lseek(fd, 0, SEEK_END));
+
+  // append a few bytes via another file descriptor
+  writeFile(16);
+  writeFile(16, filename2);
+
+  // with VISIBLE_AFTER_CLOSE, that append should not be visible
+  assert(cache->pread(fd, buf, 1024, 0) == 8);
+  assert(pread(fd2, buf, 1024, 0) == 16);
+  
+  // check file position again
+  assert(8 == cache->lseek(fd, 0, SEEK_CUR));
+  assert(8 == lseek(fd2, 0, SEEK_CUR));
+
+  // overwrite and append, make sure my writes change the length
+  cache->write(fd, "appendthis", 10);
+  write(fd2, "appendthis", 10);
+  assert(18 == cache->lseek(fd, 0, SEEK_CUR));
+  assert(18 == cache->lseek(fd, 0, SEEK_END));
+  assert(18 == lseek(fd2, 0, SEEK_CUR));
+  assert(18 == lseek(fd2, 0, SEEK_END));
+
+  memset(buf, 0, 1024);
+  assert(0 == cache->lseek(fd, 0, SEEK_SET));
+  assert(cache->read(fd, buf, 1024) == 18);
+  assert(!memcmp(buf, " 000 001appendthis", 18));
+
+  // the contents on disk haven't changed yet
+  contents = readFile();
+  assert(contents == " 000 001 002 003");
+  contents = readFile(filename2);
+  assert(contents == " 000 001appendthis");
+
+  // add a cached page
+  assert(!cache->isCached(fd, 64));
+  cache->fsck();
+  assert(61 == cache->write(fd, " here is more content for the test that will go into the file", 61));
+  cache->fsck();
+  assert(cache->isCached(fd, 64));
+  assert(61 == write(fd2, " here is more content for the test that will go into the file", 61));
+  assert(79 == cache->lseek(fd, 0, SEEK_END));
+  assert(79 == cache->lseek(fd, 0, SEEK_CUR));
+  assert(79 == lseek(fd2, 0, SEEK_END));
+  assert(79 == lseek(fd2, 0, SEEK_CUR));
+  
+  memset(buf, 0, 1024);
+  assert(79 == cache->pread(fd, buf, 1024, 0));
+  assert(!memcmp(buf, " 000 001appendthis here is more content for the test that will go into the file", 79));
+  
+  memset(buf, 0, 1024);
+  assert(79 == pread(fd2, buf, 1024, 0));
+  assert(!memcmp(buf, " 000 001appendthis here is more content for the test that will go into the file", 79));
+
+  // the contents on disk haven't changed yet
+  contents = readFile();
+  assert(contents == " 000 001 002 003");
+  contents = readFile(filename2);
+  assert(contents == " 000 001appendthis here is more content for the test that will go into the file");
+
+  cache->close(fd);
+  close(fd2);
+
+  // now the file has been updated
+  contents = readFile();
+  assert(contents == " 000 001appendthis here is more content for the test that will go into the file");
+  
+  delete cache;
+
+  remove(filename);
+  remove(filename2);
+  
+  printf("done.\n");
+}
+  
+
 int main() {
   remove(filename);
 
-  testReadOnly();
-  testReadConsistency();
+  // testReadOnly();
+  // testReadConsistency();
+  testLengthUpdates();
 
   return 0;
 }

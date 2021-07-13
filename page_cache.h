@@ -182,6 +182,8 @@ public:
   ssize_t pread(int fd, void *buf, size_t count, off_t offset);
 
   off_t lseek(int fd, off_t offset, int whence);
+
+  int ftruncate(int fd, off_t length);
   
   /* If VISIBLE_AFTER_CLOSE, flush all the pages for this file. */
   int close(int fd);
