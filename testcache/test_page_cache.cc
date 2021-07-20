@@ -394,14 +394,125 @@ void testLengthUpdates() {
   
   printf("done.\n");
 }
+
+
+// TODO when deferred ftruncates are enabled, modify these tests to match
+void testTruncate() {
+  // try shortening abcdefgh to abcd, then lengthening to abcd....
+  // make sure "efgh" don't persist
+
+  printf("testTruncate "); fflush(stdout);
+  int fd, fd2;
+  char buf[1024] = {0};
+  string contents;
+  PageCache *cache = new PageCache(PageCache::VISIBLE_AFTER_WRITE, 16, 10000);
+
+  assert(-1 == cache->ftruncate(47, 100) && errno == EBADF);
+
+  writeFile(24);
+  writeFile(24, filename2);
+  fd = cache->open(filename, O_RDONLY);
+  fd2 = open(filename, O_RDONLY);
+  assert(fd != -1 && fd2 != -1);
+  assert(-1 == cache->ftruncate(fd, 100) && errno == EINVAL);
+  assert(-1 == ftruncate(fd2, 100) && (errno == EBADF || errno == EINVAL));
+  assert(0 == cache->close(fd));
+  assert(0 == close(fd2));
+
+  fd = cache->open(filename, O_RDWR);
+  fd2 = open(filename2, O_RDWR);
+
+  assert(readFile() == " 000 001 002 003 004 005");
+  assert(readFile(filename2) == " 000 001 002 003 004 005");
+  assert(0 == cache->ftruncate(fd, 20));
+  assert(0 == ftruncate(fd2, 20));
+  assert(readFile() == " 000 001 002 003 004");
+  assert(readFile(filename2) == " 000 001 002 003 004");
+
+  assert(0 == cache->ftruncate(fd, 30));
+  memset(buf, 255, sizeof buf);
+  memset(buf+100, 0, 30);
+  strcpy(buf+100, " 000 001 002 003 004");
+  assert(30 == cache->pread(fd, buf, 100, 0));
+  assert(!memcmp(buf, buf+100, 100));
+  
+  cache->close(fd);
+  delete cache;
+
+  cache = new PageCache(PageCache::VISIBLE_AFTER_CLOSE, 16, 10000);
+  writeFile(16);
+  fd = cache->open(filename, O_RDWR);
+  assert(16 == cache->lseek(fd, 0, SEEK_END));
+  
+  // write a few bytes past EOF, check for zero fill
+  assert(40 == cache->lseek(fd, 40, SEEK_SET));
+  assert(8 == cache->write(fd, "XXXXXXXX", 8));
+  assert(48 == cache->lseek(fd, 0, SEEK_END));
+
+  // on disk file is unchanged
+  fd2 = open(filename, O_RDWR);
+  assert(16 == pread(fd2, buf, 100, 0));
+
+  // now flush changes
+  cache->close(fd);
+  memset(buf, 255, sizeof buf);
+  assert(48 == pread(fd2, buf, 100, 0));
+  strcpy(buf+100, " 000 001 002 003");
+  memset(buf+116, 0, 24);
+  memcpy(buf+140, "XXXXXXXX", 8);
+  assert(!memcmp(buf, buf+100, 100));
+  
+  fd = cache->open(filename, O_RDWR);
+  
+  cache->ftruncate(fd, 18);
+  assert(18 == cache->pread(fd, buf, 100, 0));
+  assert(!memcmp(buf, " 000 001 002 003 0", 18));
+  // with VISIBLE_AFTER_CLOSE, the change should not have taken effect yet
+  assert(20 == pread(fd2, buf, 100, 0));
+  assert(!memcmp(buf, " 000 001 002 003 0", 18));
+  cache->close(fd);
+  // now the change should have been done
+  assert(18 == pread(fd2, buf, 100, 0));
+
+  // try extending the file
+  writeFile(12);
+  fd = cache->open(filename, O_RDWR);
+  // 12 -> 50
+  cache->ftruncate(fd, 50);
+  assert(50 == cache->lseek(fd, 0, SEEK_END));
+  assert(" 000 001 002" == readFile());
+  assert(12 == pread(fd2, buf, 100, 0));
+  assert(!cache->isCached(fd, 0));
+  assert(!cache->isCached(fd, 16));
+  assert(!cache->isCached(fd, 32));
+  // set buf+100 to how the file should be
+  memset(buf, 255, sizeof(buf));
+  strcpy(buf+100, " 000 001 002");
+  memset(buf+112, 0, 50-12);
+  assert(50 == cache->pread(fd, buf, 100, 0));
+  assert(!memcmp(buf, buf+100, 100));
+  cache->close(fd);
+
+  // closing the file makes the ftruncate happen
+  memset(buf, 255, 100);
+  assert(50 == pread(fd2, buf, 100, 0));
+  assert(!memcmp(buf, buf+100, 100));
+  
+  
+  close(fd2);
+  delete cache;
+
+  printf("done.\n");
+}
   
 
 int main() {
   remove(filename);
 
-  // testReadOnly();
-  // testReadConsistency();
+  testReadOnly();
+  testReadConsistency();
   testLengthUpdates();
+  testTruncate();
 
   return 0;
 }

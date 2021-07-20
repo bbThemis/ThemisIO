@@ -136,11 +136,8 @@ int PageCache::open(const char *pathname, int flags, ...) {
   // see if this file has already been opened
   auto file_it = inode_to_file.find(statbuf.st_ino);
   if (file_it == inode_to_file.end()) {
-    file = new File(statbuf.st_ino, canonical_path, entries);
-    inode_to_file[statbuf.st_ino] = file;
-    // const struct timespec &t = statbuf.st_mtim;
-    // file->last_mod_nanos = t.tv_sec * (long)1000000000 + t.tv_nsec;
-    file->length = statbuf.st_size;
+    file = new File(statbuf.st_ino, canonical_path, statbuf.st_size, entries);
+    inode_to_file[file->inode] = file;
   } else {
     file = file_it->second;
     // Don't update last_mod_nanos if the file was already open,
@@ -223,13 +220,13 @@ ssize_t PageCache::pread(Handle *handle, void *buf, size_t count, off_t offset) 
 
   // if we're reading from the file, we need to know where EOF is.
   // we should have it from the call to fstat() right after open()
-  assert(file->length >= 0);
+  assert(file->getLength() >= 0);
 
   // already past the end of the file
-  if (offset >= file->length) return 0;
+  if (offset >= file->getLength()) return 0;
   
   // don't read past the end of the file
-  count = std::min(count, (size_t)(file->length - offset));
+  count = std::min(count, (size_t)(file->getLength() - offset));
   
   /* loop through each page of the read */
   long page_id = fileOffsetToPageId(offset);
@@ -341,7 +338,7 @@ ssize_t PageCache::pwrite(Handle *handle, const void *buf, size_t count, off_t o
           fill_page = true;
         } else if (page_offset + copy_len < page_size) {
           long write_pos = offset + (buf_pos - (const char *)buf);
-          if (write_pos + copy_len < file->length) {
+          if (write_pos + copy_len < file->getLength()) {
             fill_page = true;
           }
         }
@@ -373,8 +370,8 @@ ssize_t PageCache::pwrite(Handle *handle, const void *buf, size_t count, off_t o
   // return the number of bytes written to buf
   long bytes_written = buf_pos - (const char*)buf;
   long tmp_position = handle->position + bytes_written;
-  if (tmp_position > file->length)
-    file->length = tmp_position;
+  if (tmp_position > file->getLength())
+    file->setLength(tmp_position, false);
 
   return bytes_written;
 }
@@ -405,8 +402,8 @@ off_t PageCache::lseek(int fd, off_t offset, int whence) {
 
   else if (whence == SEEK_END) {
     // handle->file->needLength(impl);
-    assert(handle->file->length >= 0);
-    new_position = handle->file->length + offset;
+    assert(handle->file->getLength() >= 0);
+    new_position = handle->file->getLength() + offset;
   }
 
   else {
@@ -425,10 +422,79 @@ off_t PageCache::lseek(int fd, off_t offset, int whence) {
 }
 
 
-int PageCache::ftruncate(int fd, off_t length) {
-  // TODO not implemented yet
-  assert(false);
-  return -1;
+int PageCache::ftruncate(int fd, off_t new_length) {
+  Lock lock(mtx);
+  Handle *handle = getHandle(fd);
+  if (!handle) {errno = EBADF; return -1;};
+  if (!handle->isWritable()) {errno = EINVAL; return -1;};
+
+  File *file = handle->file;
+
+  // quick return if there's nothing to do
+  if (file->getLength() == new_length) {
+    return 0;
+  }
+
+  // TODO: implement deferred ftruncate
+  /*
+  if (consistency == VISIBLE_AFTER_WRITE) {
+    file->setLength(new_length, false);
+    return impl.ftruncate(file->write_fd, new_length);
+  }
+  */
+
+  long new_page_count = (new_length + page_size - 1) / page_size;
+
+  // if the new last page is cached, zero out the bytes past EOF
+  if (new_page_count > 0 && new_length < new_page_count * page_size) {
+    PageKey key(file->inode, new_page_count - 1);
+    auto entry_iter = entry_table.find(key);
+    if (entry_iter != entry_table.end()) {
+      int leftover_bytes = new_page_count * page_size - new_length;
+      int entry_id = entry_iter->second;
+      char *page_content = getEntryContent(entry_id);
+      memset(page_content + page_size - leftover_bytes, 0, leftover_bytes);
+    }
+  }
+  
+  // file is being shortened
+  if (new_length < file->getLength()) {
+    // discard all cached pages past the new EOF without writing dirty pages
+
+    // TODO this scans every cached page for this file, which could be slow.
+    // It would be faster if the page cache was ordered, so we could quickly
+    // iterate over the desired range of pages.
+
+    // clear out the dirty list
+    for (int entry_id = file->dirty_list.front();
+         entry_id != -1;
+         entry_id = file->dirty_list.next(entry_id)) {
+      Entry &e = entries[entry_id];
+      assert(e.file == file);
+      assert(e.isDirty());
+      if (e.page_id >= new_page_count) {
+        e.setClean();
+        removeEntry(entry_id, true);
+      }
+    }
+
+    // clear out the clean list
+    for (int entry_id = file->clean_list.front();
+         entry_id != -1;
+         entry_id = file->clean_list.next(entry_id)) {
+      Entry &e = entries[entry_id];
+      assert(e.file == file);
+      assert(!e.isDirty());
+      if (e.page_id >= new_page_count) {
+        removeEntry(entry_id, true);
+      }
+    }
+
+  }
+
+  file->setLength(new_length, true);
+
+  return impl.ftruncate(file->write_fd, new_length);
 }
 
 
@@ -456,8 +522,13 @@ int PageCache::close(int fd) {
      if Handle X did the writes and Handle Y is the one closing.
      Don't flush clean pages if there are still other Handles
      that may use them. */
-  if (consistency <= VISIBLE_AFTER_CLOSE)
+  if (consistency <= VISIBLE_AFTER_CLOSE) {
     flushFilePages(file, file->getref() > 1);
+
+    if (consistency == VISIBLE_AFTER_CLOSE) {
+      file->flushLengthChange(impl);
+    }
+  }
 
   int result = 0;
 
@@ -500,7 +571,7 @@ void PageCache::exit() {
     h_it = fd_to_handle.erase(h_it);
   }
   
-  // check for lingering files
+  // close remaining files
   auto f_it = inode_to_file.begin();
   while (f_it != inode_to_file.end()) {
     File *f = f_it->second;
@@ -567,13 +638,13 @@ int PageCache::getPageEntry(File *f, long page_id, bool fill,
   if (fill) {
     // we're actually reading the file, so we need to know where EOF is at
     // f->needLength(impl);
-    assert(f->length >= 0);
+    assert(f->getLength() >= 0);
 
     long offset = page_id * page_size;
     char *content = getEntryContent(entry_id);
 
     // reading past EOF? believe it or not, also jail.
-    if (offset >= f->length) {
+    if (offset >= f->getLength()) {
       // TODO: this shouldn't happen. reading past EOF should return
       // immediately with a value of 0.
       memset(content, 0, page_size);
@@ -585,8 +656,8 @@ int PageCache::getPageEntry(File *f, long page_id, bool fill,
                 "cannot read page at offset %ld for file %s opened write-only\n",
                 page_id * page_size, f->name().c_str());
       } else {
-        assert(f->length >= 0 && offset < f->length);
-        int read_len = std::min((long)page_size, f->length - offset);
+        assert(f->getLength() >= 0 && offset < f->getLength());
+        int read_len = std::min((long)page_size, f->getLength() - offset);
         int bytes_read = impl.pread(f->read_fd, content, read_len, offset);
                                     
         if (bytes_read == -1) {
@@ -706,7 +777,7 @@ int PageCache::writeDirtyEntry(int entry_id) {
 
   long offset = e.page_id * page_size;
   // if the last page is incomplete, don't write the full page
-  int write_len = std::min((long)page_size, e.file->length - offset);
+  int write_len = std::min((long)page_size, e.file->getLength() - offset);
   int bytes_written = impl.pwrite(e.file->write_fd, getEntryContent(entry_id),
                                   write_len, offset);
                                   
@@ -791,7 +862,7 @@ bool PageCache::closeFileIfDone(File *file) {
 
   assert(file->getref() == 0);
   assert(file->clean_list.empty() && file->dirty_list.empty());
-    
+  
   file->close(impl);
   inode_to_file.erase(file->inode);
   delete file;
@@ -947,6 +1018,32 @@ bool PageCache::isPageDirty(int fd, long file_offset) const {
   return entries[it->second].isDirty();
 }
 
+
+// return "inode=<inode>.path=<canonical_path>"
+std::string PageCache::File::name() {
+  std::ostringstream buf;
+  buf << "inode=" << inode;
+      
+  // without canonical_path, just comment this out to use the inode
+  buf << ".path=" << canonical_path;
+        
+  return buf.str();
+}
+
+
+// if the length was changed, call ftruncate now
+// TODO: this will be a no-op until deferred ftruncates are implemented
+void PageCache::File::flushLengthChange(Implementation &impl) {
+  /*
+  if (length_dirty) {
+    assert(isWritable());
+    impl.ftruncate(write_fd, length);
+    length_dirty = true;
+  }
+  */
+}
+
+
 bool PageCache::File::fsck(std::vector<Entry> &entries) {
   int len = 0, id = clean_list.front();
   while (id != -1) {
@@ -967,78 +1064,21 @@ bool PageCache::File::fsck(std::vector<Entry> &entries) {
   return true;
 }
 
-/* not needed */
-#if 0
-long PageCache::File::needLength(Implementation &impl) {
-  if (length != -1) return length;
 
-  int fd = read_fd == -1 ? write_fd : read_fd;
-  struct stat statbuf;
-  if (impl.fstat(fd, &statbuf)) {
-    fprintf(stderr, "Error calling stat() in PageCache::File::needLength "
-            " on %s: %s\n", canonical_path.c_str(), strerror(errno));
-    length = 0;
-  } else {
-    length = statbuf.st_size;
-  }
-  return length;
-}
+/* Close this file. All clean and dirty pages must already be flushed.
+   If the file length has been changed with ftruncate then the file
+   length will also be updated. */
+void PageCache::File::close(Implementation &impl) {
+  assert(clean_list.empty() && dirty_list.empty());
 
-long PageCache::Handle::statLength() {
-  struct stat s;
-  if (impl.fstat(fd, &s)) {
-    fprintf(stderr, "Error calling stat in PageCache::Handle::statLength(): %s\n",
-            strerror(errno));
-    return 0;
-  } else {
-    return s.st_size;
-  }
-}
-
-
-long PageCache::Handle::statLastModifiedNanos() {
-  struct stat s;
-  if (impl.fstat(fd, &s)) {
-    fprintf(stderr, "Error calling stat in PageCache::Handle::statLength(): %s\n",
-            strerror(errno));
-    return 0;
-  } else {
-    struct timespec &t = s.st_mtim;
-    return t.tv_sec * (long)1000000000 + t.tv_nsec;
-  }
-}
-
-
-/* Use fstat() to check if the file has been modified by another
-   process.  If so, update file->{last_mod_nanos,length}.
-
-   FYI, st_mtim is for the last time the contents of a file were
-   modified.  st_ctim is for the last time the permissions/metadata
-   were modified. */
-bool PageCache::Handle::checkLastModified(Implementation &impl) {
-  struct stat statbuf;
-  if (impl.fstat(fd, &statbuf)) {
-    fprintf(stderr, "Error calling fstat() in PageCache::Handle::checkLastModified(): %s\n", strerror(errno));
-    return false;
-  }
+  flushLengthChange(impl);
   
-  struct timespec &t = statbuf.st_mtim;
-  long new_last_mod = t.tv_sec * (long)1000000000 + t.tv_nsec;
-
-  // no change
-  if (new_last_mod == file->last_mod_nanos)
-    return false;
-
-  // yes change
-  file->last_mod_nanos = new_last_mod;
-  file->length = statbuf.st_size;
-
-  return true;
+  if (read_fd != -1)
+    impl.close(read_fd);
+  if (write_fd != -1 && write_fd != read_fd)
+    impl.close(write_fd);
+  read_fd = write_fd = -1;
 }
-
-#endif  /* end not needed */
-
-
 
 
 int PageCache::Implementation::open(const char *pathname, int flags, ...) {
@@ -1107,6 +1147,9 @@ int PageCache::Implementation::fstat(int fd, struct stat *statbuf) {
   return ::fstat(fd, statbuf);
 }
 
+int PageCache::Implementation::ftruncate(int fd, off_t length) {
+  return ::ftruncate(fd, length);
+}
 
 int PageCache::Implementation::close(int fd) {
   return ::close(fd);

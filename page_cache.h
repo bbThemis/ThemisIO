@@ -246,6 +246,7 @@ public:
     virtual ssize_t read(int fd, void *buf, size_t count);
     virtual ssize_t pread(int fd, void *buf, size_t count, off_t offset);
     virtual int fstat(int fd, struct stat *statbuf);
+    virtual int ftruncate(int fd, off_t length);
     virtual int close(int fd);
   };
   static Implementation system_implementation;
@@ -418,18 +419,6 @@ private:
     // but this is handy for debugging.
     const std::string canonical_path;
 
-    /* Used to share the length across all Handles, because multiple
-       Handles may have it opened for O_APPEND.  When a file is
-       opened, fstat() will be called right away to get the initial
-       value. */
-    long length;
-
-    /* Time in nanoseconds file was last modified.
-       Used when consistency <= VISIBLE_AFTER_WRITE to check if
-       someone else has modified the file
-       FYI A 64-bit signed long can store 292 years worth of nanoseconds. */
-    // long last_mod_nanos;
-
     /* The first time this file is opened, this object will retain the
        file descriptor returned by impl.open().
 
@@ -446,12 +435,12 @@ private:
     // all cached pages for this file are either on clean_list or dirty_list
     PageCache::FileList clean_list, dirty_list;
 
-    File(ino_t inode_, const std::string &canonical_path_,
+    File(ino_t inode_, const std::string &canonical_path_, long length_,
          std::vector<Entry> &entries) :
-      inode(inode_), canonical_path(canonical_path_), length(-1),
-      // last_mod_nanos(0),
+      inode(inode_), canonical_path(canonical_path_),
       read_fd(-1), write_fd(-1),
       clean_list(entries, 0), dirty_list(entries, 1),
+      length(length_), length_dirty(false),
       refcount(0) {}
 
     bool isReadable() {return read_fd != -1;}
@@ -492,32 +481,57 @@ private:
       return fd == read_fd || fd == write_fd;
     }
 
-    void close(Implementation &impl) {
-      assert(clean_list.empty() && dirty_list.empty());
-      if (read_fd != -1)
-        impl.close(read_fd);
-      if (write_fd != -1 && write_fd != read_fd)
-        impl.close(write_fd);
-      read_fd = write_fd = -1;
+    // return "inode=<inode>.path=<canonical_path>"
+    std::string name();
+
+    /* Used to share the length across all Handles, because multiple
+       Handles may have it opened for O_APPEND.  When a file is
+       opened, fstat() will be called right away to get the initial
+       value. Use accessor functions to make it easier to trace where
+       the value is read and written. */
+    long getLength() {return length;}
+
+    /* Update the length of the file.
+       This can be caused by writing past EOF or by ftruncate.
+       With VISIBLE_AFTER_CLOSE or VISIBLE_AFTER_EXIT, a file length
+       change can be deferred. If a file is shortened with ftruncate,
+       impl.ftruncate will be needed to make the change. If a file is
+       lengthened with ftruncate, impl.ftruncate will be needed but only
+       if the last byte never gets written. There can also be tricky
+       cases where is shortened but then extended a little bit with a
+       write. To keep things simple, if an ftruncate is ever deferred,
+       just call impl.ftruncate when changes are flushed to disk. 
+       Another tricky case: when the file is extended with ftruncate
+       and the uncached data is read from the file, the system should know
+       how large the file on disk is and not try to read past EOF.
+       This is too many complications than I want to deal with right now,
+       and I think deferring ftruncates is low-priority, so for now
+       ftruncates will not be deferred.
+       TODO: enable deferred ftruncate. */
+    void setLength(long new_length, bool update_deferred) {
+      length = new_length;
+      // if (update_deferred) length_dirty = true;
     }
 
-    std::string name() {
-      // without the inode, just return the path
-      // return canonical_path;
-
-      std::ostringstream buf;
-      buf << "inode=" << inode;
-      
-      // without canonical_path, just comment this out to use the inode
-      buf << ".path=" << canonical_path;
-        
-      return buf.str();
-    }
+    // if the length was changed, call ftruncate now
+    // TODO: this will be a no-op until deferred ftruncates are implemented
+    void flushLengthChange(Implementation &impl);
 
     bool fsck(std::vector<Entry> &entries);
 
+    /* Close this file. All clean and dirty pages must already be flushed.
+       If the file length has been changed with ftruncate then the file
+       length will also be updated. */
+    void close(Implementation &impl);
+
 
   private:
+    long length;
+
+    /* True iff the file length has been changed with ftruncate and
+       that the change has been deferred. */
+    bool length_dirty;
+    
     // Number of Handles referencing this file
     int refcount;
   };
@@ -554,10 +568,6 @@ private:
       path = path_;
       open_mode = mode_;
     }
-
-    // use impl.fstat() to check st_mtim to check if my File has changed.
-    // Flush the cache if it has.
-    // bool checkLastModified(Implementation &impl);
 
     // return file access: O_RDONLY, O_RDWR, or O_WRONLY
     int getAccess() {
@@ -833,7 +843,14 @@ private:
 
   /* Find every cache entry associated with this file.  If
      dirty_only == true, just write every dirty entry.  Otherwise
-     write every dirty entry and remove all entries. */
+     write every dirty entry and remove all entries. 
+     this is used:
+      - when a file is opened in VISIBLE_AFTER_CLOSE mode, to clear the
+        read cache
+      - when a file is closed in VISIBLE_AFTER_CLOSE mode, to flush dirty
+        pages
+      - in closeFileIfDone, when all handles to a file are closed
+  */
   void flushFilePages(File *file, bool dirty_only);
 
   /* When to delete an File?
