@@ -73,7 +73,7 @@ public:
 	IO_CMD_MSG *pQueue_Data;		// 8 bytes
 
 	void Enqueue(IO_CMD_MSG *pOp_Msg);
-	void Dequeue(IO_CMD_MSG *pOp_Msg);
+	int  Dequeue(IO_CMD_MSG *pOp_Msg);	// 1 - Queue is empty, 0 - Success. 
 };
 
 #endif

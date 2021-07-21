@@ -343,21 +343,22 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 		pIO_Queue = &(IO_Queue_List[thread_id]);
 		while(1)	{
 			if( (pIO_Queue->back) >= (pIO_Queue->front) )	{	// A queue that is not empty.
-				pIO_Queue->Dequeue(&Op_Msg);
-				fetch_and_add((int*)&(ActiveJobList[Op_Msg.idx_JobRec].nOps_Done), 1);
-				Op_Msg.tid = thread_id;
-				
-				if (pthread_mutex_lock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
-					perror("pthread_mutex_lock");
-					exit(2);
-				}
-				
-				Process_One_IO_OP(&Op_Msg);	// Do the real IO work!
-				nOPs_Done[thread_id]++;
-				
-				if (pthread_mutex_unlock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
-					perror("pthread_mutex_unlock");
-					exit(2);
+				if( ! pIO_Queue->Dequeue(&Op_Msg) )	{	// 0 - success (not empty)
+					fetch_and_add((int*)&(ActiveJobList[Op_Msg.idx_JobRec].nOps_Done), 1);
+					Op_Msg.tid = thread_id;
+					
+					if (pthread_mutex_lock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
+						perror("pthread_mutex_lock");
+						exit(2);
+					}
+					
+					Process_One_IO_OP(&Op_Msg);	// Do the real IO work!
+					nOPs_Done[thread_id]++;
+					
+					if (pthread_mutex_unlock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
+						perror("pthread_mutex_unlock");
+						exit(2);
+					}
 				}
 			}
 		}
@@ -549,7 +550,7 @@ void CIO_QUEUE::Enqueue(IO_CMD_MSG *pOp_Msg)
 	}
 }
 
-void CIO_QUEUE::Dequeue(IO_CMD_MSG *pOp_Msg)
+int CIO_QUEUE::Dequeue(IO_CMD_MSG *pOp_Msg)	// 1 - Queue is empty, 0 - Success. 
 {
 	IO_CMD_MSG *pMsg;
 		
@@ -562,10 +563,18 @@ void CIO_QUEUE::Dequeue(IO_CMD_MSG *pOp_Msg)
 		front++;
 //		nTokenReload++;
 	}
+	else	{	// empty
+		if (pthread_mutex_unlock(&lock) != 0) {
+			perror("pthread_mutex_unlock");
+			exit(2);
+		}
+		return 1;	// empty queue
+	}
 
 	if (pthread_mutex_unlock(&lock) != 0) {
 		perror("pthread_mutex_unlock");
 		exit(2);
 	}
+	return 0;	// success
 }
 
