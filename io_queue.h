@@ -73,7 +73,7 @@ public:
 	IO_CMD_MSG *pQueue_Data;		// 8 bytes
 
 	void Enqueue(IO_CMD_MSG *pOp_Msg);
-	IO_CMD_MSG* Dequeue(void);
+	void Dequeue(IO_CMD_MSG *pOp_Msg);
 };
 
 #endif
