@@ -24,6 +24,10 @@
 #include "dict.h"
 #include "utility.h"
 #include "ncx_slab.h"
+#include "queue_free_mem.h"
+#include "fixed_mem_allocator.h"
+
+#define MIN_BATCH_SIZE_FREE_EX_POINTER	(128*1024)
 
 extern long int nSizeReg;
 extern __thread uint64_t rseed[2];
@@ -32,6 +36,8 @@ extern __thread int idx_qp_server;
 //#define MAX_DIR_FD	(65536)
 //#define MAX_DIR_FD_M1	((MAX_DIR_FD) - 1)
 extern SERVER_QUEUEPAIR Server_qp;
+extern CQUEUE_FREE_MEM CQueue_Free_Mem;
+
 
 const int IO_Msg_Size_op = ( offsetof(IO_CMD_MSG,op) + sizeof(int) );
 static size_t File_Strip_Size_All_server, Stripe_Offset_Shift;
@@ -48,6 +54,7 @@ char szFSRoot[64]=MYFS_ROOT_DIR;
 pthread_mutex_t create_new_lock[MAX_NUM_FILE_OP_LOCK];	// the lock used by the right server
 //pthread_mutex_t create_new_ext_lock[MAX_NUM_FILE_OP_LOCK];	// the lock used by extended server
 pthread_mutex_t unlink_lock[MAX_NUM_FILE_OP_LOCK];
+pthread_mutex_t unlinkDir_lock[MAX_NUM_FILE_OP_LOCK];
 pthread_mutex_t file_lock[MAX_NUM_FILE_OP_LOCK];
 //pthread_mutex_t file_wr_lock[MAX_NUM_FILE_OP_LOCK];
 pthread_mutex_t dir_entry_lock[MAX_NUM_FILE_OP_LOCK];
@@ -58,11 +65,10 @@ pthread_mutex_t ht_stripe_lock;	// modify hashtable lock
 //pthread_mutex_t ht_DirEntry_lock[MAX_NUM_FILE_OP_LOCK];	// modify hashtable lock
 pthread_mutex_t *pAccess_qp0_lock;	// Only one token is available to access queue pair 0 since the target buffer on remote server is shared!!!! 
 
+CFIXEDSIZE_MEM_ALLOCATOR CFixedSizeMemAllcator;
+//ncx_slab_pool_t *sp_CallReturnBuff=NULL;
+//char *p_CallReturnBuff=NULL;
 
-ncx_slab_pool_t *sp_CallReturnBuff=NULL;
-char *p_CallReturnBuff=NULL;
-
-//ncx_slab_pool_t *sp_DirEntryName=NULL, *sp_DirEntryNameOffset=NULL, *sp_LongFileNameBuff=NULL;
 ncx_slab_pool_t *sp_LongFileNameBuff=NULL, *sp_DirEntryHashTableBuff=NULL;
 ncx_slab_pool_t *sp_ExtraPointers=NULL;
 ncx_slab_pool_t *sp_DirEntryList=NULL;
@@ -192,6 +198,10 @@ void Init_Memory(void)
 			printf("\n mutex unlink_lock init failed\n");
 			exit(1);
 		}
+                if(pthread_mutex_init(&(unlinkDir_lock[i]), NULL) != 0) {
+                        printf("\n mutex unlinkDir_lock init failed\n");
+                        exit(1);
+                }
 		if(pthread_mutex_init(&(file_lock[i]), NULL) != 0) { 
 			printf("\n mutex file_lock init failed\n"); 
 			exit(1);
@@ -391,7 +401,6 @@ inline int Wait_For_IO_Request_Result(int Tag_Magic, RW_FUNC_RETURN *pIO_Result)
 	return 0;
 }
 
-#define SIZE_FOR_NEW_MSG	(64)
 
 void Query_Other_Server(int idx_server)
 {
@@ -401,8 +410,9 @@ void Query_Other_Server(int idx_server)
 	int idx_qp;
 
 	idx_qp = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_qp_server;
-	
-	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN));
+
+	pMemAlloc = CFixedSizeMemAllcator.Allocate_a_Block();	
+//	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN));
 	pNewMsg_ToSend = (char*)pMemAlloc;
 	pIO_Cmd_ToSend_Other_Server = (IO_CMD_MSG *)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG);
 
@@ -431,7 +441,8 @@ void Query_Other_Server(int idx_server)
 	}
 	printf("DBG> Rank = %d result = %d nDataSize = %d\n", mpi_rank, pResult->ret_value, pResult->nDataSize);
 
-	ncx_slab_free(sp_CallReturnBuff, pMemAlloc);
+	CFixedSizeMemAllcator.Free_a_Block(pMemAlloc);
+//	ncx_slab_free(sp_CallReturnBuff, pMemAlloc);
 }
 
 int Request_Is_ParentDIr_Existing(int idx_server, char szPath[], int *pIdx_Parent_Dir)	// return 1 if existing, 0 if non-existing
@@ -444,7 +455,8 @@ int Request_Is_ParentDIr_Existing(int idx_server, char szPath[], int *pIdx_Paren
 	int idx_qp;
 
 	idx_qp = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_qp_server;
-	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN) + 1*sizeof(int));
+        pMemAlloc = CFixedSizeMemAllcator.Allocate_a_Block();
+//	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN) + 1*sizeof(int));
 	pNewMsg_ToSend = (char*)pMemAlloc;
 	pIO_Cmd_ToSend_Other_Server = (IO_CMD_MSG *)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG);
 
@@ -475,7 +487,8 @@ int Request_Is_ParentDIr_Existing(int idx_server, char szPath[], int *pIdx_Paren
 	*pIdx_Parent_Dir = pReturnResult_Dir_Exist->idx_Parent_Dir;
 
 	ret = pResult->ret_value;
-	ncx_slab_free(sp_CallReturnBuff, pMemAlloc);
+//	ncx_slab_free(sp_CallReturnBuff, pMemAlloc);
+        CFixedSizeMemAllcator.Free_a_Block(pMemAlloc);
 
 	return ret;
 }
@@ -487,7 +500,9 @@ void Request_Free_Stripe_Data(int idx_server, char szFileName[])
 	int idx_qp;
 
 	idx_qp = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_qp_server;
-	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN) + 1*sizeof(int));
+        pMemAlloc = CFixedSizeMemAllcator.Allocate_a_Block();
+
+//	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN) + 1*sizeof(int));
 	pNewMsg_ToSend = (char*)pMemAlloc;
 	pIO_Cmd_ToSend_Other_Server = (IO_CMD_MSG *)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG);
 
@@ -509,7 +524,8 @@ void Request_Free_Stripe_Data(int idx_server, char szFileName[])
 		perror("pthread_mutex_unlock");
 		exit(2);
 	}
-	ncx_slab_free(sp_CallReturnBuff, pMemAlloc);
+//	ncx_slab_free(sp_CallReturnBuff, pMemAlloc);
+        CFixedSizeMemAllcator.Free_a_Block(pMemAlloc);
 }
 
 // return 0 if succeed, -1 if fail
@@ -523,7 +539,8 @@ int Request_ParentDir_Add_Entry(int idx_server, char szPath[], int nLenParentDir
 	int idx_qp;
 
 	idx_qp = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_qp_server;
-	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN) + 1*sizeof(int));
+//	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN) + 1*sizeof(int));
+        pMemAlloc = CFixedSizeMemAllcator.Allocate_a_Block();
 	pNewMsg_ToSend = (char*)pMemAlloc;
 	pIO_Cmd_ToSend_Other_Server = (IO_CMD_MSG *)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG);
 
@@ -559,7 +576,8 @@ int Request_ParentDir_Add_Entry(int idx_server, char szPath[], int nLenParentDir
 	else	errno = pResult->myerrno;
 
 	ret = pResult->ret_value;
-	ncx_slab_free(sp_CallReturnBuff, pMemAlloc);
+//	ncx_slab_free(sp_CallReturnBuff, pMemAlloc);
+        CFixedSizeMemAllcator.Free_a_Block(pMemAlloc);
 
 	return ret;
 }
@@ -574,7 +592,8 @@ void Request_ParentDir_Remove_Entry(char szEntryName_ToRemove[], int idx_server,
 	int idx_qp;
 
 	idx_qp = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_qp_server;
-	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN));
+        pMemAlloc = CFixedSizeMemAllcator.Allocate_a_Block();
+//	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN));
 	pNewMsg_ToSend = (char*)pMemAlloc;
 	pIO_Cmd_ToSend_Other_Server = (IO_CMD_MSG *)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG);
 
@@ -608,7 +627,8 @@ void Request_ParentDir_Remove_Entry(char szEntryName_ToRemove[], int idx_server,
 	}
 	if(pResult->ret_value != 0)	errno = pResult->myerrno;
 
-	ncx_slab_free(sp_CallReturnBuff, pMemAlloc);
+//	ncx_slab_free(sp_CallReturnBuff, pMemAlloc);
+        CFixedSizeMemAllcator.Free_a_Block(pMemAlloc);
 }
 
 
@@ -650,10 +670,10 @@ int my_mkdir(char szDirName[], int mode, int uid, int gid)
 		}
 
 		if( bParentDirExisting )	{	// parent dir exists. 
-			pthread_mutex_lock(&ht_dir_lock);
-			dir_idx = p_Hash_Dir->DictInsertAuto(szDirName, &elt_list_dir, &ht_table_dir);
-			nDir++;
-			pthread_mutex_unlock(&ht_dir_lock);
+//			pthread_mutex_lock(&ht_dir_lock);
+			dir_idx = p_Hash_Dir->DictInsertAuto(szDirName, &elt_list_dir, &ht_table_dir, &nDir, 1);
+//			nDir++;
+//			pthread_mutex_unlock(&ht_dir_lock);
 
 			strcpy(pDirMetaData[dir_idx].szDirName, szDirName);
 
@@ -664,14 +684,13 @@ int my_mkdir(char szDirName[], int mode, int uid, int gid)
 			pDirMetaData[dir_idx].nEntryTriggerShrink = (int)(pDirMetaData[dir_idx].nMaxEntry * RATIO_DIRENTRY_HASHTABLE_SHRINK);
 			pDirMetaData[dir_idx].p_Hash_DirEntry = (CHASHTABLE_DirEntry *)ncx_slab_alloc(sp_DirEntryHashTableBuff, CHASHTABLE_DirEntry::GetStorageSize(DEFAULT_MAX_ENTRY_PER_DIR));
 			pDirMetaData[dir_idx].p_Hash_DirEntry->DictCreate(DEFAULT_MAX_ENTRY_PER_DIR, &(pDirMetaData[dir_idx].elt_list_DirEntry), &(pDirMetaData[dir_idx].ht_table_DirEntry));	// init hash table
-//			pDirMetaData[dir_idx].nOffset_To_EntryNameOffsetList = (long int)ncx_slab_alloc(sp_DirEntryNameOffset, pDirMetaData[dir_idx].nMaxEntry*sizeof(int)) - (long int)p_DirEntryNameOffsetBuff;
 			pDirMetaData[dir_idx].nLenAllEntries = 0;
 
 			// insert into file hash table too.
-			pthread_mutex_lock(&ht_file_lock);
-			file_idx = p_Hash_File->DictInsertAuto(szDirName, &elt_list_file, &ht_table_file);
-			nFile++;
-			pthread_mutex_unlock(&ht_file_lock);
+//			pthread_mutex_lock(&ht_file_lock);
+			file_idx = p_Hash_File->DictInsertAuto(szDirName, &elt_list_file, &ht_table_file, &nFile, 1);
+//			nFile++;
+//			pthread_mutex_unlock(&ht_file_lock);
 
 			strcpy(pMetaData[file_idx].szFileName, szDirName);
 			pMetaData[file_idx].idx_Server_Parent_Dir = idx_server_ParentDir;
@@ -789,10 +808,10 @@ int my_openfile(size_t DataReturn[], char szFileName[], int oflags, ...)
 			if( bParentDirExisting )	{	// parent dir exists on current server!
 				// insert into file hash table too.
 
-				pthread_mutex_lock(&ht_file_lock);
-				file_idx = p_Hash_File->DictInsertAuto(szFileName, &elt_list_file, &ht_table_file);
-				nFile++;
-				pthread_mutex_unlock(&ht_file_lock);
+//				pthread_mutex_lock(&ht_file_lock);
+				file_idx = p_Hash_File->DictInsertAuto(szFileName, &elt_list_file, &ht_table_file, &nFile, 1);
+//				nFile++;
+//				pthread_mutex_unlock(&ht_file_lock);
 
 				pMetaData[file_idx].nLenName = nLenFileName;
 				pMetaData[file_idx].nLenParentDirName = nLenParentDirName;
@@ -1014,7 +1033,8 @@ void my_Free_Stripe_Data_Common(DirectPointer *pExtraData, int nExtraPointer)
 			count++;
 			if(count == MAX_NUM_BLOCKS_TO_FREE_M1)	{
 				Addr_List[count] = NULL;
-				pMem_Allocator->Mem_Batch_Free(Addr_List);
+				CQueue_Free_Mem.Enqueue(Addr_List, MAX_NUM_BLOCKS_TO_FREE_M1);
+//				pMem_Allocator->Mem_Batch_Free(Addr_List);
 				count = 0;	// reset
 			}
 		}
@@ -1022,10 +1042,17 @@ void my_Free_Stripe_Data_Common(DirectPointer *pExtraData, int nExtraPointer)
 	}
 	if(count > 0)	{
 		Addr_List[count] = NULL;
-		pMem_Allocator->Mem_Batch_Free(Addr_List);
+		CQueue_Free_Mem.Enqueue(Addr_List, count);
+//		pMem_Allocator->Mem_Batch_Free(Addr_List);
 		count = 0;	// reset
 	}
-	ncx_slab_free(sp_ExtraPointers, pExtraData);
+	if(nExtraPointer >= MIN_BATCH_SIZE_FREE_EX_POINTER)	{	// free memory immediately! 
+		ncx_slab_free(sp_ExtraPointers, pExtraData);
+	}
+	else	{
+		CQueue_Free_Mem.Enqueue_Ex_Pointer(pExtraData);
+	}
+//	ncx_slab_free(sp_ExtraPointers, pExtraData);
 }
 
 void my_Free_Stripe_Data_Ext_Server(char szFileName[])
@@ -1036,15 +1063,16 @@ void my_Free_Stripe_Data_Ext_Server(char szFileName[])
 
 	fn_hash = XXH64(szFileName, strlen(szFileName), 0);
 
-	pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 	idx_file = p_Hash_LargeFile->DictSearch(szFileName, &elt_list_LargeFile, &ht_table_LargeFile, &fn_hash_2);
+	pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+//	idx_file = p_Hash_LargeFile->DictSearch(szFileName, &elt_list_LargeFile, &ht_table_LargeFile, &fn_hash_2);
 	if(idx_file >= 0)	my_Free_Stripe_Data_Common(pStripeData[idx_file].pExtraData, pStripeData[idx_file].nExtraPointer);
 	pthread_mutex_unlock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 
 	if(idx_file >= 0)	{
-		pthread_mutex_lock(&ht_stripe_lock);
-		p_Hash_LargeFile->DictDelete(szFileName, &elt_list_LargeFile, &ht_table_LargeFile);	// remove hash table record
-		pthread_mutex_unlock(&ht_stripe_lock);
+//		pthread_mutex_lock(&ht_stripe_lock);
+		p_Hash_LargeFile->DictDelete(szFileName, &elt_list_LargeFile, &ht_table_LargeFile, NULL, 0);	// remove hash table record
+//		pthread_mutex_unlock(&ht_stripe_lock);
 	}
 }
 
@@ -1239,7 +1267,7 @@ int Truncate_File(int file_idx, size_t size)
 }
 
 
-void Append_DirectPointer_List(STRIPE_DATA_INFO *pStripeData, const ULongInt addr_newly_allocated, const size_t File_Offset, const ULongInt size_Allocated)
+void Append_DirectPointer_List(STRIPE_DATA_INFO *pStripeData, const ULongInt addr_newly_allocated, const size_t File_Offset, const ULongInt size_Allocated, const size_t FileOffsetMax)
 {
 	__m256i Stripe_Data;
 	int nExtraPointer, nMaxExtraPointer;
@@ -1276,11 +1304,21 @@ void Append_DirectPointer_List(STRIPE_DATA_INFO *pStripeData, const ULongInt add
 		else	{
 			pStripeDataNew->MaxOffset += size_Allocated;
 		}
-		pStripeDataNew->MaxDataRange = pStripeDataNew->MaxOffset;
+		pStripeDataNew->MaxDataRange = max(min(pStripeDataNew->MaxOffset, FileOffsetMax), pStripeDataNew->MaxDataRange);
 		pStripeDataNew->pExtraData = pExtraDataNew;
 		_mm256_storeu_si256 ((__m256i *)pStripeData, Stripe_Data);
 
-		if(pExtraDataOrg)	ncx_slab_free(sp_ExtraPointers, pExtraDataOrg);
+//		if(pExtraDataOrg)	ncx_slab_free(sp_ExtraPointers, pExtraDataOrg);
+//		if(pExtraDataOrg)	CQueue_Free_Mem.Enqueue_Ex_Pointer(pExtraDataOrg);
+
+		if(pExtraDataOrg)	{
+			if(nExtraPointer >= MIN_BATCH_SIZE_FREE_EX_POINTER)	{	// free memory immediately! 
+				ncx_slab_free(sp_ExtraPointers, pExtraDataOrg);
+			}
+			else	{
+				CQueue_Free_Mem.Enqueue_Ex_Pointer(pExtraDataOrg);
+			}
+		}
 	}
 	else	{
 		pExtraDataOrg[nExtraPointer].AddressofData = addr_newly_allocated;
@@ -1299,7 +1337,8 @@ void Append_DirectPointer_List(STRIPE_DATA_INFO *pStripeData, const ULongInt add
 		else	{
 			pStripeDataNew->MaxOffset += size_Allocated;
 		}
-		pStripeDataNew->MaxDataRange = pStripeDataNew->MaxOffset;
+//		pStripeDataNew->MaxDataRange = pStripeDataNew->MaxOffset;
+		pStripeDataNew->MaxDataRange = max(min(pStripeDataNew->MaxOffset, FileOffsetMax), pStripeDataNew->MaxDataRange);
 		_mm256_storeu_si256 ((__m256i *)pStripeData, Stripe_Data);
 	}
 
@@ -1326,17 +1365,19 @@ size_t my_write_stripe(int fd, const char *szFileName, int server_shift, const v
 	nOffsetMax = offset + count;
 	BaseOffset = server_shift * FILE_STRIPE_SIZE;
 
-	pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+//	pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 	if(fd >= 0)	{	// The right server
+		pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 		idx_file = fd_List[fd].idx_file;
 		pStripeDataLocal = (STRIPE_DATA_INFO *)(&(pMetaData[idx_file].nExtraPointer));
 	}
 	else	{	// extended server
 		idx_file = p_Hash_LargeFile->DictSearch(szFileName, &elt_list_LargeFile, &ht_table_LargeFile, &fn_hash_2);
+		pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 		if(idx_file < 0)	{	// No record. Need to create an entry. 
-			pthread_mutex_lock(&ht_stripe_lock);
+//			pthread_mutex_lock(&ht_stripe_lock);
 			idx_file = p_Hash_LargeFile->DictSearchAndInsertAuto(szFileName, &elt_list_LargeFile, &ht_table_LargeFile, &bInsertNewRecord);
-			pthread_mutex_unlock(&ht_stripe_lock);
+//			pthread_mutex_unlock(&ht_stripe_lock);
 			if(bInsertNewRecord)	{	// a newly inserted record. Not existing previously. 
 				pStripeDataLocal = &(pStripeData[idx_file]);
 				pStripeDataLocal->nExtraPointer = 0;
@@ -1356,8 +1397,9 @@ size_t my_write_stripe(int fd, const char *szFileName, int server_shift, const v
 		nBytesToAllocate = min(nOffsetMax - pStripeDataLocal->MaxOffset, (FILE_STRIPE_SIZE-nBytesResidue));
 		pNewBuff = pMem_Allocator->Mem_Alloc( nBytesToAllocate, &nBytesJustAllocated);
 		assert( (pNewBuff != NULL) && (nBytesJustAllocated > 0) );
-		Append_DirectPointer_List(pStripeDataLocal, (const ULongInt)pNewBuff, (const size_t)pStripeDataLocal->MaxOffset, (const ULongInt)nBytesJustAllocated);
+		Append_DirectPointer_List(pStripeDataLocal, (const ULongInt)pNewBuff, (const size_t)pStripeDataLocal->MaxOffset, (const ULongInt)nBytesJustAllocated, nOffsetMax);
 	}
+	if(pStripeDataLocal->MaxDataRange < nOffsetMax )  pStripeDataLocal->MaxDataRange = max(min(pStripeDataLocal->MaxOffset, nOffsetMax), pStripeDataLocal->MaxDataRange);
 
 	idx_Block = Query_Index_StorageBlock_with_Offset_Stripe(pStripeDataLocal, offset);
 	pthread_mutex_unlock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
@@ -1597,17 +1639,19 @@ size_t my_write_stripe_RDMA(int fd, const char *szFileName, int server_shift, in
 	nOffsetMax = offset + count;
 	BaseOffset = server_shift * FILE_STRIPE_SIZE;
 
-	pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+//	pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 	if(fd >= 0)	{	// The right server
+		pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 		idx_file = fd_List[fd].idx_file;
 		pStripeDataLocal = (STRIPE_DATA_INFO *)(&(pMetaData[idx_file].nExtraPointer));
 	}
 	else	{	// extended server
 		idx_file = p_Hash_LargeFile->DictSearch(szFileName, &elt_list_LargeFile, &ht_table_LargeFile, &fn_hash_2);
+		pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 		if(idx_file < 0)	{	// No record. Need to create an entry. 
-			pthread_mutex_lock(&ht_stripe_lock);
+//			pthread_mutex_lock(&ht_stripe_lock);
 			idx_file = p_Hash_LargeFile->DictSearchAndInsertAuto(szFileName, &elt_list_LargeFile, &ht_table_LargeFile, &bInsertNewRecord);
-			pthread_mutex_unlock(&ht_stripe_lock);
+//			pthread_mutex_unlock(&ht_stripe_lock);
 			if(bInsertNewRecord)	{	// a newly inserted record. Not existing previously. 
 				pStripeDataLocal = &(pStripeData[idx_file]);
 				pStripeDataLocal->nExtraPointer = 0;
@@ -1627,9 +1671,9 @@ size_t my_write_stripe_RDMA(int fd, const char *szFileName, int server_shift, in
 		nBytesToAllocate = min(nOffsetMax - pStripeDataLocal->MaxOffset, (FILE_STRIPE_SIZE-nBytesResidue));
 		pNewBuff = pMem_Allocator->Mem_Alloc( nBytesToAllocate, &nBytesJustAllocated);
 		assert( (pNewBuff != NULL) && (nBytesJustAllocated > 0) );
-		Append_DirectPointer_List(pStripeDataLocal, (const ULongInt)pNewBuff, (const size_t)pStripeDataLocal->MaxOffset, (const ULongInt)nBytesJustAllocated);
+		Append_DirectPointer_List(pStripeDataLocal, (const ULongInt)pNewBuff, (const size_t)pStripeDataLocal->MaxOffset, (const ULongInt)nBytesJustAllocated, nOffsetMax);
 	}
-
+	if(pStripeDataLocal->MaxDataRange < nOffsetMax )  pStripeDataLocal->MaxDataRange = max(min(pStripeDataLocal->MaxOffset, nOffsetMax), pStripeDataLocal->MaxDataRange);
 	idx_Block = Query_Index_StorageBlock_with_Offset_Stripe(pStripeDataLocal, offset);
 	pthread_mutex_unlock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 
@@ -1686,13 +1730,15 @@ size_t my_read_stripe(int fd, const char *szFileName, int server_shift, void *bu
 	nBytes_ToRead = count;
 
 	fn_hash = XXH64(szFileName, strlen(szFileName), 0);
-	pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+//	pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 	if(fd >= 0)	{	// The right server
+		pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 		idx_file = fd_List[fd].idx_file;
 		pStripeDataLocal = (STRIPE_DATA_INFO *)(&(pMetaData[idx_file].nExtraPointer));
 	}
 	else	{	// extended server
 		idx_file = p_Hash_LargeFile->DictSearch(szFileName, &elt_list_LargeFile, &ht_table_LargeFile, &fn_hash2);
+		pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 		if(idx_file < 0)	{	// No record. Need to create an entry. 
 			printf("Warning> Failed to find file %s on server %d in my_read_stripe().\n", szFileName, mpi_rank);
 			pthread_mutex_unlock(&(file_lock[idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
@@ -1823,13 +1869,15 @@ size_t my_read_stripe_RDMA(int fd, const char *szFileName, int server_shift, int
 	nBytes_ToRead = count;
 
 	fn_hash = XXH64(szFileName, strlen(szFileName), 0);
-	pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+//	pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 	if(fd >= 0)	{	// The right server
+		pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 		idx_file = fd_List[fd].idx_file;
 		pStripeDataLocal = (STRIPE_DATA_INFO *)(&(pMetaData[idx_file].nExtraPointer));
 	}
 	else	{	// extended server
 		idx_file = p_Hash_LargeFile->DictSearch(szFileName, &elt_list_LargeFile, &ht_table_LargeFile, &fn_hash2);
+		pthread_mutex_lock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 		if(idx_file < 0)	{	// No record. Need to create an entry. 
 			printf("Warning> Failed to find file %s on server %d in my_read_stripe().\n", szFileName, mpi_rank);
 			pthread_mutex_unlock(&(file_lock[idx_file & MAX_NUM_FILE_OP_LOCK_M1]));
@@ -2312,13 +2360,21 @@ void my_RemoveEntryInfo_Remote_Request(char szEntryName_ToRemove[], int idx_Pare
 
 	assert(idx_Parent_dir>=0);
 
+//	pDirMetaData[idx_Parent_dir].p_Hash_DirEntry->DictDelete(szEntryName_ToRemove, &(pDirMetaData[idx_Parent_dir].elt_list_DirEntry), &(pDirMetaData[idx_Parent_dir].ht_table_DirEntry));
+//	fetch_and_add(&(pDirMetaData[idx_Parent_dir].nLenAllEntries), -(strlen(szEntryName_ToRemove) + 2) );
+//	fetch_and_add(&(pDirMetaData[idx_Parent_dir].nEntries), -1 );
+
+//	fetch_and_add(&(pDirMetaData[idx_Parent_dir].nLenAllEntries), -(strlen(szEntryName_ToRemove) + 2) );
+//	fetch_and_add(&(pDirMetaData[idx_Parent_dir].nEntries), -1 );
 	pthread_mutex_lock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
 
 	pDirMetaData[idx_Parent_dir].p_Hash_DirEntry->DictDelete(szEntryName_ToRemove, &(pDirMetaData[idx_Parent_dir].elt_list_DirEntry), &(pDirMetaData[idx_Parent_dir].ht_table_DirEntry));
 	pDirMetaData[idx_Parent_dir].nLenAllEntries -= (strlen(szEntryName_ToRemove) + 2);
 	pDirMetaData[idx_Parent_dir].nEntries--;
+	
 
 	if( (pDirMetaData[idx_Parent_dir].nEntries < pDirMetaData[idx_Parent_dir].nEntryTriggerShrink) && (pDirMetaData[idx_Parent_dir].nMaxEntry > DEFAULT_MAX_ENTRY_PER_DIR) )	{	// NEED to shrink hashtable
+//		pthread_mutex_lock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
 		nMaxEntrySave = pDirMetaData[idx_Parent_dir].nMaxEntry;
 		pDirMetaData[idx_Parent_dir].nMaxEntry /= 2;
 		pHT_DirEntrySave = pDirMetaData[idx_Parent_dir].p_Hash_DirEntry;	// save it. We need to free it after transfering to newly allocated hashtable
@@ -2336,7 +2392,8 @@ void my_RemoveEntryInfo_Remote_Request(char szEntryName_ToRemove[], int idx_Pare
 			}
 		}
 		pthread_mutex_unlock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
-		ncx_slab_free(sp_DirEntryHashTableBuff, pHT_DirEntrySave);	// free the old HT
+//		ncx_slab_free(sp_DirEntryHashTableBuff, pHT_DirEntrySave);	// free the old HT
+		CQueue_Free_Mem.Enqueue_Dir_Entry((void*)pHT_DirEntrySave);
 	}
 	else	pthread_mutex_unlock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
 }
@@ -2383,12 +2440,10 @@ void my_RemoveEntryInfo(int my_file_idx)
 			}
 		}
 		pthread_mutex_unlock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
-		ncx_slab_free(sp_DirEntryHashTableBuff, pHT_DirEntrySave);	// free the old HT
+//		ncx_slab_free(sp_DirEntryHashTableBuff, pHT_DirEntrySave);	// free the old HT
+		CQueue_Free_Mem.Enqueue_Dir_Entry((void*)pHT_DirEntrySave);
 	}
 	else	pthread_mutex_unlock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
-
-
-//	pthread_mutex_unlock(&(dir_entry_lock[idx_Parent_dir & MAX_NUM_FILE_OP_LOCK_M1]));
 
 	return;
 }
@@ -2416,28 +2471,27 @@ void my_UpdateEntryIndex_in_ParentDir(char szPath[], int NewIdxEntry_in_Dir)
 	pthread_mutex_unlock(&(create_new_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 }
 */
+
+/*
 int my_rmdir(char szDirName[])
 {
 	int dir_idx, file_idx;
 	unsigned long long fn_hash=0, fn_hash_2=0;
+	CHASHTABLE_DirEntry *p_Hash_DirEntry_ToFree=NULL;
 
 //	printf("DBG> rmdir(%s)\n", szDirName);
-//	if(strcmp(szDirName, "/myfs/mdtets_S00/test-dir.0-0/mdtest_tree.0/mdtest_tree.1/dir.mdtest.0.3")==0)	{
-//		printf("DBG> Need to debug.\n");
-//	}
 
 	fn_hash = XXH64(szDirName, strlen(szDirName), 0);
-	pthread_mutex_lock(&(unlink_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 
 	dir_idx = p_Hash_Dir->DictSearch(szDirName, &elt_list_dir, &ht_table_dir, &fn_hash_2);
 	if(dir_idx < 0)	{
-		pthread_mutex_unlock(&(unlink_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+//		pthread_mutex_unlock(&(unlinkDir_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 		errno = ENOENT;
 		return (-1);
 	}
 	else	{
 		if(pDirMetaData[dir_idx].nEntries > 0)	{
-			pthread_mutex_unlock(&(unlink_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+//			pthread_mutex_unlock(&(unlinkDir_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 			errno = ENOTEMPTY;	// Directory not empty
 			return -1;
 		}
@@ -2445,20 +2499,62 @@ int my_rmdir(char szDirName[])
 		file_idx = p_Hash_File->DictSearch(szDirName, &elt_list_file, &ht_table_file, &fn_hash_2);
 		assert(file_idx>0);
 //	printf("DBG> Rank = %d rmdir(%s) idx_Server_Parent_Dir = %d idx_Parent_Dir = %d IdxEntry_in_Dir = %d\n", mpi_rank, szDirName, pMetaData[file_idx].idx_Server_Parent_Dir, pMetaData[file_idx].idx_Parent_Dir);
+		pthread_mutex_lock(&(unlinkDir_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 		my_RemoveEntryInfo(file_idx);
-		ncx_slab_free(sp_DirEntryHashTableBuff, (void*)(pDirMetaData[dir_idx].p_Hash_DirEntry));
+//		ncx_slab_free(sp_DirEntryHashTableBuff, (void*)(pDirMetaData[dir_idx].p_Hash_DirEntry));
+		CQueue_Free_Mem.Enqueue_Dir_Entry((void*)(pDirMetaData[dir_idx].p_Hash_DirEntry));
 
-		pthread_mutex_lock(&ht_file_lock);
-		p_Hash_File->DictDelete(szDirName, &elt_list_file, &ht_table_file);	// remove hash table record
-		nFile--;
-		pthread_mutex_unlock(&ht_file_lock);
+//		pthread_mutex_lock(&ht_file_lock);
+//		nFile--;
+//		pthread_mutex_unlock(&ht_file_lock);
 
-		pthread_mutex_lock(&ht_dir_lock);
-		p_Hash_Dir->DictDelete(szDirName, &elt_list_dir, &ht_table_dir);	// remove hash table record
-		nDir--;
-		pthread_mutex_unlock(&ht_dir_lock);
+//		pthread_mutex_lock(&ht_dir_lock);
+//		nDir--;
+//		pthread_mutex_unlock(&ht_dir_lock);
 
-		pthread_mutex_unlock(&(unlink_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+		pthread_mutex_unlock(&(unlinkDir_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+
+		p_Hash_File->DictDelete(szDirName, &elt_list_file, &ht_table_file, &nFile, -1);	// remove hash table record
+		p_Hash_Dir->DictDelete(szDirName, &elt_list_dir, &ht_table_dir, &nDir, -1);	// remove hash table record
+	}
+	return 0;
+}
+*/
+
+int my_rmdir(char szDirName[])
+{
+	int dir_idx, file_idx;
+	unsigned long long fn_hash=0, fn_hash_2=0;
+	CHASHTABLE_DirEntry *p_Hash_DirEntry_ToFree=NULL;
+
+//	printf("DBG> rmdir(%s)\n", szDirName);
+
+	fn_hash = XXH64(szDirName, strlen(szDirName), 0);
+
+	dir_idx = p_Hash_Dir->DictSearch(szDirName, &elt_list_dir, &ht_table_dir, &fn_hash_2);
+	if(dir_idx < 0)	{
+//		pthread_mutex_unlock(&(unlinkDir_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+		errno = ENOENT;
+		return (-1);
+	}
+	else	{
+		if(pDirMetaData[dir_idx].nEntries > 0)	{
+//			pthread_mutex_unlock(&(unlinkDir_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+			errno = ENOTEMPTY;	// Directory not empty
+			return -1;
+		}
+
+		file_idx = p_Hash_File->DictSearch(szDirName, &elt_list_file, &ht_table_file, &fn_hash_2);
+		assert(file_idx>0);
+
+		pthread_mutex_lock(&(unlinkDir_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+		my_RemoveEntryInfo(file_idx);
+//		ncx_slab_free(sp_DirEntryHashTableBuff, (void*)(pDirMetaData[dir_idx].p_Hash_DirEntry));
+		CQueue_Free_Mem.Enqueue_Dir_Entry((void*)(pDirMetaData[dir_idx].p_Hash_DirEntry));
+		pthread_mutex_unlock(&(unlinkDir_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+
+		p_Hash_File->DictDelete(szDirName, &elt_list_file, &ht_table_file, &nFile, -1);	// remove hash table record
+		p_Hash_Dir->DictDelete(szDirName, &elt_list_dir, &ht_table_dir, &nDir, -1);	// remove hash table record
 	}
 	return 0;
 }
@@ -2471,8 +2567,8 @@ int my_unlink(char szFileName[], size_t *nFileSize)	// remove a regular file!
 //	printf("DBG> unlink(%s)\n", szFileName);
 
 	fn_hash = XXH64(szFileName, strlen(szFileName), 0);
-	pthread_mutex_lock(&(unlink_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 	file_idx = p_Hash_File->DictSearch(szFileName, &elt_list_file, &ht_table_file, &fn_hash_2);
+	pthread_mutex_lock(&(unlink_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 	if(file_idx < 0)	{
 		*nFileSize = 0;
 		szFileName[0] = 0;
@@ -2486,15 +2582,9 @@ int my_unlink(char szFileName[], size_t *nFileSize)	// remove a regular file!
 
 		my_RemoveEntryInfo(file_idx);
 	}
-	pthread_mutex_unlock(&(unlink_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+	if(file_idx >= 0)	p_Hash_File->DictDelete(pMetaData[file_idx].szFileName, &elt_list_file, &ht_table_file, &nFile, -1);
 
-	if(file_idx >= 0)	{
-		pthread_mutex_lock(&ht_file_lock);
-		p_Hash_File->DictDelete(pMetaData[file_idx].szFileName, &elt_list_file, &ht_table_file);	// remove hash table record
-//		pMetaData[file_idx].szFileName[0] = 0;
-		nFile--;
-		pthread_mutex_unlock(&ht_file_lock);
-	}
+	pthread_mutex_unlock(&(unlink_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 
 	return 0;
 }
@@ -2561,14 +2651,11 @@ int my_AddEntryInfo(int my_file_idx, int dir_idx)
 				pDirMetaData[dir_idx].p_Hash_DirEntry->DictInsert(elt_list_DirEntry_Save[i].key, elt_list_DirEntry_Save[i].value, &(pDirMetaData[dir_idx].elt_list_DirEntry), &(pDirMetaData[dir_idx].ht_table_DirEntry) );
 			}
 		}
-//		p_nEntryNameOffsetNew = (int *)ncx_slab_alloc(sp_DirEntryNameOffset, pDirMetaData[dir_idx].nMaxEntry*sizeof(int));
-//		memcpy((void*)p_nEntryNameOffsetNew, (void*)p_nEntryNameOffset, sizeof(int)*pDirMetaData[dir_idx].nEntries);
-//		pDirMetaData[dir_idx].nOffset_To_EntryNameOffsetList = (long int)p_nEntryNameOffsetNew - (long int)p_DirEntryNameOffsetBuff;
 
 		pthread_mutex_unlock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
 //		ncx_slab_free(sp_DirEntryHashTableBuff, elt_list_DirEntry_Save);	// free the old HT
-		ncx_slab_free(sp_DirEntryHashTableBuff, pHT_DirEntrySave);	// free the old HT
-//		ncx_slab_free(sp_DirEntryNameOffset, (void*)p_nEntryNameOffset);	// free in memory pool
+//		ncx_slab_free(sp_DirEntryHashTableBuff, pHT_DirEntrySave);	// free the old HT
+		CQueue_Free_Mem.Enqueue_Dir_Entry((void*)pHT_DirEntrySave);
 	}
 	else	pthread_mutex_unlock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
 
@@ -2626,7 +2713,8 @@ int my_AddEntryInfo_Remote_Request(char *szFullName, int nLenParentDirName, int 
 		}
 
 		pthread_mutex_unlock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
-		ncx_slab_free(sp_DirEntryHashTableBuff, pHT_DirEntrySave);	// free the old HT
+//		ncx_slab_free(sp_DirEntryHashTableBuff, pHT_DirEntrySave);	// free the old HT
+		CQueue_Free_Mem.Enqueue_Dir_Entry((void*)pHT_DirEntrySave);
 	}
 	else	pthread_mutex_unlock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
 

@@ -43,6 +43,7 @@ public:
 	int first_av;
 	int pad;
 	pthread_mutex_t lock;	// 40 bytes
+        int pad2[2];
 
 	static unsigned long int GetStorageSize(unsigned long int nSize)	{	return ( sizeof(CHASHTABLE_INT) + sizeof(int)*nSize*2 + sizeof(struct elt_Int)*nSize*2 );	}
 	void DictCreate(unsigned long int nSize, struct elt_Int ** p_elt_list, int ** p_ht_table);
@@ -60,6 +61,7 @@ public:
 	int first_av;
 	int nBytesMemReg;	// the size of registered memory
 	pthread_mutex_t lock;	// 40 bytes
+        int pad[2];
 
 	static unsigned long int GetStorageSize(unsigned long int nSize)	{	return ( sizeof(CHASHTABLE_MEMREG) + sizeof(int)*nSize*2 + sizeof(struct elt_MEMREG)*nSize*2 );	}
 	void DictCreate(unsigned long int nSize, struct elt_MEMREG ** p_elt_list, int ** p_ht_table);
@@ -76,17 +78,20 @@ public:
 	int first_av;
 	int pad;
 	pthread_mutex_t lock;	// 40 bytes
+        int pad2[2];
 //	int Offset_ht_table;	// Only save the offset since the memory address in different processes could be different!!!
 //	int Offset_elt_list;
 
 	static unsigned long int GetStorageSize(unsigned long int nSize)	{	return ( sizeof(CHASHTABLE_CHAR) + sizeof(int)*nSize*2 + sizeof(struct elt_Char)*nSize*2 );	}
 	void DictCreate(unsigned long int nSize, struct elt_Char ** p_elt_list, int ** p_ht_table);
-	int DictInsertAuto(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table);
+	int DictInsertAuto(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table, int *pVar_to_Inc, int ValInc);
+//	int DictInsertAuto(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table);
 	int DictSearchAndInsertAuto(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table, int *bNewRecord);
 	int DictInsert(const char *key, const int value, struct elt_Char ** p_elt_list, int ** p_ht_table);
 	int DictSearch(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table, unsigned long long *fn_hash);
 	int DictSearchOrg(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table);
-	void DictDelete(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table);
+//	void DictDelete(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table);
+	void DictDelete(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table, int *pVar_to_Dec, int ValDec);
 };
 
 class CHASHTABLE_DirEntry {
@@ -95,7 +100,8 @@ public:
     int n;              // number of elements stored
 	int first_av;
 	int pad;
-//	pthread_mutex_t lock;	// 40 bytes
+	pthread_mutex_t lock;	// 40 bytes
+	int pad2[2];
 
 	static unsigned long int GetStorageSize(unsigned long int nSize)	{	return ( sizeof(CHASHTABLE_DirEntry) + sizeof(int)*nSize*2 + sizeof(struct elt_CharEntry)*nSize*2 );	}
 	void DictCreate(unsigned long int nSize, struct elt_CharEntry ** p_elt_list, int ** p_ht_table);

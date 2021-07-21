@@ -12,14 +12,16 @@
 #include "corebinding.h"
 #include "unique_thread.h"
 #include "ncx_slab.h"
+#include "fixed_mem_allocator.h"
 
 long int nSizeReg=0;
 
 extern CORE_BINDING CoreBinding;
 extern pthread_attr_t thread_attr;
 extern CCreatedUniqueThread Unique_Thread;
-extern char *p_CallReturnBuff;
-extern ncx_slab_pool_t *sp_CallReturnBuff;
+//extern char *p_CallReturnBuff;
+//extern ncx_slab_pool_t *sp_CallReturnBuff;
+extern CFIXEDSIZE_MEM_ALLOCATOR CFixedSizeMemAllcator;
 
 extern int mpi_rank, nFSServer;	// rank and size of MPI
 extern CHASHTABLE_INT *pHT_ActiveJobs;
@@ -379,7 +381,8 @@ int SERVER_QUEUEPAIR::FindFirstAvailableQP(void)
 
 void SERVER_QUEUEPAIR::Init_Server_Socket(int max_num_qp, int port)
 {
-	int i, nSizeofNewMsgFlag, nSizeofHeartBeat, nSizeofIOCmdMsg, nSizeofIOResult, nSizeofIOResult_Recv;
+	int i, nSizeofNewMsgFlag, nSizeofHeartBeat, nSizeofIOCmdMsg, nSizeofIOResult, nSizeofIOResult_Recv, nSizePerCallReturnBlock, nSizeofReturnBuffer;
+	char *p_CallReturnBuff;
 
 //	void *pHash;
 	sock_addr = INADDR_ANY;
@@ -404,7 +407,11 @@ void SERVER_QUEUEPAIR::Init_Server_Socket(int max_num_qp, int port)
 	nSizeofIOCmdMsg = sizeof(IO_CMD_MSG)*max_qp;
 	nSizeofIOResult = sizeof(char)*IO_RESULT_BUFFER_SIZE*NUM_THREAD_IO_WORKER;	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	nSizeofIOResult_Recv = sizeof(char)*IO_RESULT_BUFFER_SIZE;	// the size of buffer to recv results from other servers. 
-	nSizeshm_Global = nSizeofNewMsgFlag + nSizeofHeartBeat + nSizeofIOCmdMsg + nSizeofIOResult + nSizeofIOResult_Recv + MAX_LEN_RETURN_BUFF;
+
+	nSizePerCallReturnBlock = (SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN) + 1*sizeof(int) + 64) & 0xFFFFFFC0;
+	nSizeofReturnBuffer = CFixedSizeMemAllcator.Query_MemSize(nSizePerCallReturnBlock, MAX_NUM_RETURN_BUFF);
+
+	nSizeshm_Global = nSizeofNewMsgFlag + nSizeofHeartBeat + nSizeofIOCmdMsg + nSizeofIOResult + nSizeofIOResult_Recv + nSizeofReturnBuffer;
 	p_shm_Global = memalign( 4096, nSizeshm_Global);
 	assert(p_shm_Global != NULL);
 	memset(p_shm_Global, 0, nSizeshm_Global);
@@ -414,7 +421,8 @@ void SERVER_QUEUEPAIR::Init_Server_Socket(int max_num_qp, int port)
 	p_shm_IO_Result = (char*)((char*)p_shm_Global + nSizeofNewMsgFlag + nSizeofHeartBeat + nSizeofIOCmdMsg);
 	p_shm_IO_Result_Recv = (char*)((char*)p_shm_Global + nSizeofNewMsgFlag + nSizeofHeartBeat + nSizeofIOCmdMsg + nSizeofIOResult);
 	p_CallReturnBuff = (char*)((char*)p_shm_Global + nSizeofNewMsgFlag + nSizeofHeartBeat + nSizeofIOCmdMsg + nSizeofIOResult + nSizeofIOResult_Recv);
-	sp_CallReturnBuff = ncx_slab_init((void*)p_CallReturnBuff, MAX_LEN_RETURN_BUFF);
+	CFixedSizeMemAllcator.Init_Memory_Pool(p_CallReturnBuff);
+//	sp_CallReturnBuff = ncx_slab_init((void*)p_CallReturnBuff, MAX_LEN_RETURN_BUFF);
 
 	FirstAV_QP = 0;
 	nQP = 0;
@@ -482,7 +490,7 @@ int SERVER_QUEUEPAIR::Setup_Listener(void)
 		}
 		else	{
 			// put socket into listening state
-			if (listen(fd,800) == -1) {
+			if (listen(fd,1600) == -1) {
 				fprintf(stderr, "listen: %s\n", strerror(errno));
 			}
 			else	{

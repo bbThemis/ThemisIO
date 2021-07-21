@@ -9,9 +9,9 @@ typedef unsigned long int ULongInt;
 typedef unsigned int UInt;
 
 #define RATIO_DIRENTRY_HASHTABLE_EXPAND	(0.9)
-#define RATIO_DIRENTRY_HASHTABLE_SHRINK	(0.4)
+#define RATIO_DIRENTRY_HASHTABLE_SHRINK	(0.35)
 
-#define MAX_NUM_FILE_OP_LOCK	(256)
+#define MAX_NUM_FILE_OP_LOCK	(512)
 #define MAX_NUM_FILE_OP_LOCK_M1	(MAX_NUM_FILE_OP_LOCK-1)
 
 #define NUM_DIRCT_PT	(8)
@@ -40,14 +40,17 @@ typedef unsigned int UInt;
 //#define DEFAULT_FULL_FILE_NAME_LEN	(176)
 #define DEFAULT_MAX_ENTRY_PER_DIR	(16)
 
-#define MAX_LEN_EXTRA_POINTERS_BUFF	(512*1024*1024)
+#define MAX_LEN_EXTRA_POINTERS_BUFF	(2048*1024*1024L)
 //#define MAX_LEN_DIR_ENTRY_BUFF	(128*1024*1024)
 //#define MAX_LEN_DIR_ENTRY_OFFSET_BUFF	(160*1024*1024)
 #define MAX_LEN_DIR_ENTRY_LIST_BUFF	(56*1024*1024)
 #define MAX_LEN_LONG_FILE_NAME_BUFF	(16*1024*1024)
 #define MAX_LEN_PER_DIR_ENTRY_BUFF	(2*1024*1024)
-#define MAX_LEN_RETURN_BUFF			(2*1024*1024)
+//#define MAX_LEN_RETURN_BUFF			(2*1024*1024)
 #define MAX_LEN_OPEN_DIR_BUFF		(384*1024*1024)
+
+#define MAX_NUM_RETURN_BUFF			(512)
+#define SIZE_FOR_NEW_MSG	(64)
 
 //#define MAX_LEN_DIR_ENTRY_HASHTABLE_BUFF	(16*4096*1024*1024L)	// NEED for large number of files in mdtest!!!
 #define MAX_LEN_DIR_ENTRY_HASHTABLE_BUFF      (6*4096*1024*1024L)
@@ -105,10 +108,12 @@ typedef struct {
 }META_INFO, *PMETA_INFO;	// local meta info of rw files
 
 typedef struct {
-	UInt		nEntries;	// 4. number of entries under this directory
+//	UInt		nEntries;	// 4. number of entries under this directory
+	int			nEntries;	// 4. number of entries under this directory
 	UInt		nMaxEntry;	// 4. the max number of entries current buffer can hold.
 //	ULongInt	nOffset_To_EntryNameOffsetList;		// the offset relative of p_DirEntryNameOffsetBuff
-	UInt		nLenAllEntries;
+//	UInt		nLenAllEntries;
+	int			nLenAllEntries;
 	int			nEntryTriggerExpand;	// larger than or equal to this number triggers hash table expand. Will implement shrink later!
 	int			nEntryTriggerShrink;	// larger than or equal to this number triggers hash table expand. Will implement shrink later!
 	CHASHTABLE_DirEntry *p_Hash_DirEntry=NULL;
