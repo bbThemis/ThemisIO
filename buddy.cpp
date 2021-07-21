@@ -1,6 +1,9 @@
 #include <malloc.h>
+#include <pthread.h>
+
 #include "buddy.h"
 #include "utility.h"
+#include "queue_free_mem.h"
 
 int CMEM_ALLOCATOR::Mem_Allocator_Init(unsigned long int npage, void *pMem_Pages, void *pMem_Data)
 {
@@ -8,6 +11,7 @@ int CMEM_ALLOCATOR::Mem_Allocator_Init(unsigned long int npage, void *pMem_Pages
     unsigned long start_addr;
 	int *p_mutex_attr;
 	pthread_mutexattr_t mattr;
+	pthread_t pthread_Free_Memory;
 	
 	if(pMem_Pages)	{
 		nPages = npage;
@@ -35,6 +39,12 @@ int CMEM_ALLOCATOR::Mem_Allocator_Init(unsigned long int npage, void *pMem_Pages
         perror("pthread_mutex_init");
         exit(1);
 	}
+
+	if(pthread_create(&pthread_Free_Memory, NULL, Func_thread_Free_Memory, NULL)) {
+		fprintf(stderr, "Error creating thread Func_thread_Free_Memory().\n");
+		return 0;
+	}
+
 	return 0;
 }
 

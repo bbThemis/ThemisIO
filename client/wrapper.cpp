@@ -52,9 +52,9 @@ All rights are reserved.
 #define MAX_FD_DUP2ED	(6)
 #define MAX_LEN_DIR_ENTRY_BUFF  (2*1024*1024)
 
-#define MAX_OPENED_FILE	(8192)
+#define MAX_OPENED_FILE	(2048)
 #define MAX_OPENED_FILE_M1	((MAX_OPENED_FILE) - 1)
-#define MAX_OPENED_DIR	(2048)
+#define MAX_OPENED_DIR	(512)
 #define MAX_OPENED_DIR_M1	((MAX_OPENED_DIR) - 1)
 
 //pthread_mutex_t global_lock;
@@ -192,8 +192,11 @@ typedef struct	{
 }DIRSTATUS, *PDIRSTATUS;
 
 __thread int Inited_fd_List=0;
-__thread FILESTATUS FileList[MAX_OPENED_FILE];
-__thread DIRSTATUS DirList[MAX_OPENED_DIR];
+//__thread FILESTATUS FileList[MAX_OPENED_FILE];
+//__thread DIRSTATUS DirList[MAX_OPENED_DIR];
+__thread FILESTATUS *FileList=NULL;
+__thread DIRSTATUS *DirList=NULL;
+
 __thread int Next_Av_fd=0, Last_fd=-1, nFd=0;	// Last_fd==-1 means the list is empty. No active fd in list. 
 __thread int Next_Av_dirfd=0, Last_dirfd=-1, nDirfd=0;
 
@@ -418,6 +421,10 @@ org_rename real_rename=NULL;
 typedef int (*org_MPI_Finalize)(void);
 org_MPI_Finalize real_MPI_Finalize=NULL;
 
+typedef int (*org_flock)(int fd, int operation);
+org_flock real_flock=NULL;
+
+
 #define F_LINUX_SPECIFIC_BASE  1024
 #define F_ADD_SEALS     (F_LINUX_SPECIFIC_BASE + 9)
 #define F_OFD_GETLK    36
@@ -440,22 +447,6 @@ extern "C" DIR *opendir(const char *szDirName);
 static char szPathLibc[128]="";
 static char szPathLibpthread[128];
 static char szPathMyLib[256];  // the name of myself
-
-inline void Allocate_loc_rem_buff(void)
-{
-	if(rem_buff == NULL)	{
-		rem_buff = (unsigned char *)memalign(64, IO_RESULT_BUFFER_SIZE + 4096);
-//		rem_buff = (unsigned char *)memalign(64, DATA_COPY_THRESHOLD_SIZE + 4096);
-		assert(rem_buff != NULL);
-		mr_rem = CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote(rem_buff, IO_RESULT_BUFFER_SIZE + 4096);
-		assert(mr_rem != NULL);
-		loc_buff = (unsigned char *)memalign(64, IO_RESULT_BUFFER_SIZE + 4096);
-//		loc_buff = (unsigned char *)memalign(64, DATA_COPY_THRESHOLD_SIZE + 4096);
-		assert(loc_buff != NULL);
-		mr_loc = CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote(loc_buff, IO_RESULT_BUFFER_SIZE + 4096);
-		assert(mr_loc != NULL);
-	}
-}
 
 
 /*
@@ -525,7 +516,7 @@ inline void Send_IO_Request(int idx_fs)
 		}
 	}
 }
-
+/*
 static inline int fetch_and_add(int* variable, int value)
 {
     __asm__ volatile("lock; xaddl %0, %1"
@@ -535,7 +526,7 @@ static inline int fetch_and_add(int* variable, int value)
     );
     return value;
 }
-
+*/
 static int callback(struct dl_phdr_info *info, size_t size, void *data)
 {
 	if(strstr(info->dlpi_name, "/libc.so"))	{
@@ -631,6 +622,18 @@ inline void Gather_FileName_Info(char szName[], int *nLenFileName, int *nLenPare
 	assert( ((*pIdx_fs) >= 0) && ((*pIdx_fs) < FileServerListLocal.nFSServer ) );
 }
 
+inline void Setup_QP_if_Needed(int idx_fs) 
+{
+	if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
+	//	CLIENT_QUEUEPAIR *pQP;
+	//	pQP = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));	
+	//	pQP->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!
+		pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
+		pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
+		fetch_and_add(&nQp, 1);	// atomically add the counter
+	}
+}
+
 extern "C" int my_open(const char *pathname, int oflags, ...)
 {
 	int mode = 0, two_args=1, fd, idx_fs, idx_fd;
@@ -655,6 +658,12 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 	
 	if(strncmp(szFullPath, MYFS_ROOT_DIR, 5) == 0)	{
 		if(loc_buff == NULL)	Allocate_loc_rem_buff();
+		if(FileList == NULL)	{
+			FileList = (FILESTATUS *)malloc(sizeof(FILESTATUS)*MAX_OPENED_FILE);
+			DirList = (DIRSTATUS *)malloc(sizeof(DIRSTATUS)*MAX_OPENED_DIR);
+			memset(FileList, 0, sizeof(FILESTATUS)*MAX_OPENED_FILE);
+			memset(DirList, 0, sizeof(DIRSTATUS)*MAX_OPENED_DIR);
+		}
 		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 
 		if(oflags & O_DIRECTORY)	{	// directory
@@ -664,14 +673,7 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 				assert(idx_fd >= 0);
 				Gather_FileName_Info(szFullPath, &(pIO_Cmd->nLen_FileName), &(pIO_Cmd->nLen_Parent_Dir_Name), &(pIO_Cmd->file_hash), NULL, &idx_fs);
 //				printf("DBG> nFSServer = %d File %s idx_fs = %d\n", FileServerListLocal.nFSServer, szFullPath, idx_fs);
-				if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
-//					CLIENT_QUEUEPAIR *pQP;
-//					pQP = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));	
-//					pQP->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!
-					pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
-					pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
-					fetch_and_add(&nQp, 1);	// atomically add the counter
-				}
+				Setup_QP_if_Needed(idx_fs);
 
 //				idx_fs = pIO_Cmd->file_hash % pFileServerList->nFSServer;	// the index of which file server holding this file
 				DirList[idx_fd].fd = idx_fd;
@@ -680,6 +682,7 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 				DirList[idx_fd].Init_by_open = 1;
 				DirList[idx_fd].pDir = pDir;
 				strcpy(DirList[idx_fd].szPath, szFullPath);
+//				printf("DBG> File %s idx_fs = %d\n", szFullPath, idx_fs);
 				return (idx_fd+FD_DIR_BASE);
 			}
 			else	{
@@ -693,14 +696,7 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 			Gather_FileName_Info(szFullPath, &(pIO_Cmd->nLen_FileName), &(pIO_Cmd->nLen_Parent_Dir_Name), &(pIO_Cmd->file_hash), NULL, &idx_fs);
 			pIO_Cmd->parent_dir_hash = 0;
 		}
-		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
-//			CLIENT_QUEUEPAIR *pQP;
-//			pQP = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));			
-//			pQP->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!
-			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
-			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
-			fetch_and_add(&nQp, 1);	// atomically add the counter
-		}
+		Setup_QP_if_Needed(idx_fs);
 //		printf("DBG> open(%s) idx_fs = %d bCreate = %d\n", szFullPath, idx_fs, oflags & O_CREAT);
 		
 		pResult = (RW_FUNC_RETURN *)rem_buff;
@@ -748,6 +744,7 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 			FileList[idx_fd].modification_time.tv_sec = 0;
 			FileList[idx_fd].modification_time.tv_nsec = 0;
 			strcpy(FileList[idx_fd].szFileName, szFullPath);
+//			printf("DBG> File %s idx_fs = %d\n", szFullPath, idx_fs);
 //			printf("DBG> File %s inode = %lx size = %ld\n", szFullPath, FileList[idx_fd].st_ino, FileList[idx_fd].FileSize);
 			return (idx_fd+FD_FILE_BASE);
 //		}
@@ -843,7 +840,7 @@ extern "C" int close(int fd)
 		pMetaData_OnClose->modification_time.tv_sec = FileList[fd_idx].modification_time.tv_sec;
 		pMetaData_OnClose->modification_time.tv_nsec = FileList[fd_idx].modification_time.tv_nsec;
 
-
+//		printf("DBG> pMetaData_OnClose->MaxDataRange = %ld\n", pMetaData_OnClose->MaxDataRange);
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_CLOSE;
 		Send_IO_Request(idx_fs);
 		
@@ -1008,6 +1005,8 @@ ssize_t stripe_read(int fd, char *szFileName, void *buf, size_t size, off_t offs
 		nBytesReadOneTime = min(nBytesToRead, FILE_STRIPE_SIZE-residue);
 		idx_fs_data = (idx_fs + idx_fs_shift) % pFileServerList->nFSServer;
 
+		Setup_QP_if_Needed(idx_fs_data);
+
 		pIO_Cmd->fd = (idx_fs_data == idx_fs) ? fd : (-1);
 		if(nBytesReadOneTime > DATA_COPY_THRESHOLD_SIZE)	{
 			mr_loc_buf = CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote((char*)buf+nBytesRead, nBytesReadOneTime);
@@ -1063,7 +1062,7 @@ extern "C" ssize_t my_read(int fd, void *buf, size_t size)
 	if(fd_Directed >= FD_FILE_BASE)	{	// regular file
 		fd_real = GetFileFD(fd_Directed);
 		idx_fs = GetFileFSIdx(fd_Directed);
-		
+	
 		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
@@ -1071,10 +1070,11 @@ extern "C" ssize_t my_read(int fd, void *buf, size_t size)
 		fd_idx = fd_Directed-FD_FILE_BASE;
 		pIO_Cmd->fd = fd_real;
 
-		if( (FileList[fd_idx].offset + size) > FILE_STRIPE_SIZE )	{
+//		if( (FileList[fd_idx].offset + size) > FILE_STRIPE_SIZE )	{
 			pResult->ret_value = stripe_read(fd_real, FileList[fd_idx].szFileName, buf, size, FileList[fd_idx].offset, idx_fs);
 			nBytesRead = pResult->ret_value;
-		}
+//		}
+/*		
 		else	{
 			if(size > DATA_COPY_THRESHOLD_SIZE)	{
 				mr_loc_buf = CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote(buf, size);
@@ -1099,7 +1099,7 @@ extern "C" ssize_t my_read(int fd, void *buf, size_t size)
 			if(mr_loc_buf)	ibv_dereg_mr(mr_loc_buf);	// data were written to buf already
 			else	memcpy(buf, (char*)pResult+sizeof(RW_FUNC_RETURN)-sizeof(int), nBytesRead);
 		}
-		
+*/		
 		if(nBytesRead < 0)	errno = pResult->myerrno;
 		else	FileList[fd_Directed-FD_FILE_BASE].offset += nBytesRead;	// update offset
 				
@@ -1138,10 +1138,11 @@ extern "C" ssize_t pread(int fd, void *buf, size_t size, off_t offset)
 		fd_idx = fd_Directed-FD_FILE_BASE;
 		pIO_Cmd->fd = fd_real;
 
-		if( (offset + size) > FILE_STRIPE_SIZE )	{
+//		if( (offset + size) > FILE_STRIPE_SIZE )	{
 			pResult->ret_value = stripe_read(fd_real, FileList[fd_idx].szFileName, buf, size, offset, idx_fs);
 			nBytesRead = pResult->ret_value;
-		}
+//		}
+/*
 		else	{
 			if(size > DATA_COPY_THRESHOLD_SIZE)	{
 				mr_loc_buf = CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote(buf, size);
@@ -1166,7 +1167,7 @@ extern "C" ssize_t pread(int fd, void *buf, size_t size, off_t offset)
 			if(mr_loc_buf)	ibv_dereg_mr(mr_loc_buf);	// data were written to buf already
 			else	memcpy(buf, (char*)pResult+sizeof(RW_FUNC_RETURN)-sizeof(int), nBytesRead);
 		}
-		
+*/		
 		if(nBytesRead < 0)	errno = pResult->myerrno;
 		else	FileList[fd_Directed-FD_FILE_BASE].offset += nBytesRead;	// update offset
 				
@@ -1196,6 +1197,7 @@ ssize_t stripe_write(int fd, char *szFileName, const void *buf, size_t size, off
 		residue = offset_loc % FILE_STRIPE_SIZE;
 		nBytesWriteOneTime = min(nBytesToWrite, FILE_STRIPE_SIZE-residue);
 		idx_fs_data = (idx_fs + idx_fs_shift) % pFileServerList->nFSServer;
+		Setup_QP_if_Needed(idx_fs_data);
 
 		pIO_Cmd->fd = (idx_fs_data == idx_fs) ? fd : (-1);
 		if(nBytesWriteOneTime > DATA_COPY_THRESHOLD_SIZE)	{
@@ -1260,14 +1262,15 @@ extern "C" ssize_t my_write(int fd, const void *buf, size_t size)
 		fd_idx = fd_Directed-FD_FILE_BASE;
 		pIO_Cmd->fd = fd_real;
 
-		if( (FileList[fd_idx].offset + size) > FILE_STRIPE_SIZE )	{
+//		if( (FileList[fd_idx].offset + size) > FILE_STRIPE_SIZE )	{
 			pResult->ret_value = stripe_write(fd_real, FileList[fd_idx].szFileName, buf, size, FileList[fd_idx].offset, idx_fs);
 			if( pResult->ret_value > 0 )	{
 				if( FileList[fd_idx].MaxDataRange < (FileList[fd_idx].offset + pResult->ret_value) )	{
 					FileList[fd_idx].MaxDataRange = FileList[fd_idx].offset + pResult->ret_value;
 				}
 			}
-		}
+//		}
+/*
 		else	{
 			if(size > DATA_COPY_THRESHOLD_SIZE)	{
 				mr_loc_buf = CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote((void*)buf, size);
@@ -1297,7 +1300,7 @@ extern "C" ssize_t my_write(int fd, const void *buf, size_t size)
 				}
 			}
 		}
-
+*/
 		nBytesWritten = pResult->ret_value;
 		if(nBytesWritten < 0)	errno = pResult->myerrno;
 		else	FileList[fd_idx].offset += nBytesWritten;	// update offset
@@ -1346,14 +1349,15 @@ extern "C" ssize_t pwrite(int fd, const void *buf, size_t size, off_t offset)
 		fd_idx = fd_Directed-FD_FILE_BASE;
 		pIO_Cmd->fd = fd_real;
 
-		if( (offset + size) > FILE_STRIPE_SIZE )	{
+//		if( (offset + size) > FILE_STRIPE_SIZE )	{
 			pResult->ret_value = stripe_write(fd_real, FileList[fd_idx].szFileName, buf, size, offset, idx_fs);
 			if( pResult->ret_value > 0 )	{
 				if( FileList[fd_idx].MaxDataRange < (FileList[fd_idx].offset + pResult->ret_value) )	{
 					FileList[fd_idx].MaxDataRange = FileList[fd_idx].offset + pResult->ret_value;
 				}
 			}
-		}
+//		}
+/*
 		else	{
 			if(size > DATA_COPY_THRESHOLD_SIZE)	{
 				mr_loc_buf = CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote((void*)buf, size);
@@ -1383,7 +1387,7 @@ extern "C" ssize_t pwrite(int fd, const void *buf, size_t size, off_t offset)
 				}
 			}
 		}
-
+*/
 		nBytesWritten = pResult->ret_value;
 		if(nBytesWritten < 0)	errno = pResult->myerrno;
 		else	FileList[fd_idx].offset += nBytesWritten;	// update offset
@@ -1554,11 +1558,12 @@ extern "C" int my_unlink(const char *pathname)
 		pIO_Cmd->parent_dir_hash = 0;
 //		idx_fs = pIO_Cmd->file_hash % pFileServerList->nFSServer;	// the index of which file server holding this file
 
-		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
-			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
-			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
-			fetch_and_add(&nQp, 1);	// atomically add the counter
-		}
+		Setup_QP_if_Needed(idx_fs);
+//		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
+//			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
+//			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
+//			fetch_and_add(&nQp, 1);	// atomically add the counter
+//		}
 		
 //		printf("DBG> unlink(%s) idx_fs = %d\n", szFullPath, idx_fs);
 		
@@ -1599,12 +1604,23 @@ extern "C" int my_xstat(int __ver, const char *__filename, struct stat *__stat_b
 		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 		Gather_FileName_Info(szFullPath, &(pIO_Cmd->nLen_FileName), &(pIO_Cmd->nLen_Parent_Dir_Name), &(pIO_Cmd->file_hash), NULL, &idx_fs);
 //		idx_fs = pIO_Cmd->file_hash % pFileServerList->nFSServer;	// the index of which file server holding this file		
+//		char szHostName[128];
+//		int flag = 1;
+//		if(strncmp(szFullPath,"/myfs/bert/input/books_wiki_en_corpus",37)==0)	{
+//			gethostname(szHostName, 63);
+//			printf("DBG> xstat(%s) on host %s pid = %d tid = %d\n", szFullPath, szHostName, getpid(), syscall(SYS_gettid));
+//			fflush(stdout);
+//			while(flag)	{
+//				sleep(1);
+//			}
+//		}
 
-		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
-			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
-			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
-			fetch_and_add(&nQp, 1);	// atomically add the counter
-		}
+		Setup_QP_if_Needed(idx_fs);
+//		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
+//			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
+//			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
+//			fetch_and_add(&nQp, 1);	// atomically add the counter
+//		}
 		
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
@@ -1661,11 +1677,12 @@ extern "C" int lxstat(int __ver, const char *__filename, struct stat *__stat_buf
 		Gather_FileName_Info(szFullPath, &(pIO_Cmd->nLen_FileName), &(pIO_Cmd->nLen_Parent_Dir_Name), &(pIO_Cmd->file_hash), NULL, &idx_fs);
 //		idx_fs = pIO_Cmd->file_hash % pFileServerList->nFSServer;	// the index of which file server holding this file		
 		
-		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
-			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
-			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
-			fetch_and_add(&nQp, 1);	// atomically add the counter
-		}
+		Setup_QP_if_Needed(idx_fs);
+//		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
+//			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
+//			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
+//			fetch_and_add(&nQp, 1);	// atomically add the counter
+//		}
 
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
@@ -1851,11 +1868,12 @@ extern "C" DIR *opendir(const char *szDirName)
 		Gather_FileName_Info(szFullPath, &(pIO_Cmd->nLen_FileName), &(pIO_Cmd->nLen_Parent_Dir_Name), &(pIO_Cmd->file_hash), NULL, &idx_fs);
 //		idx_fs = pIO_Cmd->file_hash % pFileServerList->nFSServer;	// the index of which file server holding this file		
 		
-		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
-			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
-			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
-			fetch_and_add(&nQp, 1);	// atomically add the counter
-		}
+		Setup_QP_if_Needed(idx_fs);
+//		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
+//			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
+//			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
+//			fetch_and_add(&nQp, 1);	// atomically add the counter
+//		}
 
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult_Ext = (RW_FUNC_RETURN_EXT *)rem_buff;
@@ -2085,11 +2103,12 @@ extern "C" int access(const char *pathname, int mode)
 		Gather_FileName_Info(szFullPath, &(pIO_Cmd->nLen_FileName), &(pIO_Cmd->nLen_Parent_Dir_Name), &(pIO_Cmd->file_hash), NULL, &idx_fs);
 //		idx_fs = pIO_Cmd->file_hash % pFileServerList->nFSServer;	// the index of which file server holding this file		
 
-		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
-			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
-			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
-			fetch_and_add(&nQp, 1);	// atomically add the counter
-		}
+		Setup_QP_if_Needed(idx_fs);
+//		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
+//			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
+//			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
+//			fetch_and_add(&nQp, 1);	// atomically add the counter
+//		}
 		
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
@@ -2615,11 +2634,12 @@ extern "C" int truncate(const char *path, off_t length)
 		Gather_FileName_Info(szFullPath, &(pIO_Cmd->nLen_FileName), &(pIO_Cmd->nLen_Parent_Dir_Name), &(pIO_Cmd->file_hash), &(pIO_Cmd->parent_dir_hash), &idx_fs);
 //		idx_fs = pIO_Cmd->file_hash % pFileServerList->nFSServer;	// the index of which file server holding this file		
 		
-		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
-			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
-			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
-			fetch_and_add(&nQp, 1);	// atomically add the counter
-		}
+		Setup_QP_if_Needed(idx_fs);
+//		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
+//			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
+//			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
+//			fetch_and_add(&nQp, 1);	// atomically add the counter
+//		}
 
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
@@ -2744,11 +2764,12 @@ int utimensat(int dirfd, const char *pathname, const struct timespec times[2], i
 	Gather_FileName_Info(szFullPath, &(pIO_Cmd->nLen_FileName), &(pIO_Cmd->nLen_Parent_Dir_Name), &(pIO_Cmd->file_hash), NULL, &idx_fs);
 //	idx_fs = pIO_Cmd->file_hash % pFileServerList->nFSServer;	// the index of which file server holding this file		
 	
-	if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
-		pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
-		pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
-		fetch_and_add(&nQp, 1);	// atomically add the counter
-	}
+	Setup_QP_if_Needed(idx_fs);
+//	if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
+//		pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
+//		pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
+//		fetch_and_add(&nQp, 1);	// atomically add the counter
+//	}
 	
 	pResult = (RW_FUNC_RETURN *)rem_buff;
 	pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
@@ -2809,11 +2830,12 @@ int utimes(const char *pathname, const struct timeval times[2])
 		Gather_FileName_Info(szFullPath, &(pIO_Cmd->nLen_FileName), &(pIO_Cmd->nLen_Parent_Dir_Name), &(pIO_Cmd->file_hash), NULL, &idx_fs);
 //		idx_fs = pIO_Cmd->file_hash % pFileServerList->nFSServer;	// the index of which file server holding this file		
 		
-		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
-			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
-			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
-			fetch_and_add(&nQp, 1);	// atomically add the counter
-		}
+		Setup_QP_if_Needed(idx_fs);
+//		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
+//			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
+//			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
+//			fetch_and_add(&nQp, 1);	// atomically add the counter
+//		}
 
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
@@ -2880,11 +2902,12 @@ int utime(const char *pathname, const struct utimbuf *times)
 		Gather_FileName_Info(szFullPath, &(pIO_Cmd->nLen_FileName), &(pIO_Cmd->nLen_Parent_Dir_Name), &(pIO_Cmd->file_hash), NULL, &idx_fs);
 //		idx_fs = pIO_Cmd->file_hash % pFileServerList->nFSServer;	// the index of which file server holding this file		
 
-		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
-			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
-			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
-			fetch_and_add(&nQp, 1);	// atomically add the counter
-		}
+		Setup_QP_if_Needed(idx_fs);
+//		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
+//			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
+//			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
+//			fetch_and_add(&nQp, 1);	// atomically add the counter
+//		}
 
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
@@ -3040,11 +3063,12 @@ int mkdir(const char *pathname, mode_t mode)
 		Gather_FileName_Info(szFullPath, &(pIO_Cmd->nLen_FileName), &(pIO_Cmd->nLen_Parent_Dir_Name), &(pIO_Cmd->file_hash), &(pIO_Cmd->parent_dir_hash), &idx_fs);	// create a new file
 //		idx_fs = pIO_Cmd->file_hash % pFileServerList->nFSServer;	// the index of which file server holding this file
 		
-		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
-			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
-			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
-			fetch_and_add(&nQp, 1);	// atomically add the counter
-		}
+		Setup_QP_if_Needed(idx_fs);
+//		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
+//			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
+//			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
+//			fetch_and_add(&nQp, 1);	// atomically add the counter
+//		}
 
 //		printf("DBG> mkdir(%s) idx_fs = %d\n", szFullPath, idx_fs);
 		
@@ -3121,6 +3145,7 @@ inline int Wait_For_IO_Request_Result(int Tag_Magic)
 	int *pTag_End;
 	struct timeval tm1, tm2;	// tm1.tv_sec
 	long int t1_ms, t2_ms;
+	char szHostName[128];
 
 	gettimeofday(&tm1, NULL);
 	t1_ms = (tm1.tv_sec * 1000) + (tm1.tv_usec / 1000);
@@ -3130,7 +3155,8 @@ inline int Wait_For_IO_Request_Result(int Tag_Magic)
 		gettimeofday(&tm2, NULL);
 		t2_ms = (tm2.tv_sec * 1000) + (tm2.tv_usec / 1000);
 		if( (t2_ms - t1_ms) > QP_WAIT_RESULT_TIMEOUT_MS )	{
-			printf("DBG> Timeout. pid = %d\n", getpid());
+			gethostname(szHostName, 63);
+			printf("DBG> Timeout. pid = %d on %s\n", getpid(), szHostName);
 			fflush(stdout);
 			sleep(300);
 			return 1;	// time out
@@ -3157,7 +3183,8 @@ inline int Wait_For_IO_Request_Result(int Tag_Magic)
 		gettimeofday(&tm2, NULL);
 		t2_ms = (tm2.tv_sec * 1000) + (tm2.tv_usec / 1000);
 		if( (t2_ms - t1_ms) > QP_WAIT_RESULT_TIMEOUT_MS )	{
-			printf("DBG> Timeout. pid = %d\n", getpid());
+			gethostname(szHostName, 63);
+			printf("DBG> Timeout. pid = %d on %s\n", getpid(), szHostName);
                         fflush(stdout);
                         sleep(300);
 
@@ -3356,6 +3383,7 @@ extern "C" int rmdir(const char *path)
 	}
 
 	Standardlize_Path(path, szFullPath);
+//	printf("DBG> rmdir(%s)\n", szFullPath);
 
 	if(strncmp(szFullPath, MYFS_ROOT_DIR, 5) == 0)	{
 		if(loc_buff == NULL)	Allocate_loc_rem_buff();
@@ -3363,11 +3391,12 @@ extern "C" int rmdir(const char *path)
 		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 		Gather_FileName_Info(szFullPath, &(pIO_Cmd->nLen_FileName), &(pIO_Cmd->nLen_Parent_Dir_Name), &(pIO_Cmd->file_hash), &(pIO_Cmd->parent_dir_hash), &idx_fs);
 //		idx_fs = pIO_Cmd->file_hash % pFileServerList->nFSServer;	// the index of which file server holding this file		
-		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
-			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
-			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
-			fetch_and_add(&nQp, 1);	// atomically add the counter
-		}
+		Setup_QP_if_Needed(idx_fs);
+//		if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
+//			pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
+//			pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
+//			fetch_and_add(&nQp, 1);	// atomically add the counter
+//		}
 		
 //		printf("DBG> rmdir(%s) idx_fs = %d\n", szFullPath, idx_fs);
 
@@ -3402,11 +3431,12 @@ extern "C" void Print_Mem(void)
 	
 	pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 	idx_fs = 0;	// the index of which file server holding this file		
-	if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
-		pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
-		pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
-		fetch_and_add(&nQp, 1);	// atomically add the counter
-	}
+	Setup_QP_if_Needed(idx_fs);
+//	if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
+//		pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
+//		pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
+//		fetch_and_add(&nQp, 1);	// atomically add the counter
+//	}
 	
 	pResult = (RW_FUNC_RETURN *)rem_buff;
 	pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
@@ -3451,11 +3481,12 @@ extern "C" int statfs(const char *pathname, struct statfs *buf)
 		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		for(idx_fs=0; idx_fs<FileServerListLocal.nFSServer; idx_fs++)	{
-			if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
-				pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
-				pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
-				fetch_and_add(&nQp, 1);	// atomically add the counter
-			}
+			Setup_QP_if_Needed(idx_fs);
+//			if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
+//				pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
+//				pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
+//				fetch_and_add(&nQp, 1);	// atomically add the counter
+//			}
 			pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 			pIO_Cmd->rkey = mr_rem->rkey;		
 			pIO_Cmd->rem_buff = mr_rem->addr;
@@ -3516,11 +3547,12 @@ extern "C" int statvfs(const char *pathname, struct statvfs *buf)
 		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 		pResult = (RW_FUNC_RETURN *)rem_buff;
 		for(idx_fs=0; idx_fs<FileServerListLocal.nFSServer; idx_fs++)	{
-			if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
-				pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
-				pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
-				fetch_and_add(&nQp, 1);	// atomically add the counter
-			}
+			Setup_QP_if_Needed(idx_fs);
+//			if(pClient_qp[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
+//				pClient_qp[idx_fs] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
+//				pClient_qp[idx_fs]->Setup_QueuePair(idx_fs, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
+//				fetch_and_add(&nQp, 1);	// atomically add the counter
+//			}
 			pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
 			pIO_Cmd->rkey = mr_rem->rkey;		
 			pIO_Cmd->rem_buff = mr_rem->addr;
@@ -3584,13 +3616,22 @@ extern "C" int MPI_Finalize(void)
 		assert(real_MPI_Finalize != NULL);
 	}
 
-	printf("DBG> In MPI_Finalize().\n");
+//	printf("DBG> In MPI_Finalize().\n");
 	// You can push all cached IO requests to server here!!!
 
 	return real_MPI_Finalize();
 }
 
+extern "C" int flock(int fd, int operation)
+{
+	if(real_flock==NULL)	{
+		real_flock = (org_flock)dlsym(RTLD_NEXT, "flock");
+		assert(real_flock != NULL);
+	}
 
+	if(fd >= FD_FILE_BASE)	return 0;
+	else	return real_flock(fd, operation);
+}
 /*
 int test_open_client(char szFileName[])
 {
@@ -4492,11 +4533,15 @@ __attribute__((constructor)) void Init_FS_Client()
 	int i;
 	char szUid[16], *szEnvPWD, *szMPIRank;
 	void *p_patch_allocated=NULL;
-
+//	char szHostName[128];
 //	if(pthread_mutex_init(&global_lock, NULL) != 0) {
 //        perror("pthread_mutex_init");
 //        exit(1);
 //	}
+
+//	return;
+
+	ibv_fork_init();
 
 	szMPIRank = getenv("PMI_RANK");
 	if(szMPIRank == NULL)    {
@@ -4506,25 +4551,33 @@ __attribute__((constructor)) void Init_FS_Client()
 		mpi_rank = atoi(szMPIRank);
 	}
 
+//	gethostname(szHostName, 63);
+//	printf("DBG> Host %s pid = %d\n", szHostName, getpid());
+//	fflush(stdout);
+
 	Get_Exe_Name(szExeName);
 	Init_Client();
+
+//	if(p_sigaction==NULL)	p_sigaction = (org_sigaction)dlsym(RTLD_NEXT,"sigaction");
 
 	Setup_Signal_QueuePair();
 
 	// Establish the first QP
 //	memset(pClient_qp, 0, sizeof(CLIENT_QUEUEPAIR *)*MAX_FS_SERVER);
 //	if( (strstr(szExeName, "ior")) || (strstr(szExeName, "mdtest")) || (strstr(szExeName, "wrf.exe")) )	{
-		CLIENT_QUEUEPAIR *pQP;
+/*
+	CLIENT_QUEUEPAIR *pQP;
 		for(i=0; i<pFileServerList->nFSServer; i++)	{	// set up the QP for the main thread now
 ////		idx_qp = nQp;
 ////		pClient_qp[i] = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
 ////		pClient_qp[i]->Setup_QueuePair(i, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
 			pQP = (CLIENT_QUEUEPAIR *)malloc(sizeof(CLIENT_QUEUEPAIR));
-			Allocate_loc_rem_buff();
+//			Allocate_loc_rem_buff();
 			pQP->Setup_QueuePair(i, (char*)loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
 //		printf("DBG> %d, %p %p\n", pQP, pClient_qp[i]);
 			nQp++;
 		}
+*/
 //	}
 	for(i=0; i<NHOOK_IN_PTHREAD; i++)	{
 		func_addr_in_lib_pthread[i] = 0;
@@ -4645,7 +4698,7 @@ __attribute__((destructor)) void Finalize_Client()
 	for(i=0; i<MAX_QP_PER_PROCESS; i++)	{
 		if(pClient_qp_List[i])	{
 			if(pClient_qp_List[i]->queue_pair)	{	// to put a msg to let server close this associated QP
-				pIO_Cmd = (IO_CMD_MSG *)(mr_loc->addr);
+				pIO_Cmd = (IO_CMD_MSG *)(pClient_qp_List[i]->mr_loc_thread->addr);
 				assert(pIO_Cmd != NULL);
 //				local_mr = CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote((void*)pIO_Cmd, sizeof(IO_CMD_MSG));
 				
@@ -4655,12 +4708,12 @@ __attribute__((destructor)) void Finalize_Client()
 //				Send_IO_Request(idx_fs);
 				// send the IO request first
 //				pClient_qp_List[i]->IB_Put((void*)pIO_Cmd, pClient_qp_List[i]->mr_loc->lkey, (void*)(pClient_qp_List[i]->remote_addr_IO_CMD + sizeof(IO_CMD_MSG)*pClient_qp_List[i]->Idx_fs), pClient_qp_List[i]->pal_remote_mem.key, sizeof(IO_CMD_MSG));
-				pClient_qp_List[i]->IB_Put((void*)pIO_Cmd, mr_loc->lkey, (void*)(pClient_qp_List[i]->remote_addr_IO_CMD), pClient_qp_List[i]->pal_remote_mem.key, sizeof(IO_CMD_MSG));
+				pClient_qp_List[i]->IB_Put((void*)pIO_Cmd, pClient_qp_List[i]->mr_loc_thread->lkey, (void*)(pClient_qp_List[i]->remote_addr_IO_CMD), pClient_qp_List[i]->pal_remote_mem.key, sizeof(IO_CMD_MSG));
 
 				// send a msg to notify that a new IO quest is coming.
 				*((unsigned char *)pIO_Cmd) = TAG_NEW_REQUEST;
 //				pClient_qp_List[i]->IB_Put((void*)pIO_Cmd, pClient_qp_List[i]->mr_loc->lkey, (void*)(pClient_qp_List[i]->remote_addr_new_msg + sizeof(char)*pClient_qp_List[i]->Idx_fs), pClient_qp_List[i]->pal_remote_mem.key, 1);
-				pClient_qp_List[i]->IB_Put((void*)pIO_Cmd, mr_loc->lkey, (void*)(pClient_qp_List[i]->remote_addr_new_msg), pClient_qp_List[i]->pal_remote_mem.key, 1);
+				pClient_qp_List[i]->IB_Put((void*)pIO_Cmd, pClient_qp_List[i]->mr_loc_thread->lkey, (void*)(pClient_qp_List[i]->remote_addr_new_msg), pClient_qp_List[i]->pal_remote_mem.key, 1);
 
 //				ibv_dereg_mr(local_mr);
 			}
@@ -4680,7 +4733,7 @@ __attribute__((destructor)) void Finalize_Client()
 			}
 			free(pClient_qp_List[i]);
 			if(loc_buff)	{
-				free(loc_buff);
+//				free(loc_buff);
 				free(rem_buff);
 				loc_buff = rem_buff = NULL;
 			}

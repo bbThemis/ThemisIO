@@ -33,6 +33,7 @@
 #include <malloc.h>
 #include <netinet/tcp.h>
 
+#include "../utility.h"
 #include "../dict.h"
 #include "../qp_common.h"
 #include "../io_ops_common.h"
@@ -76,7 +77,7 @@ int fd_stdin=-1, fd_stdout=-1, fd_stderr=-1, Is_in_shell=0;
 
 //atic __thread unsigned char __attribute__((aligned(16))) rem_buff[DATA_COPY_THRESHOLD_SIZE + 4096], loc_buff[DATA_COPY_THRESHOLD_SIZE + 4096]; 
 static __thread unsigned char *rem_buff=NULL, *loc_buff=NULL; 
-static struct ibv_mr *mr_rem = NULL, *mr_loc = NULL;
+static __thread struct ibv_mr *mr_rem = NULL, *mr_loc = NULL;
 
 void Finalize_Client();
 
@@ -142,7 +143,7 @@ public:
 	static void Init_IB_Env(void);
 
 	IB_MEM_DATA pal_remote_mem;
-//	struct ibv_mr *mr_rem = NULL, *mr_loc = NULL;
+	struct ibv_mr *mr_rem_thread = NULL, *mr_loc_thread = NULL;
 	struct ibv_mr *mr_loc_qp_Obj = NULL;
 	struct ibv_qp *queue_pair = NULL;
 	time_t qp_heart_beat_t = 0;
@@ -209,6 +210,42 @@ void Get_Exe_Name(char szName[])
 	strcpy(szName, szPath + i + 1);
 
 	szName[MAX_EXENAME_LEN-1] = 0;
+}
+
+inline void Allocate_loc_rem_buff(void)
+{
+	int i;
+
+	if(rem_buff == NULL)	{
+		rem_buff = (unsigned char *)memalign(64, 2*(IO_RESULT_BUFFER_SIZE + 4096));
+		assert(rem_buff != NULL);
+		mr_rem = CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote(rem_buff, IO_RESULT_BUFFER_SIZE + 4096);
+		assert(mr_rem != NULL);
+		loc_buff = rem_buff + IO_RESULT_BUFFER_SIZE + 4096;
+		mr_loc = CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote(loc_buff, IO_RESULT_BUFFER_SIZE + 4096);
+		assert(mr_loc != NULL);
+
+		for(i=0; i<MAX_FS_SERVER; i++)	{
+			if(pClient_qp[i])	{
+				pClient_qp[i]->mr_loc_thread = mr_loc;
+				pClient_qp[i]->mr_rem_thread = mr_rem;
+			}
+		}
+	}
+/*
+	if(rem_buff == NULL)	{
+		rem_buff = (unsigned char *)memalign(64, IO_RESULT_BUFFER_SIZE + 4096);
+//		rem_buff = (unsigned char *)memalign(64, DATA_COPY_THRESHOLD_SIZE + 4096);
+		assert(rem_buff != NULL);
+		mr_rem = CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote(rem_buff, IO_RESULT_BUFFER_SIZE + 4096);
+		assert(mr_rem != NULL);
+		loc_buff = (unsigned char *)memalign(64, IO_RESULT_BUFFER_SIZE + 4096);
+//		loc_buff = (unsigned char *)memalign(64, DATA_COPY_THRESHOLD_SIZE + 4096);
+		assert(loc_buff != NULL);
+		mr_loc = CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote(loc_buff, IO_RESULT_BUFFER_SIZE + 4096);
+		assert(mr_loc != NULL);
+	}
+*/
 }
 
 void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t size_loc_buff, char rem_buff[], size_t size_rem_buff)
@@ -294,6 +331,11 @@ void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t si
 	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	
 	mr_loc_qp_Obj = IB_RegisterBuf_RW_Local_Remote((void*)this, sizeof(CLIENT_QUEUEPAIR));
+	
+	if(loc_buff == NULL)	Allocate_loc_rem_buff();
+	mr_loc_thread = mr_loc;
+	mr_rem_thread = mr_rem;
+
 //	mr_loc = IB_RegisterBuf_RW_Local_Remote((void*)loc_buff, size_loc_buff);
 //	assert(mr_loc != NULL);
 //	mr_rem = IB_RegisterBuf_RW_Local_Remote((void*)rem_buff, size_rem_buff);
@@ -345,10 +387,11 @@ void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t si
 
 	pthread_mutex_lock(&ht_qp_lock);
 
-	pthread_mutex_lock(&(pFileServerList->FS_List[IdxServer].fs_qp_lock));
-	pFileServerList->FS_List[IdxServer].nQP ++;
-	pthread_mutex_unlock(&(pFileServerList->FS_List[IdxServer].fs_qp_lock));
+//	pthread_mutex_lock(&(pFileServerList->FS_List[IdxServer].fs_qp_lock));
+//	pFileServerList->FS_List[IdxServer].nQP ++;
+//	pthread_mutex_unlock(&(pFileServerList->FS_List[IdxServer].fs_qp_lock));
 
+	fetch_and_add(&(pFileServerList->FS_List[IdxServer].nQP), 1);
 
 	idx = pHT_qp->DictInsertAuto(tid, &elt_list_qp, &ht_table_qp);
 	pClient_qp_List[idx] = this;
@@ -510,9 +553,9 @@ void CLIENT_QUEUEPAIR::Close_QueuePair(void)
 	
 	// release memory region which is nonblocking-io but not freed.
 	if(mr_rem)	{
-		ibv_dereg_mr(mr_rem);
-		ibv_dereg_mr(mr_loc);
-		mr_rem = NULL;
+		mr_rem = mr_loc = NULL;
+		ibv_dereg_mr(mr_rem_thread);
+		ibv_dereg_mr(mr_loc_thread);
 	}
 	ibv_dereg_mr(mr_loc_qp_Obj);
 
@@ -1051,10 +1094,18 @@ static void Close_QP(int argc, void *param)
 static void sigsegv_handler(int sig, siginfo_t *siginfo, void *uc)
 {
 	char szMsg[256];
+	char szHostName[128];
+
 	Finalize_Client();
+	
+	gethostname(szHostName, 63);
+
 	//	if(Client_qp.queue_pair)	Client_qp.Close_QueuePair();
-	sprintf(szMsg, "Got signal %d (SIGSEGV)\n", siginfo->si_signo);
+	sprintf(szMsg, "Got signal %d (SIGSEGV) Host %s tid = %d\n", siginfo->si_signo, szHostName, syscall(SYS_gettid));
 	write(STDERR_FILENO, szMsg, strlen(szMsg));
+	fsync(STDERR_FILENO);
+	sleep(300);
+
 	if(org_segv)	org_segv(sig, siginfo, uc);
 	else	exit(1);
 }
@@ -1081,6 +1132,17 @@ static void sigint_handler(int sig, siginfo_t *siginfo, void *uc)
 	else	exit(0);
 }
 
+//typedef int (*org_sigaction)(int signum, const struct sigaction *act, struct sigaction *oldact); 
+//org_sigaction p_sigaction=NULL;
+
+//extern "C" int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
+//{
+//	if(p_sigaction==NULL)	p_sigaction = (org_sigaction)dlsym(RTLD_NEXT,"sigaction");
+
+//	if(signum != SIGSEGV)	return p_sigaction(signum, act, oldact);
+//	else	return 0;
+//}
+
 static void Setup_Signal_QueuePair(void)
 {
 	struct sigaction act, old_action;
@@ -1091,6 +1153,7 @@ static void Setup_Signal_QueuePair(void)
 	
     act.sa_sigaction = sigsegv_handler;
     if (sigaction(SIGSEGV, &act, &old_action) == -1) {
+//    if (sigaction(SIGSEGV, &act, &old_action) == -1) {
         perror("Error: sigaction");
         exit(1);
     }

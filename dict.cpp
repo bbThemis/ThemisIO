@@ -436,8 +436,8 @@ void CHASHTABLE_MEMREG::DictDelete(const long int key, struct elt_MEMREG ** p_el
 void CHASHTABLE_CHAR::DictCreate(unsigned long int nSize, struct elt_Char ** p_elt_list, int ** p_ht_table)
 {
 	int i;
-	int *p_mutex_attr;
-	pthread_mutexattr_t mattr;
+//	int *p_mutex_attr;
+//	pthread_mutexattr_t mattr;
 	
 	if(nSize) {
 		if(is_power_of_two(nSize)==0)	{
@@ -447,9 +447,9 @@ void CHASHTABLE_CHAR::DictCreate(unsigned long int nSize, struct elt_Char ** p_e
 		size = nSize - 1;
 		n = 0;
 		
-		p_mutex_attr = (int *)(&mattr);
-		*p_mutex_attr = PTHREAD_MUTEXATTR_FLAG_PSHARED;	// PTHREAD_PROCESS_SHARED !!!!!!!!!!!!!!! Shared between processes
-		if(pthread_mutex_init(&lock, &mattr) != 0) {
+//		p_mutex_attr = (int *)(&mattr);
+//		*p_mutex_attr = PTHREAD_MUTEXATTR_FLAG_PSHARED;	// PTHREAD_PROCESS_SHARED !!!!!!!!!!!!!!! Shared between processes
+		if(pthread_mutex_init(&lock, NULL) != 0) {
 			perror("pthread_mutex_init");
 			exit(1);
 		}
@@ -478,39 +478,49 @@ int CHASHTABLE_CHAR::DictInsert(const char *key, const int value, struct elt_Cha
 	int first_av_Save, nLen;
 	
 	assert(key);
+	nLen = strlen(key);
+	if(nLen >= MAX_NAME_LEN)	printf("ERROR> nLen (%d) >= MAX_NAME_LEN\n", nLen);
+	h = XXH64(key, nLen, 0) & size;
+	// h = fast_hash(size, key);
+
+	pthread_mutex_lock(&lock);
+
 	first_av_Save = first_av;
 	e = &( (*p_elt_list)[first_av]);	// first available unit
 	strcpy(e->key, key);
     e->value = value;
 	
 	first_av = e->next;	// pointing to the next available unit
-	nLen = strlen(key);
-	if(nLen >= MAX_NAME_LEN)	printf("ERROR> nLen (%d) >= MAX_NAME_LEN\n", nLen);
-	h = XXH64(key, nLen, 0) & size;
-//	h = fast_hash(size, key);
 	
     e->next = (*p_ht_table)[h];
     (*p_ht_table)[h] = first_av_Save;
     n++;
+	pthread_mutex_unlock(&lock);
 	
     /* grow table if there is not enough room */
-    if(n >= (size * MAX_LOAD_FACTOR) ) {
-		printf("Hash table is FULL.\nQuit.\n");
-		exit(1);
+//    if(n >= (size * MAX_LOAD_FACTOR) ) {
+//		printf("Hash table is FULL.\nQuit.\n");
+//		exit(1);
 		//        grow(d);
-    }
+//    }
 
 	return first_av_Save;	// the unit saving the data
 }
 
-int CHASHTABLE_CHAR::DictInsertAuto(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table)
+int CHASHTABLE_CHAR::DictInsertAuto(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table, int *pVar_to_Inc, int ValInc)
 {
     struct elt_Char *e;
     unsigned long long h;
     int first_av_Save, nLen;
 	
 	assert(key);
-	
+	nLen = strlen(key);
+	if(nLen >= MAX_NAME_LEN)        printf("ERROR> nLen (%d) >= MAX_NAME_LEN\n", nLen);
+	h = XXH64(key, nLen, 0) & size;
+	// h = fast_hash(size, key);
+
+	pthread_mutex_lock(&lock);
+
 	first_av_Save = first_av;
 	e = &( (*p_elt_list)[first_av]);	// first available unit
 	strcpy(e->key, key);
@@ -518,15 +528,13 @@ int CHASHTABLE_CHAR::DictInsertAuto(const char *key, struct elt_Char ** p_elt_li
     e->value = first_av_Save;
 	
 	first_av = e->next;	// pointing to the next available unit
-	nLen = strlen(key);
-	if(nLen >= MAX_NAME_LEN)        printf("ERROR> nLen (%d) >= MAX_NAME_LEN\n", nLen);
-	h = XXH64(key, nLen, 0) & size;
-//	h = fast_hash(size, key);
 	
     e->next = (*p_ht_table)[h];
     (*p_ht_table)[h] = first_av_Save;
     n++;
-	
+	if(pVar_to_Inc)	(*pVar_to_Inc) += (ValInc);
+	pthread_mutex_unlock(&lock);
+
     // grow table if there is not enough room
 //    if(n >= (size * MAX_LOAD_FACTOR) ) {
 //		printf("Hash table is FULL.\nQuit.\n");
@@ -551,6 +559,8 @@ int CHASHTABLE_CHAR::DictSearchAndInsertAuto(const char *key, struct elt_Char **
 
 	*bNewRecord = 0;
 
+	pthread_mutex_lock(&lock);
+
 	idx = (*p_ht_table)[h & size];
 	if(idx == -1)	{
 		*bNewRecord = 1;
@@ -559,6 +569,7 @@ int CHASHTABLE_CHAR::DictSearchAndInsertAuto(const char *key, struct elt_Char **
 		e = &( (*p_elt_list)[idx] );
 		while(1) {
 			if(!strcmp(e->key, key)) {
+				pthread_mutex_unlock(&lock);
 				return e->value;
 			}
 			else	{
@@ -582,7 +593,8 @@ int CHASHTABLE_CHAR::DictSearchAndInsertAuto(const char *key, struct elt_Char **
     e->next = (*p_ht_table)[h];
     (*p_ht_table)[h] = first_av_Save;
     n++;
-	
+	pthread_mutex_unlock(&lock);
+
 	return first_av_Save;	// the unit saving the data
 }
 
@@ -656,7 +668,7 @@ int CHASHTABLE_CHAR::DictSearchOrg(const char *key, struct elt_Char ** p_elt_lis
 
 // delete the most recently inserted record with the given key 
 // if there is no such record, has no effect 
-void CHASHTABLE_CHAR::DictDelete(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table)
+void CHASHTABLE_CHAR::DictDelete(const char *key, struct elt_Char ** p_elt_list, int ** p_ht_table, int *pVar_to_Dec, int ValDec)
 {
     int idx, next;
     unsigned long long h;
@@ -664,6 +676,7 @@ void CHASHTABLE_CHAR::DictDelete(const char *key, struct elt_Char ** p_elt_list,
 	assert(key);
 //	h = fast_hash(size, key);
 	h = XXH64(key, strlen(key), 0) & size;
+	pthread_mutex_lock(&lock);
 	idx = (*p_ht_table)[h];
 	
 	if(!strcmp((*p_elt_list)[idx].key, key)) {	// found as the first element
@@ -671,6 +684,8 @@ void CHASHTABLE_CHAR::DictDelete(const char *key, struct elt_Char ** p_elt_list,
 		(*p_elt_list)[idx].next = first_av;
 		first_av = idx;		// put back as the beginning of the free space
 		n--;
+		if(pVar_to_Dec)	(*pVar_to_Dec) += (ValDec);
+		pthread_mutex_unlock(&lock);
 		return;
 	}
 	
@@ -681,18 +696,21 @@ void CHASHTABLE_CHAR::DictDelete(const char *key, struct elt_Char ** p_elt_list,
 			(*p_elt_list)[next].next = first_av;
 			first_av = next;		
 			n--;
+			if(pVar_to_Dec)	(*pVar_to_Dec) += (ValDec);
+			pthread_mutex_unlock(&lock);
 			return;
         }
         idx = next;
-    }
+    }    
+	pthread_mutex_unlock(&lock);
 }
 
 
 void CHASHTABLE_DirEntry::DictCreate(unsigned long int nSize, struct elt_CharEntry ** p_elt_list, int ** p_ht_table)
 {
 	int i;
-	int *p_mutex_attr;
-	pthread_mutexattr_t mattr;
+//	int *p_mutex_attr;
+//	pthread_mutexattr_t mattr;
 	
 	if(nSize) {
 		if(is_power_of_two(nSize)==0)	{
@@ -702,12 +720,12 @@ void CHASHTABLE_DirEntry::DictCreate(unsigned long int nSize, struct elt_CharEnt
 		size = nSize - 1;
 		n = 0;
 		
-		p_mutex_attr = (int *)(&mattr);
-		*p_mutex_attr = PTHREAD_MUTEXATTR_FLAG_PSHARED;	// PTHREAD_PROCESS_SHARED !!!!!!!!!!!!!!! Shared between processes
-//		if(pthread_mutex_init(&lock, &mattr) != 0) {
-//			perror("pthread_mutex_init");
-//			exit(1);
-//		}
+//		p_mutex_attr = (int *)(&mattr);
+//		*p_mutex_attr = PTHREAD_MUTEXATTR_FLAG_PSHARED;	// PTHREAD_PROCESS_SHARED !!!!!!!!!!!!!!! Shared between processes
+		if(pthread_mutex_init(&lock, NULL) != 0) {
+			perror("pthread_mutex_init");
+			exit(1);
+		}
 //		Offset_ht_table = sizeof(CHASHTABLE_DirEntry);
 //		Offset_elt_list = sizeof(CHASHTABLE_DirEntry) + sizeof(int)*(size+1);
 	}
@@ -872,6 +890,8 @@ int CHASHTABLE_DirEntry::DictDelete(const char *key, struct elt_CharEntry ** p_e
 	assert(key);
 //	h = fast_hash(size, key);
 	h = XXH64(key, strlen(key), 0) & size;
+
+	pthread_mutex_lock(&lock);
 	idx = (*p_ht_table)[h];
 	
 	if(!strcmp((*p_elt_list)[idx].key, key)) {	// found as the first element
@@ -881,6 +901,7 @@ int CHASHTABLE_DirEntry::DictDelete(const char *key, struct elt_CharEntry ** p_e
 		(*p_elt_list)[idx].next = first_av;
 		first_av = idx;		// put back as the beginning of the free space
 		n--;
+		pthread_mutex_unlock(&lock);
 		return ret;
 	}
 	
@@ -894,10 +915,13 @@ int CHASHTABLE_DirEntry::DictDelete(const char *key, struct elt_CharEntry ** p_e
 			(*p_elt_list)[next].next = first_av;
 			first_av = next;		
 			n--;
+			pthread_mutex_unlock(&lock);
 			return ret;
         }
         idx = next;
     }
+
+	pthread_mutex_unlock(&lock);
 	return ret;
 }
 
