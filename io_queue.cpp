@@ -323,7 +323,7 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 {
 	int i, thread_id, idx_op, IdxMin, IdxMax, idx_JobRec, nNumQueuePerWorker;
-	IO_CMD_MSG Op_Msg, *pOP_Msg_Retrieve;
+	IO_CMD_MSG Op_Msg;
 	CIO_QUEUE *pIO_Queue=NULL;
 	struct timeval tm;
 	
@@ -343,9 +343,8 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 		pIO_Queue = &(IO_Queue_List[thread_id]);
 		while(1)	{
 			if( (pIO_Queue->back) >= (pIO_Queue->front) )	{	// A queue that is not empty.
-				pOP_Msg_Retrieve = pIO_Queue->Dequeue();
-				memcpy(&Op_Msg, pOP_Msg_Retrieve, sizeof(IO_CMD_MSG));
-				fetch_and_add((int*)&(ActiveJobList[pOP_Msg_Retrieve->idx_JobRec].nOps_Done), 1);
+				pIO_Queue->Dequeue(&Op_Msg);
+				fetch_and_add((int*)&(ActiveJobList[Op_Msg.idx_JobRec].nOps_Done), 1);
 				Op_Msg.tid = thread_id;
 				
 				if (pthread_mutex_lock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
@@ -386,8 +385,7 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 					idx_JobRec = pIO_Queue->pQueue_Data[idx_op].idx_JobRec;
 					
 					if(ActiveJobList[idx_JobRec].nTokenAV >= pIO_Queue->pQueue_Data[idx_op].nTokenNeeded)	{	// check whether the queue has enough token !!!!!!!!!!!!!!!!
-						pOP_Msg_Retrieve = pIO_Queue->Dequeue();
-						memcpy(&Op_Msg, pOP_Msg_Retrieve, sizeof(IO_CMD_MSG));
+						pIO_Queue->Dequeue(&Op_Msg);
 						Op_Msg.tid = thread_id;
 						
 						if (pthread_mutex_lock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
@@ -551,7 +549,7 @@ void CIO_QUEUE::Enqueue(IO_CMD_MSG *pOp_Msg)
 	}
 }
 
-IO_CMD_MSG* CIO_QUEUE::Dequeue(void)
+void CIO_QUEUE::Dequeue(IO_CMD_MSG *pOp_Msg)
 {
 	IO_CMD_MSG *pMsg;
 		
@@ -559,16 +557,15 @@ IO_CMD_MSG* CIO_QUEUE::Dequeue(void)
 		perror("pthread_mutex_lock");
 		exit(2);
 	}
-	
-	pMsg = &(pQueue_Data[front & IO_QUEUE_SIZE_M1]);
-	front++;
-//	nTokenReload++;
+	if( back >= front )	{	// A queue that is not empty.
+		memcpy(pOp_Msg, &(pQueue_Data[front & IO_QUEUE_SIZE_M1]), sizeof(IO_CMD_MSG));
+		front++;
+//		nTokenReload++;
+	}
 
 	if (pthread_mutex_unlock(&lock) != 0) {
 		perror("pthread_mutex_unlock");
 		exit(2);
 	}
-	
-	return pMsg;
 }
 
