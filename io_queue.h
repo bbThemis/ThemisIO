@@ -68,7 +68,7 @@ typedef	struct	{
 class CIO_QUEUE {
 public:
 	int IdxWorker;	// the index of the IO worker who is processing this queue. -1 means not being processes. 
-	long int front, back;	// 16 bytes
+	volatile long int front, back;	// 16 bytes
 	pthread_mutex_t lock;	// 40 bytes
 	IO_CMD_MSG *pQueue_Data;		// 8 bytes
 
