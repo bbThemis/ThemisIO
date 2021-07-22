@@ -21,14 +21,14 @@
 #define LEN_QUEUE_FREE_DIR_ENTRY		(MAX_SIZE_DIR_ENTRY_TO_FREE / sizeof(void *))
 #define LEN_QUEUE_FREE_DIR_ENTRY_M1	(LEN_QUEUE_FREE_DIR_ENTRY - 1)
 
-#define MAX_SIZE_CALL_RETURN_TO_FREE	(8*1024*1024L)
-#define LEN_QUEUE_FREE_CALL_RETURN		(MAX_SIZE_CALL_RETURN_TO_FREE / sizeof(void *))
-#define LEN_QUEUE_FREE_CALL_RETURN_M1	(LEN_QUEUE_FREE_CALL_RETURN - 1)
+//#define MAX_SIZE_CALL_RETURN_TO_FREE	(8*1024*1024L)
+//#define LEN_QUEUE_FREE_CALL_RETURN		(MAX_SIZE_CALL_RETURN_TO_FREE / sizeof(void *))
+//#define LEN_QUEUE_FREE_CALL_RETURN_M1	(LEN_QUEUE_FREE_CALL_RETURN - 1)
 
 #define PACKED_FREE_MEM_OP_SIZE	(64L)	// This is used to minimize the times of locking memory allocator
 #define PACKED_FREE_EX_POINTER_OP_SIZE	(240L)	// This is used to minimize the times of locking memory allocator
 #define PACKED_FREE_DIR_ENTRY_OP_SIZE	(480L)	// This is used to minimize the times of locking memory allocator
-#define PACKED_FREE_CALL_RETURN_OP_SIZE	(120L)	// This is used to minimize the times of locking memory allocator
+//#define PACKED_FREE_CALL_RETURN_OP_SIZE	(120L)	// This is used to minimize the times of locking memory allocator
 
 extern CORE_BINDING CoreBinding;
 extern CMEM_ALLOCATOR *pMem_Allocator;
@@ -63,10 +63,10 @@ void* Func_thread_Free_Memory(void *pParam)	// a thread running to release all m
 		printf("\n mutex lock init failed for CQueue_Free_Mem.lock_Dir_Entry in Func_thread_Free_Memory()\n"); 
 		exit(1);
 	}
-	if(pthread_mutex_init(&(CQueue_Free_Mem.lock_Call_Return), NULL) != 0) { 
-		printf("\n mutex lock init failed for CQueue_Free_Mem.lock_Call_Return in Func_thread_Free_Memory()\n"); 
-		exit(1);
-	}
+//	if(pthread_mutex_init(&(CQueue_Free_Mem.lock_Call_Return), NULL) != 0) { 
+//		printf("\n mutex lock init failed for CQueue_Free_Mem.lock_Call_Return in Func_thread_Free_Memory()\n"); 
+//		exit(1);
+//	}
 
 	pMemListToFree[PACKED_FREE_MEM_OP_SIZE] = NULL;	// The end of the list
 
@@ -81,9 +81,9 @@ void* Func_thread_Free_Memory(void *pParam)	// a thread running to release all m
 	assert(CQueue_Free_Mem.pMemList_Dir_Entry != NULL);
 	memset(CQueue_Free_Mem.pMemList_Dir_Entry, 0, MAX_SIZE_DIR_ENTRY_TO_FREE);
 
-	CQueue_Free_Mem.pMemList_Call_Return = (void **)memalign(64, MAX_SIZE_CALL_RETURN_TO_FREE);
-	assert(CQueue_Free_Mem.pMemList_Call_Return != NULL);
-	memset(CQueue_Free_Mem.pMemList_Call_Return, 0, MAX_SIZE_CALL_RETURN_TO_FREE);
+//	CQueue_Free_Mem.pMemList_Call_Return = (void **)memalign(64, MAX_SIZE_CALL_RETURN_TO_FREE);
+//	assert(CQueue_Free_Mem.pMemList_Call_Return != NULL);
+//	memset(CQueue_Free_Mem.pMemList_Call_Return, 0, MAX_SIZE_CALL_RETURN_TO_FREE);
 
 	// start the loop to check whethere there exist memory blocks to free
 	while(1)	{
@@ -277,7 +277,7 @@ void CQUEUE_FREE_MEM::Enqueue_Dir_Entry(void *pMemToFree_Dir_Entry)
 		}
 	}
 }
-
+/*
 void CQUEUE_FREE_MEM::Enqueue_Call_Return(void *pMemToFree_Call_Return)
 {
 	long int back_mod, Len_Queue_Free_Call_Return;
@@ -310,4 +310,5 @@ void CQUEUE_FREE_MEM::Enqueue_Call_Return(void *pMemToFree_Call_Return)
 		}
 	}
 }
+*/
 
