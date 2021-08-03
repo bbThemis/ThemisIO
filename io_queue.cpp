@@ -10,6 +10,7 @@
 #include "io_ops.h"
 #include "utility.h"
 #include "corebinding.h"
+// #include "fair_queue.h"
 
 extern CORE_BINDING CoreBinding;
 extern int nFSServer, mpi_rank;
@@ -633,7 +634,7 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 			nNumQueuePerWorker = ( MAX_NUM_QUEUE - 1 ) / ( NUM_THREAD_IO_WORKER - 1 ) + 1;
 		}
 		IdxMin = 1 + (thread_id-1)*nNumQueuePerWorker;
-		IdxMax = min( (IdxMin + nNumQueuePerWorker - 1), (MAX_NUM_QUEUE - 1));
+		IdxMax = MIN( (IdxMin + nNumQueuePerWorker - 1), (MAX_NUM_QUEUE - 1));
 		printf("DBG> worker %d, (%d, %d)\n", thread_id, IdxMin, IdxMax);
 		range = IdxMax-IdxMin+1;
 
@@ -804,7 +805,7 @@ void* Func_thread_IO_Worker_FIFO(void *pParam)	// process all IO wrok
 			nNumQueuePerWorker = ( MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER ) / ( NUM_THREAD_IO_WORKER - NUM_THREAD_IO_WORKER_INTER_SERVER ) + 1;
 		}
 		IdxMin = NUM_THREAD_IO_WORKER_INTER_SERVER + (thread_id-NUM_THREAD_IO_WORKER_INTER_SERVER)*nNumQueuePerWorker;
-		IdxMax = min( (IdxMin + nNumQueuePerWorker - 1), (MAX_NUM_QUEUE - 1));
+		IdxMax = MIN( (IdxMin + nNumQueuePerWorker - 1), (MAX_NUM_QUEUE - 1));
 		printf("DBG> worker %d, (%d, %d)\n", thread_id, IdxMin, IdxMax);
 	}
 	

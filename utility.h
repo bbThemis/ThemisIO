@@ -3,9 +3,10 @@
 
 #include <stdint.h>
 
+// min and max conflict with std::min and std::max
 //#ifndef min(a,b)
-#define min(a,b)	( ((a)<(b)) ? (a) : (b) )
-#define max(a,b)	( ((a)>(b)) ? (a) : (b) )
+#define MIN(a,b)	( ((a)<(b)) ? (a) : (b) )
+#define MAX(a,b)	( ((a)>(b)) ? (a) : (b) )
 //#endif
 
 #ifndef	BUDDY_PAGE_SHIFT

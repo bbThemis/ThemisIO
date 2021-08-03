@@ -53,7 +53,7 @@ typedef	struct	{
 	int jobid;	// slurm job id
 	int nnode;	// the number of node of this job. nTokenPerReload will be calculated based on this number. 
 	int nQP;	// number of queue pairs are associated with this jobid.
-	int pad;
+	int uid;  // user id
 
 	long int Time;	// time stamp in seconds of last reload
 	long int nTokenAV;	// the number of token available
