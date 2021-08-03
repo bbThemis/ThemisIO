@@ -10,7 +10,7 @@
 #include "io_ops.h"
 #include "utility.h"
 #include "corebinding.h"
-// #include "fair_queue.h"
+#include "fair_queue.h"
 
 extern CORE_BINDING CoreBinding;
 extern int nFSServer, mpi_rank;
@@ -151,7 +151,7 @@ void Sum_OP_Done_All_Servers(long int T_Download)
 
 		Server_qp.pJobScale_Remote->Job_Scale[idx_job].jobid = JobList.Job_Op[idx_job].jobid;
 		scale = (float)( 1.0 * JobList.Job_Op[idx_job].nnode * nOP_Done_Total/(JobList.Job_Op[idx_job].nOps_Done*nNode_Total) );
-		scale = min(scale, nFSServer*1.0);
+		scale = MIN(scale, nFSServer*1.0);
 		if(JobList.Job_Op[idx_job].nOps_Done < N_OP_DONE_THRESHOLD)	{	// Not an active job on this node
 			scale = PROB_LOWWER_BOUND;
 		}
@@ -275,7 +275,7 @@ void Scale_Probability_List(void)
 	active_prob ^= 1;
 }
 
-void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode)
+void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id)
 {
 	int i;
 	JOB_OP_SEND *pJob_OP = Server_qp.pJob_OP_Send;
@@ -284,6 +284,7 @@ void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode)
 	ActiveJobList[idx_rec].jobid = jobid;
 	ActiveJobList[idx_rec].nnode = nnode;
 	ActiveJobList[idx_rec].nQP = 1;	// A new QP was just established. 
+	ActiveJobList[idx_rec].uid = user_id;
 	ActiveJobList[idx_rec].nTokenAV = 0;
 	ActiveJobList[idx_rec].nTokenReload = 0;
 	ActiveJobList[idx_rec].nOps_Done = 0;
@@ -453,7 +454,7 @@ void* Func_thread_IO_Worker_LeiSizeFair(void *pParam)	// process all IO wrok
 			nNumQueuePerWorker = ( MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER ) / ( NUM_THREAD_IO_WORKER - NUM_THREAD_IO_WORKER_INTER_SERVER ) + 1;
 		}
 		IdxMin = NUM_THREAD_IO_WORKER_INTER_SERVER + (thread_id-NUM_THREAD_IO_WORKER_INTER_SERVER)*nNumQueuePerWorker;
-		IdxMax = min( (IdxMin + nNumQueuePerWorker - 1), (MAX_NUM_QUEUE - 1));
+		IdxMax = MIN( (IdxMin + nNumQueuePerWorker - 1), (MAX_NUM_QUEUE - 1));
 		printf("DBG> worker %d, (%d, %d)\n", thread_id, IdxMin, IdxMax);
 
 		range = IdxMax-IdxMin+1;
@@ -729,9 +730,8 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 			//printf("INFO> thread_id = %d Overhead %5.3lf\n", thread_id, 1.0 * t_accum / nOp_Done);
 			//}
 
-			pIO_Queue->Dequeue(pOP_Msg_Retrieve);
-			memcpy(&Op_Msg, pOP_Msg_Retrieve, sizeof(IO_CMD_MSG));
-			fetch_and_add((int*)&(ActiveJobList[pOP_Msg_Retrieve->idx_JobRec].nOps_Done), 1);
+			pIO_Queue->Dequeue(&Op_Msg);
+			fetch_and_add((int*)&(ActiveJobList[Op_Msg.idx_JobRec].nOps_Done), 1);
 			Op_Msg.tid = thread_id;
 			
 			if (pthread_mutex_lock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
