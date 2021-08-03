@@ -723,7 +723,7 @@ void* Func_thread_Finish_QP_Setup(void *pParam)
 	idx_JobRec = pHT_ActiveJobs->DictSearch(pData_to_recv->JobInfo.jobid, &elt_list_ActiveJobs, &ht_table_ActiveJobs, &jobid_hash);
 	if(idx_JobRec < 0)	{	// Do not exist. Need to insert it into hash table. 
 		idx_JobRec = pHT_ActiveJobs->DictInsertAuto(pData_to_recv->JobInfo.jobid, &elt_list_ActiveJobs, &ht_table_ActiveJobs);
-		Init_NewActiveJobRecord(idx_JobRec, pData_to_recv->JobInfo.jobid, pData_to_recv->JobInfo.nnode);
+		Init_NewActiveJobRecord(idx_JobRec, pData_to_recv->JobInfo.jobid, pData_to_recv->JobInfo.nnode, pData_to_recv->JobInfo.cuid);
 	}
 	else	{
 		fetch_and_add(&(ActiveJobList[idx_JobRec].nQP), 1);	// Increse the counter by 1
@@ -747,8 +747,8 @@ void* Func_thread_Finish_QP_Setup(void *pParam)
 	pServer_QP->pQP_Data[idx].bTimeout = 0;
 	pServer_QP->pQP_Data[idx].bServerReady = 1;
 
-	printf("DBG> Rank = %d Creating QP: Jobid = %d idx_qp = %d idx_Queue = %d (%d qps) from %s on client %s nQP = %d FirstAV_QP = %d IdxLastQP = %d\n", 
-		mpi_rank, pData_to_recv->JobInfo.jobid, idx, idx_Queue, ActiveJobList[idx_JobRec].nQP, pData_to_recv->JobInfo.szClientExeName, pData_to_recv->JobInfo.szClientHostName, pServer_QP->nQP, pServer_QP->FirstAV_QP, pServer_QP->IdxLastQP);
+	printf("DBG> Rank = %d Creating QP: Jobid = %d userid = %d idx_qp = %d idx_Queue = %d (%d qps) from %s on client %s nQP = %d FirstAV_QP = %d IdxLastQP = %d\n", 
+				 mpi_rank, pData_to_recv->JobInfo.jobid, pData_to_recv->JobInfo.cuid, idx, idx_Queue, ActiveJobList[idx_JobRec].nQP, pData_to_recv->JobInfo.szClientExeName, pData_to_recv->JobInfo.szClientHostName, pServer_QP->nQP, pServer_QP->FirstAV_QP, pServer_QP->IdxLastQP);
 	
 //	Global_Addr_Data.comm_tag = TAG_GLOBAL_ADDR_INFO;
 //	Global_Addr_Data.addr_NewMsgFlag = (uint64_t)pServer_QP->p_shm_NewMsgFlag + sizeof(char)*idx;

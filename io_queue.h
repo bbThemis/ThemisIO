@@ -38,7 +38,7 @@
 
 void Init_ActiveJobList(void);
 void Init_QueueList(void);
-void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode);
+void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id);
 void* Func_thread_IO_Worker(void *pParam);	// process all IO wrok
 void* Func_thread_Global_Fair_Sharing(void *pParam);
 
