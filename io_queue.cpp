@@ -16,10 +16,28 @@ extern CORE_BINDING CoreBinding;
 extern int nFSServer, mpi_rank;
 extern SERVER_QUEUEPAIR Server_qp;
 
+
 int active_prob=0;	// the index of active probability set. Only can be 0 or 1. ^ 1 to flip it. 
+
+// array of possible operations to execute in Func_thread_IO_Worker_FairQueue
+// must be larger than 'range'  (range = IdxMax - IdxMin + 1)
+#define FIRSTOPLIST_SIZE 640
+
+// XXX each counter in this array is updated by a different thread (via nOPs_Done[thread_id]++)
+// so the performance of those updates will suffer from false sharing
 long int nOPs_Done[NUM_THREAD_IO_WORKER];
+
+// writes are synchronized with lock_Modify_ActiveJob_List in qp.cpp, reads are not synchronized
 JOBREC ActiveJobList[MAX_NUM_ACTIVE_JOB];
+
+// size=nActiveJob
+// IdxJobRecList[i].idx_rec_ht is an index into ActiveJobList
+// new jobs are appended to this in Init_NewActiveJobRecord()
+// XXX there needs to be a way to remove inactive jobs, and this should be made thread-safe
 LISTJOBREC IdxJobRecList[MAX_NUM_ACTIVE_JOB];
+
+// Set in ConstructJobProbabilityList each time Init_NewActiveJobRecord is called,
+// this is used by Random_Pick_a_TargetJob to choose jobs.
 float ActiveJobProbability[2][MAX_NUM_ACTIVE_JOB];	// two set of list of probablities since we keep updating them. 
 
 CIO_QUEUE __attribute__((aligned(64))) IO_Queue_List[MAX_NUM_QUEUE];
@@ -34,6 +52,7 @@ CHASHTABLE_INT *pHT_ActiveJobs=NULL;
 struct elt_Int *elt_list_ActiveJobs = NULL;
 int *ht_table_ActiveJobs=NULL;
 
+// defined in qp.cpp, this protects ActiveJobList
 extern pthread_mutex_t lock_Modify_ActiveJob_List;
 extern pthread_mutex_t *pAccess_qp0_lock;
 
@@ -192,6 +211,10 @@ void Init_ActiveJobList(void)
 
 //void Update_Active_JobList(void);
 
+/* Fills ActiveJobProbability[] with a cumulative probability table,
+   one entry per active job, where the magnitude of each entry is
+   proportional to the number of nodes in the job, and the total is 1.
+   This is used by Random_Pick_a_TargetJob. */
 void ConstructJobProbabilityList(void)
 {
 	int i;
@@ -332,6 +355,8 @@ void Init_QueueList(void)
 
 }
 
+/* Returns the an index into ActiveJobList[] of a randomly selected
+	 job, weighted by number of nodes in the job. */
 int Random_Pick_a_TargetJob(uint64_t s[2], int *p_Idx_Job)
 {
 	int i;
@@ -339,7 +364,9 @@ int Random_Pick_a_TargetJob(uint64_t s[2], int *p_Idx_Job)
 	float *pJobProb;
 
 	pJobProb = ActiveJobProbability[active_prob];
-//	r = 1.0f*next(s)/RAND_MAX;
+
+	// choose a random float in the range [0,1)
+	//	r = 1.0f*next(s)/RAND_MAX;
 	r = (next(s) >> 11) * 0x1.0p-53;
 
 	for(i=0; i<nActiveJob; i++)	{
@@ -360,8 +387,11 @@ void* Func_thread_IO_Worker_LeiSizeFair(void *pParam)	// process all IO wrok
 	int idx_job;
 	IO_CMD_MSG Op_Msg;
 	CIO_QUEUE *pIO_Queue=NULL;
-//	FIRSTOPLIST *pFirstOPList=NULL;
-	FIRSTOPLIST pFirstOPList[640];	// need to make sure it is larger than range!!!!!
+
+	// array of possible operations to execute
+	// must be larger than 'range'  (range = IdxMax - IdxMin + 1)
+	FIRSTOPLIST pFirstOPList[FIRSTOPLIST_SIZE];
+
 	unsigned long int T_queue_Earlyest, T_queue_Earlyest_TargetJob;
 	int idx_Earlyest, idx_Earlyest_TargetJob, idx_rec_ht_Picked, nValidOPs, ToProcOP, IdxQueue_PreviousSelected=-1, idx_Cur;
 	struct timeval tm1, tm2;	// tm1.tv_sec
@@ -427,7 +457,7 @@ void* Func_thread_IO_Worker_LeiSizeFair(void *pParam)	// process all IO wrok
 				if( pIO_Queue->Dequeue(&Op_Msg) )	{	// failed
 					continue;
 				}
-//				memcpy(&Op_Msg, pOP_Msg_Retrieve, sizeof(IO_CMD_MSG));
+				// XXX this performs a 32-bit update of a 64-bit counter, so at 2**32-1, it will overflow back down to 0
 				fetch_and_add((int*)&(ActiveJobList[Op_Msg.idx_JobRec].nOps_Done), 1);	// ??????????????????????????????????????????????????????
 				Op_Msg.tid = thread_id;
 				
@@ -458,6 +488,7 @@ void* Func_thread_IO_Worker_LeiSizeFair(void *pParam)	// process all IO wrok
 		printf("DBG> worker %d, (%d, %d)\n", thread_id, IdxMin, IdxMax);
 
 		range = IdxMax-IdxMin+1;
+		assert(FIRSTOPLIST_SIZE >= range);
 
 //		pNext_IO_OP_Idx_Queue_List = (int*)malloc(sizeof(int)*range + sizeof(FIRSTOPLIST)*range);	// the list of index to sorted list according to T_Queued
 //		assert(pNext_IO_OP_Idx_Queue_List != NULL);
@@ -475,6 +506,8 @@ void* Func_thread_IO_Worker_LeiSizeFair(void *pParam)	// process all IO wrok
 	
 	IdxQueue_PreviousSelected = IdxMin - 1;
 	while(1)	{	// loop forever
+		// XXX without thread synchronization, this variable may be cached
+		// in a register and never re-read, creating an infinite loop
 		if(nActiveJob == 0)	continue;
 		idx_rec_ht_Picked = Random_Pick_a_TargetJob(rseed, &idx_job);
 		if(idx_rec_ht_Picked < 0)	continue;
@@ -484,6 +517,8 @@ void* Func_thread_IO_Worker_LeiSizeFair(void *pParam)	// process all IO wrok
 		idx_Earlyest = idx_Earlyest_TargetJob = -1;
 		nValidOPs = 0;
 
+    // Scan all queues in the inclusive range [IdxMin:IdxMax], checking
+    // just the first entry in each (not a full scan of all queued events).
 		for(i=1; i<=range; i++)	{	// All IO worker handle queues independently now!!! No lock is needed now.
 			idx_Cur = IdxQueue_PreviousSelected + i;
 			if(idx_Cur > IdxMax)	idx_Cur -= range;
@@ -506,6 +541,8 @@ void* Func_thread_IO_Worker_LeiSizeFair(void *pParam)	// process all IO wrok
 				}
 			}
 
+      // idx_Earlyest_TargetJob: oldest entry from the job selected by Random_Pick_a_TargetJob
+      // idx_Earlyest: oldest entry from any job
 			if(pFirstOPList[idxTask].T_Queued < LARGE_T_QUEUED)	{	// a valid record!
 				if(pFirstOPList[idxTask].idx_rec_ht == idx_rec_ht_Picked)	{
 					if(pFirstOPList[idxTask].T_Queued < T_queue_Earlyest_TargetJob)	{
@@ -545,6 +582,7 @@ void* Func_thread_IO_Worker_LeiSizeFair(void *pParam)	// process all IO wrok
 //			gettimeofday(&tm2, NULL);
 //			t_accum += ( (tm2.tv_sec - tm1.tv_sec) * 1000000 + (tm2.tv_usec - tm1.tv_usec) );
 			nOp_Done++;
+      // % is a slow operation. (nOp_Done & ((1<<17)-1))==0 would be better
 //			if(nOp_Done % 100000 == 0)	{
 //				printf("INFO> thread_id = %d Overhead %5.3lf\n", thread_id, 1.0 * t_accum / nOp_Done);
 //			}

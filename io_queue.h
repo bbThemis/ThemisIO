@@ -95,8 +95,19 @@ typedef	struct	{
 }JOB_SCALE_LIST,*PJOB_SCALE_LIST;
 
 typedef	struct	{
-	int idx_queue, idx_op;
-	int idx_rec_ht, pad;	// index that would be found by hashtable querying
+	// index into IO_Queue_List
+	int idx_queue;
+
+	// position of op in that queue, IO_Queue_List[idx_queue].pQueue_Data[idx_op]
+	int idx_op;
+
+	// index that would be found by hashtable querying
+	// and index into ActiveJobList[]
+	int idx_rec_ht;
+
+	int pad;
+
+	// timestamp when the request was received in microseconds
 	unsigned long int T_Queued;
 }FIRSTOPLIST,*PFIRSTOPLIST;
 
