@@ -10,6 +10,13 @@
 	throughput of all ranks is combined, but a standard deviation across ranks
   is also output.
 
+    -time=S : run for S seconds
+		-prefix=<path> : test output filename prefix
+		-iosize=<bytes> : size of each IO operations
+		-filesize=<bytes> : maximum output file size
+		-tag=<name> : a name included in output to aid analysis
+		-nodelete : don't delete output file
+
 	Example:
 	  ./rw_speed -filesize=100m -iosize=4k -time=5 -prefix=/myfs/rw_speed -tag=job0
 
@@ -23,6 +30,7 @@
 #include <cstring>
 #include <climits>
 #include <cassert>
+#include <cmath>
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -90,7 +98,7 @@ struct Options {
 						 
 		}
 		MPI_Finalize();
-		exit(1);
+		exit(0);
 		return;
 	}
 
@@ -152,6 +160,10 @@ struct Options {
 			else if (!strcmp(arg, "-nodelete")) {
 				cleanup = false;
 			}
+
+      else {
+        printHelp();
+      }
 		}
 		return true;
 	}
@@ -178,7 +190,7 @@ public:
 		double timestamp = getTime();
 		size_t slice_idx = (size_t) timestamp;
 		if (slice_idx >= slice_bytes.size()) {
-			slice_bytes.resize(slice_idx);
+			slice_bytes.resize(slice_idx+1);
 		}
 		slice_bytes[slice_idx] += io_size;
 	}
@@ -189,7 +201,7 @@ public:
 		for (size_t i=0; i < slice_bytes.size(); i++) {
 			if (i > 0) buf << ",";
 			double mbps = (double)slice_bytes[i] / (1<<20);
-			buf << std::setprecision(1) << mbps;
+			buf << std::fixed << std::setprecision(1) << mbps;
 		}
 		buf << ")";
 		return buf.str();
@@ -279,6 +291,27 @@ void fillBuffer(vector<long> &data, long file_offset) {
 		file_offset += 8;
 	}
 }
+
+
+void gatherStats(long io_bytes, long &total_io_bytes, double &rank_io_bytes_stddev) {
+  // sum all ranks io_bytes into total_io_bytes
+	// MPI_Reduce(&io_bytes, &total_io_bytes, 1, MPI_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
+
+  // gather all values of io_bytes to compute standard deviation
+  vector<long> rank_io_bytes(np);
+  MPI_Gather(&io_bytes, 1, MPI_LONG, rank_io_bytes.data(), 1, MPI_LONG, 0, MPI_COMM_WORLD);
+
+  if (rank == 0) {
+    total_io_bytes = 0;
+    double sum2 = 0;  // sum of squares
+    for (int i=0; i < np; i++) {
+      total_io_bytes += rank_io_bytes[i];
+      sum2 += (double)rank_io_bytes[i] * rank_io_bytes[i];
+    }
+    double variance = (sum2 - ((double)total_io_bytes * total_io_bytes)/np) / (np-1);
+    rank_io_bytes_stddev = sqrt(variance);
+  }
+}
 	
 
 int main(int argc, char **argv) {
@@ -300,17 +333,23 @@ int main(int argc, char **argv) {
 	const char *filename = filename_str.c_str();
 
 	int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-	if (fd == -1) {
-		printf("[%d] Error creating %s: %s\n", rank, filename, strerror(errno));
-		fflush(stdout);
-		assert(0 == "failed to create output file");
-	}
+
+  // make sure everyone was able to open their files
+  int min_fd;
+  MPI_Allreduce(&fd, &min_fd, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+  if (min_fd < 0) {
+    if (fd == -1) {
+      printf("[%d] Error creating %s: %s\n", rank, filename, strerror(errno));
+    }
+    MPI_Finalize();
+    return 1;
+  }
 
 	vector<long> data(opt.io_size / sizeof(long));
 	vector<long> expected_data(opt.io_size / sizeof(long));
 	long file_offset;
 	bool done = false;
-
+  
 	MPI_Barrier(MPI_COMM_WORLD);
 	double start_time = MPI_Wtime();
 
@@ -318,13 +357,16 @@ int main(int argc, char **argv) {
 		
 		// write to the file
 
-		printf("[%d] writing...\n", rank);
+		// printf("[%d] %.3f writing...\n", rank, getTime());
 		for (file_offset = 0; 
 				 file_offset < opt.file_size;
 				 file_offset += opt.io_size) {
 
 			// out of time
-			if (getTime() > opt.run_time_sec) break;
+			if (getTime() > opt.run_time_sec) {
+        done=true;
+        break;
+      }
 
 			fillBuffer(data, file_offset);
 			int bytes_written = write(fd, data.data(), opt.io_size);
@@ -338,7 +380,7 @@ int main(int argc, char **argv) {
 		}
 
 		// read from the file
-		printf("[%d] reading...\n", rank);
+		// printf("[%d] %.3f reading...\n", rank, getTime());
 
 		// XXX ThemisIO doesn't yet support seek
 		close(fd);
@@ -350,7 +392,10 @@ int main(int argc, char **argv) {
 				 file_offset += opt.io_size) {
 
 			// out of time
-			if (getTime() > opt.run_time_sec) break;
+			if (getTime() > opt.run_time_sec) {
+        done=true;
+        break;
+      }
 
 			fillBuffer(expected_data, file_offset);
 			int bytes_read = read(fd, data.data(), opt.io_size);
@@ -378,12 +423,15 @@ int main(int argc, char **argv) {
 	MPI_Barrier(MPI_COMM_WORLD);
 	double elapsed_sec = MPI_Wtime() - start_time;
 
-	long total_io_bytes = 0;
-	MPI_Reduce(&io_bytes, &total_io_bytes, 1, MPI_LONG, MPI_SUM, 0,
-						 MPI_COMM_WORLD);
+  // printf("[%d] %ld bytes\n", rank, io_bytes);
+	long total_io_bytes;
+  double rank_io_bytes_stddev;
+  gatherStats(io_bytes, total_io_bytes, rank_io_bytes_stddev);
 
 	double total_mbps = total_io_bytes / ((1<<20) * elapsed_sec);
+  double mbps_rank_stddev = rank_io_bytes_stddev / ((1<<20) * elapsed_sec);
 
+  /*
 	for (int r=0; r < np; r++) {
 		MPI_Barrier(MPI_COMM_WORLD);
 		if (r == rank) {
@@ -392,18 +440,21 @@ int main(int argc, char **argv) {
 			usleep(100000);
 		}
 	}
+  */
 
 	if (rank==0) {
 		string tag;
 		if (opt.tag.size() > 0) tag = "." + opt.tag;
-		printf("rw_speed%s user=%ld mbps=%.3f",
-					 tag.c_str(), (long)getuid(), total_mbps);
+		printf("rw_speed%s user=%ld mbps=%.3f mbps_rank_stddev=%.3f\n",
+					 tag.c_str(), (long)getuid(), total_mbps, mbps_rank_stddev);
 	}
 
 	close(fd);
 
 	if (opt.cleanup)
 		remove(filename);
+
+  MPI_Finalize();
 
 	return 0;
 }
