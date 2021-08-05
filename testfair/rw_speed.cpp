@@ -43,7 +43,7 @@
 using std::string;
 using std::vector;
 
-int np, rank;
+int np, rank, node_count;
 double t0;
 
 const double DEFAULT_RUN_TIME_SEC = 10;
@@ -53,6 +53,7 @@ const long DEFAULT_FILE_SIZE = 1024*1024*100;
 
 int parseSize(const char *str, uint64_t *result);
 double getTime() {return MPI_Wtime() - t0;}
+int getNodeCount();
 
 
 struct Options {
@@ -207,6 +208,18 @@ public:
 		return buf.str();
 	}
 
+	/* Gather all data onto rank 0. */
+	void gather() {
+		// make sure everyone is the same length
+		int max_len = slice_bytes.size();
+		MPI_Allreduce(MPI_IN_PLACE, &max_len, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+		assert(max_len >= slice_bytes.size());
+		slice_bytes.resize(max_len, 0);
+		MPI_Reduce(rank==0 ? MPI_IN_PLACE : slice_bytes.data(), slice_bytes.data(),
+							 max_len, MPI_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
+	}
+
+
 private:
 	int io_size;
 
@@ -285,6 +298,20 @@ int parseSize(const char *str, uint64_t *result) {
 }
 
 
+int getNodeCount() {
+	int rank, is_rank0, nodes;
+	MPI_Comm shmcomm;
+
+	MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0,
+											MPI_INFO_NULL, &shmcomm);
+	MPI_Comm_rank(shmcomm, &rank);
+	is_rank0 = (rank == 0) ? 1 : 0;
+	MPI_Allreduce(&is_rank0, &nodes, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+	MPI_Comm_free(&shmcomm);
+	return nodes;
+}
+
+
 void fillBuffer(vector<long> &data, long file_offset) {
 	for (size_t i=0; i < data.size(); i++) {
 		data[i] = file_offset;
@@ -318,6 +345,7 @@ int main(int argc, char **argv) {
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &np);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	node_count = getNodeCount();
 	t0 = MPI_Wtime();
 
 	Options opt;
@@ -349,6 +377,11 @@ int main(int argc, char **argv) {
 	vector<long> expected_data(opt.io_size / sizeof(long));
 	long file_offset;
 	bool done = false;
+
+	if (rank==0)
+		printf("rw_speed np=%d nn=%d -prefix=%s -iosize=%d -filesize=%ld -time=%.1f -tag=%s%s\n",
+					 np, node_count, opt.filename_prefix.c_str(), opt.io_size, opt.file_size,
+					 opt.run_time_sec, opt.tag.c_str(), opt.cleanup ? "" : " -nodelete");
   
 	MPI_Barrier(MPI_COMM_WORLD);
 	double start_time = MPI_Wtime();
@@ -431,22 +464,21 @@ int main(int argc, char **argv) {
 	double total_mbps = total_io_bytes / ((1<<20) * elapsed_sec);
   double mbps_rank_stddev = rank_io_bytes_stddev / ((1<<20) * elapsed_sec);
 
-  /*
-	for (int r=0; r < np; r++) {
-		MPI_Barrier(MPI_COMM_WORLD);
-		if (r == rank) {
-			printf("[%d] mbps slices %s\n", rank, io_over_time.toString().c_str());
-			fflush(stdout);
-			usleep(100000);
-		}
-	}
-  */
+	io_over_time.gather();
 
+	// summarize output
 	if (rank==0) {
 		string tag;
 		if (opt.tag.size() > 0) tag = "." + opt.tag;
-		printf("rw_speed%s user=%ld mbps=%.3f mbps_rank_stddev=%.3f\n",
-					 tag.c_str(), (long)getuid(), total_mbps, mbps_rank_stddev);
+
+		char job_id[100] = {0};
+		const char *slurm_jobid = getenv("SLURM_JOBID");
+		if (slurm_jobid && strlen(slurm_jobid) < 50)
+			snprintf(job_id, sizeof job_id, " jobid=%s", slurm_jobid);
+
+		printf("rw_speed%s nn=%d np=%d user=%ld%s mbps=%.3f mbps_rank_stddev=%.3f mbps_1sec_time_slices=%s\n",
+					 tag.c_str(), node_count, np, (long)getuid(), job_id, total_mbps, mbps_rank_stddev,
+					 io_over_time.toString().c_str());
 	}
 
 	close(fd);
