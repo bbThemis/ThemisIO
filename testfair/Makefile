@@ -1,8 +1,8 @@
 default: all
 
 EXECS = rw_speed simple
-OPT = -g
-# OPT = -O3 -march=native
+# OPT = -g
+OPT = -O3 -march=native
 CC = gcc -Wall $(OPT)
 CXX = gcc -Wall $(OPT)
 MPICXX = mpicxx -Wall $(OPT)

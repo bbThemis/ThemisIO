@@ -730,6 +730,16 @@ void* Func_thread_Finish_QP_Setup(void *pParam)
 	}
 	pthread_mutex_unlock(&lock_Modify_ActiveJob_List);
 
+  /*
+		This formula maps idx to idx_Queue. To make it bit more understandable,
+		here is the formula broken down in to smaller pieces:
+
+    nis = NUM_THREAD_IO_WORKER_INTER_SERVER
+    qpw = NUM_QUEUE_PER_WORKER
+    maxq = MAX_NUM_QUEUE_MX
+    i = idx - nFSServer * NUM_THREAD_IO_WORKER_INTER_SERVER
+    idx_Queue = ( (i*qpw + i*qpw/maxq ) % maxq ) + nis;
+	*/
 	
 //	idx_Queue = ( ((idx-nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER)*NUM_QUEUE_PER_WORKER + (idx-nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER)*NUM_QUEUE_PER_WORKER/MAX_NUM_QUEUE_MX ) % MAX_NUM_QUEUE_MX) + nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER;
 	idx_Queue = ( ((idx-nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER)*NUM_QUEUE_PER_WORKER + (idx-nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER)*NUM_QUEUE_PER_WORKER/MAX_NUM_QUEUE_MX ) % MAX_NUM_QUEUE_MX) + NUM_THREAD_IO_WORKER_INTER_SERVER;
