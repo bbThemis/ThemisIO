@@ -5,11 +5,13 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "io_ops_common.h"
+
 #define PTHREAD_MUTEXATTR_FLAG_PSHARED (0x80000000)	// int 
 #define INITIAL_SIZE (1024*1024*2)
 #define MAX_NAME_LEN	(184)
 //#define MAX_ENTRY_NAME_LEN	(56)
-#define MAX_ENTRY_NAME_LEN    (40)
+//#define MAX_ENTRY_NAME_LEN    (40)
 
 struct elt_Int {
     int next;

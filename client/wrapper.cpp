@@ -586,15 +586,15 @@ inline void Gather_FileName_Info(char szName[], int *nLenFileName, int *nLenPare
 	*nLenParentDirName = i;
 
 	*pIdx_fs = -1;	// set an invalid index
-	if( ((*nLenFileName)>=4) && (szName[(*nLenFileName)-4] == '_') && (szName[(*nLenFileName)-3] == 'S') )	{	// specific tag used to choose specific server!!!!!!!!!!!!!!!!!!!!
-		nReadItem = sscanf(szName+(*nLenFileName)-2, "%x", pIdx_fs);
+	if( ((*nLenFileName)>=3) && (szName[(*nLenFileName)-3] == '_') && (szName[(*nLenFileName)-2] == 'S') )	{	// specific tag used to choose specific server!!!!!!!!!!!!!!!!!!!!
+		nReadItem = sscanf(szName+(*nLenFileName)-1, "%x", pIdx_fs);
 		if(nReadItem != 1)	{
-			printf("Warning> Failed to extract server index from %s\n", szName+(*nLenFileName)-4);
+			printf("Warning> Failed to extract server index from %s\n", szName+(*nLenFileName)-3);
 			*pIdx_fs = -1;
 		}
 		else	{
 			if((*pIdx_fs) >= FileServerListLocal.nFSServer)	{
-				printf("Warning> idx_Server (%d) > nFSServer (%d) in %s\n", *pIdx_fs, FileServerListLocal.nFSServer, szName+(*nLenFileName)-4);
+				printf("Warning> idx_Server (%d) > nFSServer (%d) in %s\n", *pIdx_fs, FileServerListLocal.nFSServer, szName+(*nLenFileName)-3);
 				*pIdx_fs = -1;
 //				exit(1);
 			}
@@ -691,7 +691,13 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 			}
 		}
 
-		if( (! two_args) && ( oflags & O_CREAT ) )	Gather_FileName_Info(szFullPath, &(pIO_Cmd->nLen_FileName), &(pIO_Cmd->nLen_Parent_Dir_Name), &(pIO_Cmd->file_hash), &(pIO_Cmd->parent_dir_hash), &idx_fs);	// create a new file
+		if( (! two_args) && ( oflags & O_CREAT ) )	{
+			Gather_FileName_Info(szFullPath, &(pIO_Cmd->nLen_FileName), &(pIO_Cmd->nLen_Parent_Dir_Name), &(pIO_Cmd->file_hash), &(pIO_Cmd->parent_dir_hash), &idx_fs);	// create a new file
+			if( (pIO_Cmd->nLen_FileName - pIO_Cmd->nLen_Parent_Dir_Name - 1) >= MAX_ENTRY_NAME_LEN)	{
+				printf("ERROR> The length of entry name >= MAX_ENTRY_NAME_LEN (%d).\n%s\nQuit\n", MAX_ENTRY_NAME_LEN, szFullPath);
+				exit(1);
+			}
+		}
 		else	{
 			Gather_FileName_Info(szFullPath, &(pIO_Cmd->nLen_FileName), &(pIO_Cmd->nLen_Parent_Dir_Name), &(pIO_Cmd->file_hash), NULL, &idx_fs);
 			pIO_Cmd->parent_dir_hash = 0;
@@ -3061,6 +3067,10 @@ int mkdir(const char *pathname, mode_t mode)
 		pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 
 		Gather_FileName_Info(szFullPath, &(pIO_Cmd->nLen_FileName), &(pIO_Cmd->nLen_Parent_Dir_Name), &(pIO_Cmd->file_hash), &(pIO_Cmd->parent_dir_hash), &idx_fs);	// create a new file
+		if( (pIO_Cmd->nLen_FileName - pIO_Cmd->nLen_Parent_Dir_Name - 1) >= MAX_ENTRY_NAME_LEN)	{
+			printf("ERROR> The length of entry name >= MAX_ENTRY_NAME_LEN (%d).\n%s\nQuit\n", MAX_ENTRY_NAME_LEN, szFullPath);
+			exit(1);
+		}
 //		idx_fs = pIO_Cmd->file_hash % pFileServerList->nFSServer;	// the index of which file server holding this file
 		
 		Setup_QP_if_Needed(idx_fs);
