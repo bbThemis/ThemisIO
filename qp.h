@@ -124,6 +124,11 @@ public:
 	char *p_shm_IO_Result_Recv = NULL;
 	IO_CMD_MSG *pIO_Cmd_ToSend_Other_Server=NULL;
 
+	long int T_Start_us = 0;
+	JOB_SCALE_LIST *pJobScale_Local=NULL, *pJobScale_Remote=NULL;
+	JOB_OP_SEND *pJob_OP_Recv=NULL;	// only allocate memory on rank 0
+	JOB_OP_SEND *pJob_OP_Send=NULL;
+
 	struct ibv_device** dev_list_ = NULL;
 	struct ibv_context* context_ = NULL;
 	struct ibv_pd* pd_ = NULL;

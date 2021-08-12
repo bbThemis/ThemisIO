@@ -4,14 +4,23 @@
 #include <pthread.h>
 #include "io_ops_common.h"
 
+#define T_WINDOW	(500000)	// unit is us. 
+#define T_FOR_UPLOAD	(T_WINDOW - 3000)	// unit is us. 
+#define T_FOR_SUM	(T_FOR_UPLOAD + 1500)	// unit is us. 
+#define N_OP_DONE_THRESHOLD	(20)	// should proportional to T_WINDOW
+#define PROB_LOWWER_BOUND	(0.0002)
+
+#define N_BYTE_READ_SCALING	(192)	// make it smaller than the max inline size
+
 #define LARGE_T_QUEUED	(0x60000000000000UL)
 #define	N_SECOND_THRESHOLD_REMOVE_JOB	(15)	// When (nQP == 0) and dT > N_SECOND_THRESHOLD_REMOVE_JOB, remove current job from active job list
 
 #define NUM_THREAD_IO_WORKER_INTER_SERVER  (8)
 #define NUM_THREAD_IO_WORKER  (16+NUM_THREAD_IO_WORKER_INTER_SERVER)
+//#define NUM_THREAD_IO_WORKER  (14+NUM_THREAD_IO_WORKER_INTER_SERVER)
 
 #define MAX_NUM_ACTIVE_JOB	(1024)	// max number of concurrent slurm job id
-
+//#define MAX_NUM_QUEUE (1120 + NUM_THREAD_IO_WORKER_INTER_SERVER)
 #define MAX_NUM_QUEUE (640 + NUM_THREAD_IO_WORKER_INTER_SERVER)
 //#define MAX_NUM_QUEUE	(640 + NUM_THREAD_IO_WORKER_INTER_SERVER)	// The first queue is reserved for inter-server communications! 
 #define MAX_NUM_QUEUE_MX	(MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER)
@@ -31,6 +40,8 @@ void Init_ActiveJobList(void);
 void Init_QueueList(void);
 void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode);
 void* Func_thread_IO_Worker(void *pParam);	// process all IO wrok
+void* Func_thread_Global_Fair_Sharing(void *pParam);
+
 void Update_Active_JobList(void);
 void ConstructJobProbabilityList(void);
 
@@ -58,6 +69,30 @@ typedef	struct	{
 	int jobid;	// slurm job id
 	int idx_rec_ht;	// index that would be found by hashtable querying
 }LISTJOBREC,*PLISTJOBREC;
+
+typedef	struct	{
+	int jobid;	// slurm job id
+	float scale;	// Scaling factor
+}JOB_SCALE,*PJOB_SCALE;	// The data all server gets from rank 0. 
+
+typedef	struct	{
+	int jobid;	// slurm job id
+	int nnode;	// the number of nodes allocated 
+	long int nOps_Done;	// The number of operations processed in last window
+}JOB_OP_REC,*PJOB_OP_REC;
+
+typedef	struct	{
+//	struct timeval T_op;	// 16 bytes
+	int nActiveJob, pad;
+	long int T_op_us;	// time in ms since the beginning 
+	JOB_OP_REC Job_Op[MAX_NUM_ACTIVE_JOB-1];	// each record uses 16 bytes. -1 for alignment!!!!!
+}JOB_OP_SEND,*PJOB_OP_SEND;
+
+typedef	struct	{
+	int nActiveJob, pad;
+	long int T_op_us;	// time in ms since the beginning 
+	JOB_SCALE Job_Scale[MAX_NUM_ACTIVE_JOB-2];	// each record uses 16 bytes. -2 for alignment!!!!!!!
+}JOB_SCALE_LIST,*PJOB_SCALE_LIST;
 
 typedef	struct	{
 	int idx_queue, idx_op;
