@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 #include "qp.h"
 #include "dict.h"
@@ -14,10 +15,11 @@ extern CORE_BINDING CoreBinding;
 extern int nFSServer, mpi_rank;
 extern SERVER_QUEUEPAIR Server_qp;
 
+int active_prob=0;	// the index of active probability set. Only can be 0 or 1. ^ 1 to flip it. 
 long int nOPs_Done[NUM_THREAD_IO_WORKER];
 JOBREC ActiveJobList[MAX_NUM_ACTIVE_JOB];
 LISTJOBREC IdxJobRecList[MAX_NUM_ACTIVE_JOB];
-float ActiveJobProbability[MAX_NUM_ACTIVE_JOB];
+float ActiveJobProbability[2][MAX_NUM_ACTIVE_JOB];	// two set of list of probablities since we keep updating them. 
 
 CIO_QUEUE __attribute__((aligned(64))) IO_Queue_List[MAX_NUM_QUEUE];
 __thread uint64_t rseed[2];
@@ -32,6 +34,132 @@ struct elt_Int *elt_list_ActiveJobs = NULL;
 int *ht_table_ActiveJobs=NULL;
 
 extern pthread_mutex_t lock_Modify_ActiveJob_List;
+extern pthread_mutex_t *pAccess_qp0_lock;
+
+// Send my record of job OP to rank 0
+void Upload_Job_OP_List(long int T_Upload)
+{
+	int idx_qp;
+
+	if(mpi_rank == 0)	return;
+	if(nActiveJob == 0)	return;
+
+	idx_qp = 0;	// Using the first QP
+	Server_qp.pJob_OP_Send->T_op_us = T_Upload;
+
+	if(Server_qp.pQP_Data[idx_qp].queue_pair == NULL)	return;
+
+	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+		perror("pthread_mutex_lock");
+		exit(2);
+	}
+
+	Server_qp.IB_Put(idx_qp, (void*)Server_qp.pJob_OP_Send, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pJob_OP_Recv), Server_qp.pQP_Data[idx_qp].rem_key, sizeof(JOB_OP_REC)*(nActiveJob+1));
+
+	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+		perror("pthread_mutex_unlock");
+		exit(2);
+	}
+}
+
+int Query_JobID(int job_id, JOB_OP_SEND *pJobList)
+{
+	int i, nJob;
+
+	nJob = pJobList->nActiveJob;
+
+	for(i=0; i<nJob; i++)	{	// Will use hash table for better efficiency later! 
+		if( job_id == pJobList->Job_Op[i].jobid )	{
+			return i;
+		}
+	}
+	return (-1);
+}
+
+void Download_Scaling_Factors(long int T_Download)
+{
+	int idx_qp, nBytesExpected;
+
+	if(mpi_rank == 0)	return;
+
+	idx_qp = 0;	// Using the first QP
+
+	if(Server_qp.pQP_Data[idx_qp].queue_pair == NULL)	return;
+
+	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+		perror("pthread_mutex_lock");
+		exit(2);
+	}
+
+	Server_qp.IB_Get(idx_qp, (void*)Server_qp.pJobScale_Local, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pJobScale_Remote), Server_qp.pQP_Data[idx_qp].rem_key, N_BYTE_READ_SCALING);
+	nBytesExpected = sizeof(int)*4 + Server_qp.pJobScale_Local->nActiveJob*sizeof(int)*2;
+	if(nBytesExpected > N_BYTE_READ_SCALING)	{
+		Server_qp.IB_Get(idx_qp, (void*)((char*)(Server_qp.pJobScale_Local) + N_BYTE_READ_SCALING), Server_qp.mr_shm_global->lkey, 
+			(void*)((char*)(Server_qp.pJobScale_Remote) + N_BYTE_READ_SCALING), Server_qp.pQP_Data[idx_qp].rem_key, nBytesExpected-N_BYTE_READ_SCALING);
+	}
+
+	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+		perror("pthread_mutex_unlock");
+		exit(2);
+	}
+}
+
+
+void Sum_OP_Done_All_Servers(long int T_Download)
+{
+	int idx_server, idx_job, nJob_Local, idx;
+	int nNode_Total=0;
+	float scale;
+	long int nOP_Done_Total=0;
+	JOB_OP_SEND JobList;
+
+	JobList.nActiveJob = 0;
+
+	for(idx_server=0; idx_server<nFSServer; idx_server++)	{
+		nJob_Local = Server_qp.pJob_OP_Recv[idx_server].nActiveJob;
+		for(idx_job=0; idx_job<nJob_Local; idx_job++)	{
+			idx = Query_JobID(Server_qp.pJob_OP_Recv[idx_server].Job_Op[idx_job].jobid, &JobList);
+			printf("DBG> %d nOPs_Done = %ld\n", idx_server, Server_qp.pJob_OP_Recv[idx_server].Job_Op[idx_job].nOps_Done);
+			if(idx >=0)	{	// found 
+				JobList.Job_Op[idx].nOps_Done += ( Server_qp.pJob_OP_Recv[idx_server].Job_Op[idx_job].nOps_Done );
+			}
+			else	{	// Not found. Append this record. 
+				JobList.Job_Op[JobList.nActiveJob].jobid = Server_qp.pJob_OP_Recv[idx_server].Job_Op[idx_job].jobid;
+				JobList.Job_Op[JobList.nActiveJob].nnode = Server_qp.pJob_OP_Recv[idx_server].Job_Op[idx_job].nnode;
+				JobList.Job_Op[JobList.nActiveJob].nOps_Done = Server_qp.pJob_OP_Recv[idx_server].Job_Op[idx_job].nOps_Done;
+				JobList.nActiveJob++;
+			}
+		}
+	}
+
+	for(idx_job=0; idx_job<JobList.nActiveJob; idx_job++)	{
+		nNode_Total += JobList.Job_Op[idx_job].nnode;
+		nOP_Done_Total += JobList.Job_Op[idx_job].nOps_Done;
+	}
+	printf("DBG> nOP_Done_Total = %ld\n", nOP_Done_Total);
+
+
+	if(nOP_Done_Total < N_OP_DONE_THRESHOLD)	Server_qp.pJobScale_Remote->nActiveJob = 0;
+	Server_qp.pJobScale_Remote->nActiveJob = JobList.nActiveJob;
+
+	for(idx_job=0; idx_job<JobList.nActiveJob; idx_job++)	{
+//		if(JobList.Job_Op[idx_job].nOps_Done == 0)	{
+//			JobList.Job_Op[idx_job].nOps_Done = 1;
+//		}
+		JobList.Job_Op[idx_job].nOps_Done++;	// Make sure it is larger than zero
+
+		Server_qp.pJobScale_Remote->Job_Scale[idx_job].jobid = JobList.Job_Op[idx_job].jobid;
+		scale = (float)( 1.0 * JobList.Job_Op[idx_job].nnode * nOP_Done_Total/(JobList.Job_Op[idx_job].nOps_Done*nNode_Total) );
+		scale = min(scale, nFSServer*1.0);
+		if(JobList.Job_Op[idx_job].nOps_Done < N_OP_DONE_THRESHOLD)	{	// Not an active job on this node
+			scale = PROB_LOWWER_BOUND;
+		}
+		Server_qp.pJobScale_Remote->Job_Scale[idx_job].scale = scale;
+		printf("DBG> s[%d] = %lf %d %d %ld %ld\n", idx_job, Server_qp.pJobScale_Remote->Job_Scale[idx_job].scale, JobList.Job_Op[idx_job].nnode, nNode_Total, 
+			nOP_Done_Total, JobList.Job_Op[idx_job].nOps_Done);
+	}
+
+}
 
 void Init_ActiveJobList(void)
 {
@@ -65,31 +193,93 @@ void Init_ActiveJobList(void)
 
 void ConstructJobProbabilityList(void)
 {
-	int i, nnode_sum=0;
-	float nnode_sum_inv, prob_Accu=0.0, ratio;
+	int i;
+	float nnode_sum=0.0, nnode_sum_inv, prob_Accu=0.0, ratio, *pJobProb=NULL;
 
 	if(nActiveJob == 0)	return;
 
+	pJobProb = ActiveJobProbability[active_prob];
+
 	for(i=0; i<nActiveJob; i++)	{
-		nnode_sum += (ActiveJobList[IdxJobRecList[i].idx_rec_ht].nnode);
+		pJobProb[i] = ActiveJobList[IdxJobRecList[i].idx_rec_ht].nnode;
+		nnode_sum += pJobProb[i];
 	}
 
 	nnode_sum_inv = 1.0 / nnode_sum;
 	prob_Accu = 0.0;
 	for(i=0; i<nActiveJob; i++)	{
-		ratio = nnode_sum_inv * ActiveJobList[IdxJobRecList[i].idx_rec_ht].nnode;
+		ratio = nnode_sum_inv * pJobProb[i];
 		prob_Accu += ratio;
-		ActiveJobProbability[i] = prob_Accu;
+		pJobProb[i] = prob_Accu;
 	}
 
 	printf("INFO> ------------- probability of job list.\n");
 	for(i=0; i<nActiveJob; i++)	{
-		printf("INFO> jobid %d nnode %d %6.3lf\n", ActiveJobList[IdxJobRecList[i].idx_rec_ht].jobid, ActiveJobList[IdxJobRecList[i].idx_rec_ht].nnode, ActiveJobProbability[i]);
+		printf("INFO> jobid %d nnode %d %6.3lf\n", ActiveJobList[IdxJobRecList[i].idx_rec_ht].jobid, ActiveJobList[IdxJobRecList[i].idx_rec_ht].nnode, pJobProb[i]);
 	}
+}
+
+float Query_Scaling_Factor(int jobid)
+{
+	int i;
+
+	for(i=0; i<Server_qp.pJobScale_Local->nActiveJob; i++)	{
+		if(Server_qp.pJobScale_Local->Job_Scale[i].jobid == jobid)	{
+			return Server_qp.pJobScale_Local->Job_Scale[i].scale;
+		}
+	}
+	return 1.0f;
+}
+
+void Scale_Probability_List(void)
+{
+	int i, new_active_prob;
+	float nnode_sum=0.0, nnode_sum_inv, prob_Accu=0.0, ratio, *pJobProb=NULL;
+	long int nOP_Done_Sum=0;
+
+	if(nActiveJob == 0)	return;
+	if(Server_qp.pJobScale_Remote == NULL)	return;
+
+	new_active_prob = active_prob ^ 1;	// flip
+	pJobProb = ActiveJobProbability[new_active_prob];
+
+	for(i=0; i<nActiveJob; i++)	{
+		Server_qp.pJobScale_Local->Job_Scale[i].scale;
+//		pJobProb[i] = ActiveJobList[IdxJobRecList[i].idx_rec_ht].nnode;
+		printf("rank = %d s[%d] = %lf\n", mpi_rank, i, Query_Scaling_Factor(IdxJobRecList[i].jobid));
+		pJobProb[i] = (ActiveJobList[IdxJobRecList[i].idx_rec_ht].nnode * Query_Scaling_Factor(IdxJobRecList[i].jobid));
+		nnode_sum += pJobProb[i];
+	}
+
+	nnode_sum_inv = 1.0 / nnode_sum;
+	prob_Accu = 0.0;
+	for(i=0; i<nActiveJob; i++)	{
+		ratio = nnode_sum_inv * pJobProb[i];
+		prob_Accu += ratio;
+		pJobProb[i] = prob_Accu;
+	}
+
+	printf("INFO> ------------- probability of job list.\n");
+	for(i=0; i<nActiveJob; i++)	{
+		printf("INFO> jobid %d nnode %d %6.3lf\n", ActiveJobList[IdxJobRecList[i].idx_rec_ht].jobid, ActiveJobList[IdxJobRecList[i].idx_rec_ht].nnode, pJobProb[i]);
+	}
+
+	Server_qp.pJob_OP_Send->nActiveJob = nActiveJob;
+	for(i=0; i<nActiveJob; i++)	{
+		Server_qp.pJob_OP_Send->Job_Op[i].jobid = ActiveJobList[i].jobid;
+		Server_qp.pJob_OP_Send->Job_Op[i].nnode = ActiveJobList[i].nnode;
+		Server_qp.pJob_OP_Send->Job_Op[i].nOps_Done = 0;	// recount from 0
+	}
+
+	active_prob ^= 1;
 }
 
 void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode)
 {
+	int i;
+	JOB_OP_SEND *pJob_OP = Server_qp.pJob_OP_Send;
+	JOB_OP_REC *pJob_Done = pJob_OP->Job_Op;
+
 	ActiveJobList[idx_rec].jobid = jobid;
 	ActiveJobList[idx_rec].nnode = nnode;
 	ActiveJobList[idx_rec].nQP = 1;	// A new QP was just established. 
@@ -101,7 +291,18 @@ void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode)
 	IdxJobRecList[nActiveJob].jobid = jobid;
 	IdxJobRecList[nActiveJob].idx_rec_ht = idx_rec;
 	nActiveJob++;
+
 	ConstructJobProbabilityList();
+
+	pJob_OP->nActiveJob = nActiveJob;
+	for(i=0; i<nActiveJob; i++)	{
+		pJob_Done[i].jobid = ActiveJobList[i].jobid;
+		pJob_Done[i].nnode = ActiveJobList[i].nnode;
+		pJob_Done[i].nOps_Done = 0;	// recount from 0
+	}
+	if(mpi_rank == 0)	{
+		Server_qp.pJobScale_Remote->nActiveJob = 0;
+	}
 }
 
 void Init_QueueList(void)
@@ -129,36 +330,51 @@ void Init_QueueList(void)
 
 }
 
-int Random_Pick_a_TargetJob(uint64_t s[2])
+int Random_Pick_a_TargetJob(uint64_t s[2], int *p_Idx_Job)
 {
 	int i;
 	double r;
+	float *pJobProb;
 
+	pJobProb = ActiveJobProbability[active_prob];
 //	r = 1.0f*next(s)/RAND_MAX;
 	r = (next(s) >> 11) * 0x1.0p-53;
 
 	for(i=0; i<nActiveJob; i++)	{
-		if(r < ActiveJobProbability[i])	{
+		if(r < pJobProb[i])	{
+			*p_Idx_Job = i;
 			return IdxJobRecList[i].idx_rec_ht;
 		}
 	}
+	*p_Idx_Job = (-1);
 	return (-1);
 }
-/*
+
 void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 {
 //	int i, idxTask, thread_id, idx_op, IdxMin, IdxMax, idx_JobRec, nNumQueuePerWorker, *pNext_IO_OP_Idx_Queue_List=NULL, range, nValid_Next_IO_OP=0;
 	int i, idxTask, thread_id, idx_op, IdxMin, IdxMax, idx_JobRec, nNumQueuePerWorker, range, nValid_Next_IO_OP=0;
-	IO_CMD_MSG Op_Msg, *pOP_Msg_Retrieve;
+	int idx_job;
+	IO_CMD_MSG Op_Msg;
 	CIO_QUEUE *pIO_Queue=NULL;
 //	FIRSTOPLIST *pFirstOPList=NULL;
-	FIRSTOPLIST pFirstOPList[400];	// need to make sure it is larger than range!!!!!
+	FIRSTOPLIST pFirstOPList[640];	// need to make sure it is larger than range!!!!!
 	unsigned long int T_queue_Earlyest, T_queue_Earlyest_TargetJob;
 	int idx_Earlyest, idx_Earlyest_TargetJob, idx_rec_ht_Picked, nValidOPs, ToProcOP, IdxQueue_PreviousSelected=-1, idx_Cur;
 	struct timeval tm1, tm2;	// tm1.tv_sec
 	long int t_accum=0;
 	long int nOp_Done=0;
+	long int T_Start_us, T_Now, T_Upload, T_Download, T_Sum;
 	struct timeval tm;
+
+	while(! Server_qp.pJobScale_Remote)	{
+	}
+	sleep(1);
+
+	T_Start_us = Server_qp.T_Start_us;
+	T_Download = T_Start_us;
+	T_Upload = T_Download + T_FOR_UPLOAD;
+	T_Sum = T_Download + T_FOR_SUM;
 
 	gettimeofday(&tm, NULL);
 	rseed[0] = tm.tv_sec;
@@ -168,16 +384,48 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 	printf("DBG> Func_thread_IO_Worker(): thread_id = %d\n", thread_id);
 	CoreBinding.Bind_This_Thread();
 
-	if(thread_id == 0)	{	// the first thread is dedicated for inter-server communication via queue[0]
-		IdxMin = 0;
-		IdxMax = 0;
-//		sleep(36000);
-		pIO_Queue = &(IO_Queue_List[0]);
+//	if(thread_id == 0)	{	// the first thread is dedicated for inter-server communication via queue[0]
+	// the first NUM_THREAD_IO_WORKER_INTER_SERVER thread is dedicated for inter-server communication via queue[0]
+	if(thread_id < NUM_THREAD_IO_WORKER_INTER_SERVER)	{
+		if(nFSServer == 1)	sleep(3600000);	// no work to do if there is only one server
+//		IdxMin = 0;
+//		IdxMax = 0;
+//		pIO_Queue = &(IO_Queue_List[0]);
+		IdxMin = thread_id;
+		IdxMax = thread_id;
+		pIO_Queue = &(IO_Queue_List[thread_id]);
 		while(1)	{
+
+			if(thread_id == 0)	{	// upload load info and download scaling factors
+				gettimeofday(&tm, NULL);
+				T_Now = tm.tv_sec*1000000 + tm.tv_usec;
+				if( T_Now >= T_Download )	{
+					// Download data from server 0;
+					Download_Scaling_Factors(T_Now);
+					printf("Time %ld %ld\n", T_Download, T_Now);
+					T_Download += T_WINDOW;	// update to next time to download
+					Scale_Probability_List();
+				}
+				if( T_Now >= T_Upload )	{
+					Upload_Job_OP_List(T_Now);
+					T_Upload += T_WINDOW;
+				}
+				if(mpi_rank == 0)	{
+					if( T_Now >= T_Sum )	{
+						Sum_OP_Done_All_Servers(T_Now);
+						T_Sum += T_WINDOW;
+					}
+				}
+			}
+
 			if( (pIO_Queue->back) >= (pIO_Queue->front) )	{	// A queue that is not empty.
-				pOP_Msg_Retrieve = pIO_Queue->Dequeue();
-				memcpy(&Op_Msg, pOP_Msg_Retrieve, sizeof(IO_CMD_MSG));
-				fetch_and_add((int*)&(ActiveJobList[pOP_Msg_Retrieve->idx_JobRec].nOps_Done), 1);
+//				pOP_Msg_Retrieve = pIO_Queue->Dequeue();
+				// 0 - success (not empty)
+				if( pIO_Queue->Dequeue(&Op_Msg) )	{	// failed
+					continue;
+				}
+//				memcpy(&Op_Msg, pOP_Msg_Retrieve, sizeof(IO_CMD_MSG));
+				fetch_and_add((int*)&(ActiveJobList[Op_Msg.idx_JobRec].nOps_Done), 1);	// ??????????????????????????????????????????????????????
 				Op_Msg.tid = thread_id;
 				
 				if (pthread_mutex_lock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
@@ -196,15 +444,16 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 		}
 	}
 	else	{
-		if( ( ( MAX_NUM_QUEUE - 1 ) % ( NUM_THREAD_IO_WORKER - 1 ) ) == 0 )	{
-			nNumQueuePerWorker = ( MAX_NUM_QUEUE - 1 ) / ( NUM_THREAD_IO_WORKER - 1 ) ;
+		if( ( ( MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER ) % ( NUM_THREAD_IO_WORKER - NUM_THREAD_IO_WORKER_INTER_SERVER ) ) == 0 )	{
+			nNumQueuePerWorker = ( MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER ) / ( NUM_THREAD_IO_WORKER - NUM_THREAD_IO_WORKER_INTER_SERVER ) ;
 		}
 		else	{
-			nNumQueuePerWorker = ( MAX_NUM_QUEUE - 1 ) / ( NUM_THREAD_IO_WORKER - 1 ) + 1;
+			nNumQueuePerWorker = ( MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER ) / ( NUM_THREAD_IO_WORKER - NUM_THREAD_IO_WORKER_INTER_SERVER ) + 1;
 		}
-		IdxMin = 1 + (thread_id-1)*nNumQueuePerWorker;
+		IdxMin = NUM_THREAD_IO_WORKER_INTER_SERVER + (thread_id-NUM_THREAD_IO_WORKER_INTER_SERVER)*nNumQueuePerWorker;
 		IdxMax = min( (IdxMin + nNumQueuePerWorker - 1), (MAX_NUM_QUEUE - 1));
 		printf("DBG> worker %d, (%d, %d)\n", thread_id, IdxMin, IdxMax);
+
 		range = IdxMax-IdxMin+1;
 
 //		pNext_IO_OP_Idx_Queue_List = (int*)malloc(sizeof(int)*range + sizeof(FIRSTOPLIST)*range);	// the list of index to sorted list according to T_Queued
@@ -224,8 +473,7 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 	IdxQueue_PreviousSelected = IdxMin - 1;
 	while(1)	{	// loop forever
 		if(nActiveJob == 0)	continue;
-//		gettimeofday(&tm1, NULL);
-		idx_rec_ht_Picked = Random_Pick_a_TargetJob(rseed);
+		idx_rec_ht_Picked = Random_Pick_a_TargetJob(rseed, &idx_job);
 		if(idx_rec_ht_Picked < 0)	continue;
 
 		// loop over all queues this IO worker needs to cover and extract job info for the first OP
@@ -298,9 +546,13 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 //				printf("INFO> thread_id = %d Overhead %5.3lf\n", thread_id, 1.0 * t_accum / nOp_Done);
 //			}
 
-			pOP_Msg_Retrieve = pIO_Queue->Dequeue();
-			memcpy(&Op_Msg, pOP_Msg_Retrieve, sizeof(IO_CMD_MSG));
-			fetch_and_add((int*)&(ActiveJobList[pOP_Msg_Retrieve->idx_JobRec].nOps_Done), 1);
+//			pOP_Msg_Retrieve = pIO_Queue->Dequeue();
+			if( pIO_Queue->Dequeue(&Op_Msg) )	{	// failed
+				continue;
+			}
+//			memcpy(&Op_Msg, pOP_Msg_Retrieve, sizeof(IO_CMD_MSG));
+			fetch_and_add((int*)&(ActiveJobList[Op_Msg.idx_JobRec].nOps_Done), 1);
+			fetch_and_add((int*)&(Server_qp.pJob_OP_Send->Job_Op[idx_job].nOps_Done), 1);
 			Op_Msg.tid = thread_id;
 			
 			if (pthread_mutex_lock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
@@ -318,8 +570,9 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 		}
 	}
 }
-*/
 
+
+/*
 void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 {
 	int i, thread_id, idx_op, IdxMin, IdxMax, idx_JobRec, nNumQueuePerWorker;
@@ -408,7 +661,7 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 		}
 	}
 }
-
+*/
 void Process_One_IO_OP(IO_CMD_MSG *pOP_Msg)
 {
 	int Op_Tag;

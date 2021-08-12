@@ -382,6 +382,7 @@ int SERVER_QUEUEPAIR::FindFirstAvailableQP(void)
 void SERVER_QUEUEPAIR::Init_Server_Socket(int max_num_qp, int port)
 {
 	int i, nSizeofNewMsgFlag, nSizeofHeartBeat, nSizeofIOCmdMsg, nSizeofIOResult, nSizeofIOResult_Recv, nSizePerCallReturnBlock, nSizeofReturnBuffer;
+	int offset;
 	char *p_CallReturnBuff;
 
 //	void *pHash;
@@ -411,18 +412,52 @@ void SERVER_QUEUEPAIR::Init_Server_Socket(int max_num_qp, int port)
 	nSizePerCallReturnBlock = (SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN) + 1*sizeof(int) + 64) & 0xFFFFFFC0;
 	nSizeofReturnBuffer = CFixedSizeMemAllcator.Query_MemSize(nSizePerCallReturnBlock, MAX_NUM_RETURN_BUFF);
 
-	nSizeshm_Global = nSizeofNewMsgFlag + nSizeofHeartBeat + nSizeofIOCmdMsg + nSizeofIOResult + nSizeofIOResult_Recv + nSizeofReturnBuffer;
+	if(mpi_rank == 0)	{
+		nSizeshm_Global = nSizeofNewMsgFlag + nSizeofHeartBeat + nSizeofIOCmdMsg + nSizeofIOResult + nSizeofIOResult_Recv + nSizeofReturnBuffer 
+			+ sizeof(JOB_SCALE_LIST) + sizeof(JOB_OP_SEND)*nFSServer;
+	}
+	else	{
+		nSizeshm_Global = nSizeofNewMsgFlag + nSizeofHeartBeat + nSizeofIOCmdMsg + nSizeofIOResult + nSizeofIOResult_Recv + nSizeofReturnBuffer 
+			+ sizeof(JOB_SCALE_LIST) + sizeof(JOB_OP_SEND);
+	}
 	p_shm_Global = memalign( 4096, nSizeshm_Global);
 	assert(p_shm_Global != NULL);
 	memset(p_shm_Global, 0, nSizeshm_Global);
+
+	offset = 0;
 	p_shm_NewMsgFlag = (unsigned char *)p_shm_Global;
-	p_shm_TimeHeartBeat = (time_t *)((char*)p_shm_Global + nSizeofNewMsgFlag);
-	p_shm_IO_Cmd_Msg = (IO_CMD_MSG *)((char*)p_shm_Global + nSizeofNewMsgFlag + nSizeofHeartBeat);
-	p_shm_IO_Result = (char*)((char*)p_shm_Global + nSizeofNewMsgFlag + nSizeofHeartBeat + nSizeofIOCmdMsg);
-	p_shm_IO_Result_Recv = (char*)((char*)p_shm_Global + nSizeofNewMsgFlag + nSizeofHeartBeat + nSizeofIOCmdMsg + nSizeofIOResult);
-	p_CallReturnBuff = (char*)((char*)p_shm_Global + nSizeofNewMsgFlag + nSizeofHeartBeat + nSizeofIOCmdMsg + nSizeofIOResult + nSizeofIOResult_Recv);
+	offset += nSizeofNewMsgFlag;
+
+	p_shm_TimeHeartBeat = (time_t *)((char*)p_shm_Global + offset);
+	offset += nSizeofHeartBeat;
+
+	p_shm_IO_Cmd_Msg = (IO_CMD_MSG *)((char*)p_shm_Global + offset);
+	offset += nSizeofIOCmdMsg;
+
+	p_shm_IO_Result = (char*)((char*)p_shm_Global + offset);
+	offset += nSizeofIOResult;
+
+	p_shm_IO_Result_Recv = (char*)((char*)p_shm_Global + offset);
+	offset += nSizeofIOResult_Recv;
+
+	p_CallReturnBuff = (char*)((char*)p_shm_Global + offset );
+	offset += nSizeofReturnBuffer;
+
+	pJobScale_Local = (JOB_SCALE_LIST *)((char*)p_shm_Global + offset);
+	offset += sizeof(JOB_SCALE_LIST);
+
+	pJob_OP_Send = (JOB_OP_SEND *)((char*)p_shm_Global + offset);
+
+	if(mpi_rank == 0)	{
+		pJob_OP_Recv = pJob_OP_Send;
+		pJobScale_Remote = pJobScale_Local;
+	}
+	// Other rank will get the value of pJobScale_Remote and pJob_OP_Recv with bcast!!!
+
 	CFixedSizeMemAllcator.Init_Memory_Pool(p_CallReturnBuff);
 //	sp_CallReturnBuff = ncx_slab_init((void*)p_CallReturnBuff, MAX_LEN_RETURN_BUFF);
+
+
 
 	FirstAV_QP = 0;
 	nQP = 0;

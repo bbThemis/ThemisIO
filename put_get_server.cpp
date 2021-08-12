@@ -18,6 +18,10 @@
 #include <net/if.h>
 #include <sys/ioctl.h>
 
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <signal.h>
+
 #include <mpi.h> 
 
 #include "qp.h"
@@ -142,6 +146,23 @@ void Setup_QP_Among_Servers(void)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
+	static struct timeval tm;
+	if(mpi_rank == 0)	{
+		gettimeofday(&tm, NULL);
+		Server_qp.T_Start_us =  (tm.tv_sec + 15)*1000000 + tm.tv_usec;	// 9~10 s delay
+		Server_qp.T_Start_us = Server_qp.T_Start_us - (Server_qp.T_Start_us % 1000000);
+	}
+
+	MPI_Bcast(&(Server_qp.T_Start_us), sizeof(long int), MPI_CHAR, 0, MPI_COMM_WORLD);
+
+	MPI_Bcast(&(Server_qp.pJob_OP_Recv), sizeof(void*), MPI_CHAR, 0, MPI_COMM_WORLD);
+	printf("DBG> Server_qp.pJob_OP_Recv = %p\n", Server_qp.pJob_OP_Recv);
+	if(mpi_rank)	Server_qp.pJob_OP_Recv += (mpi_rank);
+	printf("DBG> Server_qp.pJob_OP_Recv = %p\n", Server_qp.pJob_OP_Recv);
+	MPI_Bcast(&(Server_qp.pJobScale_Remote), sizeof(void*), MPI_CHAR, 0, MPI_COMM_WORLD);
+
+	if(mpi_rank == 0)	Server_qp.pJobScale_Remote->nActiveJob = 0;
+
 	printf("DBG> Rank = %d Finishing Setup_QP_Among_Servers().\n", mpi_rank);
 }
 
@@ -259,6 +280,7 @@ static void* Func_thread_qp_server(void *pParam)
 	}
 
 	Server_Started = 1;	// active the flag: Server started running!!!
+	printf("Rank = %d. Server is started.\n", mpi_rank);
 	pServer_qp->Socket_Server_Loop();
 	
 	return 0;
@@ -323,14 +345,42 @@ inline void Send_IO_Request(int idx_fs)
 	}
 }
 */
+
+
+static void sigsegv_handler(int sig, siginfo_t *siginfo, void *uc)
+{
+	char szMsg[256];
+
+	sprintf(szMsg, "\n\n\n\n\n\n\n\n\nGot signal %d (SIGSEGV) rank = %d tid = %d\n\n\n\n\n\n\n", siginfo->si_signo, mpi_rank, syscall(SYS_gettid));
+	write(STDERR_FILENO, szMsg, strlen(szMsg));
+	fsync(STDERR_FILENO);
+	sleep(3000);
+//	if(org_segv)	org_segv(sig, siginfo, uc);
+//	else	exit(1);
+}
+
 int main(int argc, char **argv)
 {
 	int i;
 	FILE *fOut;
-	pthread_t thread_qp_server, thread_print_data, thread_polling_newmsg;
+	pthread_t thread_qp_server, thread_print_data, thread_polling_newmsg, thread_global_sharing;
 //	unsigned char *pNewMsg_ToSend=NULL;
 //	IO_CMD_MSG *pIO_Cmd_toSend;
 //	struct ibv_mr *mr_local;
+
+
+	struct sigaction act, old_action;
+	
+    // Set up sigsegv handler
+    memset (&act, 0, sizeof(act));
+    act.sa_flags = SA_SIGINFO;
+	
+    act.sa_sigaction = sigsegv_handler;
+    if (sigaction(SIGSEGV, &act, &old_action) == -1) {
+        perror("Error: sigaction");
+        exit(1);
+    }
+
 
 	CoreBinding.Init_Core_Binding();
 	Unique_Thread.Init_UniqueThread();
@@ -374,7 +424,11 @@ int main(int argc, char **argv)
 	}
 
 	Setup_QP_Among_Servers();
-	printf("Rank = %d. Server is started.\n", mpi_rank);
+
+//	if(pthread_create(&(thread_global_sharing), NULL, Func_thread_Global_Fair_Sharing, &Server_qp)) {
+//		fprintf(stderr, "Error creating thread\n");
+//		return 1;
+//	}
 
 //	if(pthread_create(&(thread_print_data), NULL, Func_thread_Print_Data, &Server_qp)) {
 //		fprintf(stderr, "Error creating thread\n");
@@ -390,7 +444,10 @@ int main(int argc, char **argv)
 	signal(SIGALRM, sigalarm_handler); // Register signal handler
 	alarm(T_FREQ_REPORT_RESULT);
 
-	if(nFSServer>1)	Query_Other_Server( (mpi_rank + 1) % nFSServer );
+	while(Server_Started == 0)	{
+		usleep(10000);
+	}
+	if( nFSServer>1 )	Query_Other_Server( (mpi_rank + 1) % nFSServer );
 
 /*
 	pNewMsg_ToSend = (unsigned char*)malloc(sizeof(IO_CMD_MSG));
