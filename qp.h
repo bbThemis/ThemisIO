@@ -55,7 +55,10 @@ extern CIO_QUEUE IO_Queue_List[MAX_NUM_QUEUE];
 
 inline int Align64_Int(int a)
 {
-	return ( (a & 0x3F) ? (64 + (a & 0xFFFFFFC0) ) : (a) );
+	// return ( (a & 0x3F) ? (64 + (a & 0xFFFFFFC0) ) : (a) );
+
+	// branch not needed
+	return (a + 63) & ~63;
 }
 
 void Init_PreAllocated_QueuePair_List(void);

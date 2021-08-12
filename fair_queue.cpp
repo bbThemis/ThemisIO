@@ -16,6 +16,15 @@ FairQueue::FairQueue(Mode mode_, JobInfoLookup &job_info_lookup_, int max_idle_s
 }
 
 
+FairQueue::~FairQueue() {
+	auto it = indexed_queues.begin();
+	while (it != indexed_queues.end()) {
+		delete it->second;
+		it = indexed_queues.erase(it);
+	}
+}
+
+
 void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 	int key = getKey(msg);
 	MessageQueue *q;
@@ -119,6 +128,7 @@ void FairQueue::purgeIdle() {
 	while (it != indexed_queues.end()) {
 		MessageQueue *q = it->second;
 		if (q->messages.empty() && q->idle_timestamp < too_old) {
+			delete q;
 			it = indexed_queues.erase(it);
 		} else {
 			it++;

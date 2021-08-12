@@ -170,8 +170,20 @@ struct Options {
 	}
 
 	string getFilename() {
+		char nodename[MPI_MAX_PROCESSOR_NAME+1];
+		int namelen;
+		MPI_Get_processor_name(nodename, &namelen);
+		nodename[namelen] = 0;
+
+		// truncate after first part of the name
+		char *dot = strchr(nodename, '.');
+		if (dot) {
+			*dot = 0;
+		}
+		
 		std::ostringstream buf;
-		buf << filename_prefix << ".rank" << rank << ".uid" << getuid();
+		// buf << filename_prefix << ".rank" << rank << ".node" << nodename << ".pid" << getpid() << ".uid" << getuid();
+		buf << filename_prefix << "." << nodename << "." << getpid();
 		return buf.str();
 	}
 
@@ -359,6 +371,7 @@ int main(int argc, char **argv) {
 	
 	string filename_str = opt.getFilename();
 	const char *filename = filename_str.c_str();
+	printf("[%d] filename=\"%s\"\n", rank, filename);
 
 	int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
@@ -385,9 +398,11 @@ int main(int argc, char **argv) {
   
 	MPI_Barrier(MPI_COMM_WORLD);
 	double start_time = MPI_Wtime();
+	int iteration = 0;
 
 	while (!done) {
-		
+		iteration++;
+
 		// write to the file
 
 		// printf("[%d] %.3f writing...\n", rank, getTime());
@@ -404,7 +419,7 @@ int main(int argc, char **argv) {
 			fillBuffer(data, file_offset);
 			int bytes_written = write(fd, data.data(), opt.io_size);
 			if (bytes_written != opt.io_size) {
-				printf("[%d] write fail, %d of %d bytes\n", rank, bytes_written, opt.io_size);
+				printf("[%d] %.6f write fail, %d of %d bytes\n", rank, getTime(), bytes_written, opt.io_size);
 				done = true;
 				break;
 			}
@@ -418,6 +433,12 @@ int main(int argc, char **argv) {
 		// XXX ThemisIO doesn't yet support seek
 		close(fd);
 		fd = open(filename, O_RDONLY);
+		if (fd < 0) {
+			printf("[%d] %.6f read iteration %d of %s, open returned %d, error %s\n",
+						 rank, getTime(), iteration, filename, fd, strerror(errno));
+			break;
+		}
+			
 		assert(fd >= 0);
 		
 		for (file_offset = 0; 
@@ -433,12 +454,12 @@ int main(int argc, char **argv) {
 			fillBuffer(expected_data, file_offset);
 			int bytes_read = read(fd, data.data(), opt.io_size);
 			if (bytes_read != opt.io_size) {
-				printf("[%d] read fail, %d of %d bytes\n", rank, bytes_read, opt.io_size);
+				printf("[%d] %.6f read fail, %d of %d bytes\n", rank, getTime(), bytes_read, opt.io_size);
 				done = true;
 				break;
 			}
 			if (memcmp(expected_data.data(), data.data(), opt.io_size)) {
-				printf("[%d] data read back incorrectly at offset %ld\n", rank, file_offset);
+				printf("[%d] %.6f data read back incorrectly at offset %ld\n", rank, getTime(), file_offset);
 				done = true;
 				break;
 			}
@@ -450,6 +471,12 @@ int main(int argc, char **argv) {
 		// XXX ThemisIO doesn't yet support seek
 		close(fd);
 		fd = open(filename, O_WRONLY);
+		if (fd < 0) {
+			printf("[%d] %.6f write iteration %d of %s, open returned %d error %s\n",
+						 rank, getTime(), iteration, filename, fd, strerror(errno));
+			break;
+		}
+
 		assert(fd >= 0);
 	}
 

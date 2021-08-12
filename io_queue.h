@@ -12,7 +12,9 @@
 
 #define N_BYTE_READ_SCALING	(192)	// make it smaller than the max inline size
 
+// special timestamp value used to mark invalid entries
 #define LARGE_T_QUEUED	(0x60000000000000UL)
+
 #define	N_SECOND_THRESHOLD_REMOVE_JOB	(15)	// When (nQP == 0) and dT > N_SECOND_THRESHOLD_REMOVE_JOB, remove current job from active job list
 
 #define NUM_THREAD_IO_WORKER_INTER_SERVER  (8)
@@ -68,6 +70,8 @@ typedef	struct	{
 typedef	struct	{
 	int jobid;	// slurm job id
 	int idx_rec_ht;	// index that would be found by hashtable querying
+									// index into ActiveJobList[] and elt_list_ActiveJobs[]
+									// same as CIO_QUEUE::pQueue_Data[idx_op].idx_JobRec
 }LISTJOBREC,*PLISTJOBREC;
 
 typedef	struct	{
@@ -107,7 +111,7 @@ typedef	struct	{
 
 	int pad;
 
-	// timestamp when the request was received in microseconds
+	// timestamp when the request was received in microseconds since epoch
 	unsigned long int T_Queued;
 }FIRSTOPLIST,*PFIRSTOPLIST;
 
@@ -117,6 +121,11 @@ public:
 	volatile long int front, back;	// 16 bytes
 	pthread_mutex_t lock;	// 40 bytes
 	IO_CMD_MSG *pQueue_Data;		// 8 bytes
+
+	// protect these with lock to make them safe. Current code matches
+	// unsafe versions.
+	bool isFullUnsafe() { return ( back - front ) >= IO_QUEUE_SIZE; }
+	bool isEmptyUnsafe() { return back < front; }
 
 	void Enqueue(IO_CMD_MSG *pOp_Msg);
 	int  Dequeue(IO_CMD_MSG *pOp_Msg);	// 1 - Queue is empty, 0 - Success. 

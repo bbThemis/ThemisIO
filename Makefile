@@ -14,7 +14,7 @@ endif
 all: server
 
 server: $(OBJS)
-	$(CXX) -O2 $(CXXFLAGS) -g -o $@ put_get_server.o qp.o io_queue.o buddy.o myfs.o io_ops.o corebinding.o unique_thread.o dict.o xxhash.o ncx_slab.o queue_free_mem.o -libverbs -lpthread -lrt -Wunused-variable -L/opt/intel/compilers_and_libraries_2018.6.288/linux/mpi/intel64/lib/release_mt -L/opt/intel/compilers_and_libraries_2018.6.288/linux/mpi/intel64/lib -lmpicxx -lmpifort -lmpi -ldl
+	$(CXX) -O2 $(CXXFLAGS) -g -o $@ put_get_server.o qp.o io_queue.o fair_queue.o buddy.o myfs.o io_ops.o corebinding.o unique_thread.o dict.o xxhash.o ncx_slab.o queue_free_mem.o -libverbs -lpthread -lrt -Wunused-variable -L/opt/intel/compilers_and_libraries_2018.6.288/linux/mpi/intel64/lib/release_mt -L/opt/intel/compilers_and_libraries_2018.6.288/linux/mpi/intel64/lib -lmpicxx -lmpifort -lmpi -ldl
 #	$(CXX) $(CXXFLAGS) -o $@ put_get_server.o io_queue.o dict.o xxhash.o -libverbs -lpthread -lrt -Wunused-variable -L/opt/intel/compilers_and_libraries_2020.4.304/linux/mpi/intel64/lib/release -L/opt/intel/compilers_and_libraries_2020.4.304/linux/mpi/intel64/lib -lmpicxx -lmpifort -lmpi -ldl
 
 #fsclient: $(OBJS)
