@@ -371,7 +371,7 @@ int main(int argc, char **argv) {
 	
 	string filename_str = opt.getFilename();
 	const char *filename = filename_str.c_str();
-	printf("[%d] filename=\"%s\"\n", rank, filename);
+	// printf("[%d] filename=\"%s\"\n", rank, filename);
 
 	int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
