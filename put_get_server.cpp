@@ -147,13 +147,13 @@ void Setup_QP_Among_Servers(void)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	static struct timeval tm;
-	if(mpi_rank == 0)	{
+//	if(mpi_rank == 0)	{
 		gettimeofday(&tm, NULL);
 		Server_qp.T_Start_us =  (tm.tv_sec + 15)*1000000 + tm.tv_usec;	// 9~10 s delay
-		Server_qp.T_Start_us = Server_qp.T_Start_us - (Server_qp.T_Start_us % 1000000);
-	}
+//		Server_qp.T_Start_us = Server_qp.T_Start_us - (Server_qp.T_Start_us % 1000000);
+//	}
 
-	MPI_Bcast(&(Server_qp.T_Start_us), sizeof(long int), MPI_CHAR, 0, MPI_COMM_WORLD);
+//	MPI_Bcast(&(Server_qp.T_Start_us), sizeof(long int), MPI_CHAR, 0, MPI_COMM_WORLD);
 
 	MPI_Bcast(&(Server_qp.pJob_OP_Recv), sizeof(void*), MPI_CHAR, 0, MPI_COMM_WORLD);
 	printf("DBG> Server_qp.pJob_OP_Recv = %p\n", Server_qp.pJob_OP_Recv);
