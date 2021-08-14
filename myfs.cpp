@@ -127,13 +127,17 @@ void Init_Memory(void)
 
 //	FSSize = HashTableFileSize + HashTableDirSize + FileMetaDataSize + DirMetaDataSize + sizeof(CMEM_ALLOCATOR) + AllocatorSize + DataAreaSize;
 	FSSize = HashTableFileSize + HashTableDirSize + HashTableLargeFileSize + LargeFileStripeDataSize + FileMetaDataSize + DirMetaDataSize + BUDDY_PAGE_SIZE + AllocatorSize + DataAreaSize;
+	// printf("FSSize = HashTableFileSize (%lu) + HashTableDirSize (%lu) + HashTableLargeFileSize (%lu) + LargeFileStripeDataSize (%lu) + FileMetaDataSize (%lu) + DirMetaDataSize (%lu) + BUDDY_PAGE_SIZE (%lu) + AllocatorSize (%lu) + DataAreaSize (%lu)\n", HashTableFileSize, HashTableDirSize, HashTableLargeFileSize, LargeFileStripeDataSize, FileMetaDataSize, DirMetaDataSize, BUDDY_PAGE_SIZE, AllocatorSize, DataAreaSize);
 
 	if (ftruncate(fd_shm, FSSize) != 0) {
 		perror("ftruncate for fd_shm");
 	}
+
 	pMyfs = mmap(NULL, FSSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd_shm, 0);
 	if(pMyfs == MAP_FAILED)	{
-		perror("mmap for pMyfs");
+		// perror("mmap for pMyfs");
+		printf("mmap failed with FSSize=%luGB file=%s filedes=%d: %s\n", FSSize / (1<<30), szNameShm_Full, fd_shm, strerror(errno));
+		exit(1);
 	}
 	Offset = 0;
 
