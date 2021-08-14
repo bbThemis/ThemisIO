@@ -616,7 +616,7 @@ void* Func_thread_IO_Worker_LeiSizeFair(void *pParam)	// process all IO wrok
 }
 
 
-void Inter_server_communication_loop(int thread_id, CIO_QUEUE *queue) {
+static void Inter_server_communication_loop(int thread_id, CIO_QUEUE *queue) {
 	IO_CMD_MSG msg;
 
 	while(1)	{
@@ -650,6 +650,8 @@ void Inter_server_communication_loop(int thread_id, CIO_QUEUE *queue) {
 			exit(2);
 		}
 	}
+
+
 }
 
 
@@ -684,26 +686,33 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 	rseed[1] = tm.tv_usec;
 	*/
 
-
-	printf("DBG> Func_thread_IO_Worker_FairQueue(): thread_id = %d, pid = %ld\n", thread_id, (long)getpid());
 	CoreBinding.Bind_This_Thread();
+	idx_qp_server = thread_id % NUM_THREAD_IO_WORKER_INTER_SERVER;
 
-	if(thread_id == 0)	{	// the first thread is dedicated for inter-server communication via queue[0]
-		Inter_server_communication_loop(thread_id, &(IO_Queue_List[0]));
+	// the first thread is dedicated for inter-server communication via queue[0]
+	if(thread_id < NUM_THREAD_IO_WORKER_INTER_SERVER)	{
+		printf("DBG> FairQueue thread_id %d inter-server-queue %d\n", thread_id, thread_id);
+		Inter_server_communication_loop(thread_id, &(IO_Queue_List[thread_id]));
 		// never returns
 		return NULL;
 	}
 
 	// Each thread handles a subrange of input queues.
 	// Distribute those queues across threads as equally as possible.
-	IdxMin = 1 + (thread_id-1) * (MAX_NUM_QUEUE - 1) / (NUM_THREAD_IO_WORKER-1);
-	IdxMax = 1 + thread_id * (MAX_NUM_QUEUE - 1) / (NUM_THREAD_IO_WORKER-1) - 1;
-	range = IdxMax-IdxMin+1;
-	printf("DBG> worker %d, (%d, %d) count=%d\n", thread_id, IdxMin, IdxMax, range);
+	{
+		int nThreads = NUM_THREAD_IO_WORKER - NUM_THREAD_IO_WORKER_INTER_SERVER;
+		int nQueues = MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER;
+		int offset = NUM_THREAD_IO_WORKER_INTER_SERVER;
+		int worker_id = thread_id - NUM_THREAD_IO_WORKER_INTER_SERVER;
+		IdxMin = offset + worker_id * nQueues / nThreads;
+		IdxMax = offset + (worker_id+1) * nQueues / nThreads - 1;
+	}
+
+	printf("DBG> FairQueue thread_id %d queues %d..%d (count=%d)\n", thread_id, IdxMin, IdxMax, IdxMax-IdxMin+1);
 	
+	IO_CMD_MSG msg;
 	JobInfoLookup job_info_lookup(ActiveJobList, &nActiveJob);
 	FairQueue fair_queue(FairQueue::Mode::JOB_FAIR, job_info_lookup);
-	IO_CMD_MSG msg;
 	int pending_count = 0;
 
 	while(1)	{	// loop forever
@@ -720,11 +729,13 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 		for (CIO_QUEUE *queue = IO_Queue_List + IdxMin;
 				 queue <= IO_Queue_List + IdxMax;
 				 queue++) {
-			if (queue->Dequeue(&msg) == 0) {
-				msg.tid = thread_id;
-				// printMessage(&msg, "incomingMsg");
-				fair_queue.putMessage(&msg);
-				pending_count++;
+			if (!queue->isEmptyUnsafe()) {
+				if (queue->Dequeue(&msg) == 0) {
+					msg.tid = thread_id;
+					// printMessage(&msg, "incomingMsg");
+					fair_queue.putMessage(&msg);
+					pending_count++;
+				}
 			}
 		}
 
@@ -775,7 +786,7 @@ void* Func_thread_IO_Worker_FIFO(void *pParam)	// process all IO wrok
 	struct timeval tm;
 	
 	thread_id = *((int*)pParam);
-	printf("DBG> Func_thread_IO_Worker(): thread_id = %d\n", thread_id);
+	printf("DBG> Func_thread_IO_Worker_FIFO(): thread_id = %d\n", thread_id);
 	CoreBinding.Bind_This_Thread();
 	idx_qp_server = thread_id % NUM_THREAD_IO_WORKER_INTER_SERVER;
 
