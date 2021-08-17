@@ -1,4 +1,6 @@
 CXX=g++
+OPT=-O2
+# OPT=
 CXXFLAGS=-march=skylake-avx512 -g -I/opt/intel/compilers_and_libraries_2018.6.288/linux/mpi/intel64/include -DNCX_PTR_SIZE=8 -pipe -DLOG_LEVEL=4  -DPAGE_MERGE
 OBJS=put_get_server.o qp.o dict.o xxhash.o io_queue.o myfs.o io_ops.o buddy.o ncx_slab.o corebinding.o unique_thread.o queue_free_mem.o fair_queue.o
 #HEADERS=dict.h qp_common.h qp.h io_queue.h utility.h xxhash.h list.h buddy.h myfs_common.h myfs.h io_ops_common.h io_ops.h ncx_slab.h ncx_core.h ncx_log.h client/qp_client.h
@@ -24,37 +26,37 @@ put_get_server.o: put_get_server.cpp $(HEADERS)
 	$(CXX) -O0 $(CXXFLAGS) -c $<
 
 qp.o: qp.cpp $(HEADERS)
-	$(CXX) -O2 $(CXXFLAGS) -c $<
+	$(CXX) $(OPT) $(CXXFLAGS) -c $<
 
 dict.o: dict.cpp $(HEADERS)
-	$(CXX) -g -O2 $(CXXFLAGS) -c $<
+	$(CXX) $(OPT) $(CXXFLAGS) -c $<
 
 xxhash.o: xxhash.cpp $(HEADERS)
-	$(CXX) -O2 $(CXXFLAGS) -c $<
+	$(CXX) $(OPT) $(CXXFLAGS) -c $<
 
 io_queue.o: io_queue.cpp $(HEADERS)
 	$(CXX) -g -O0 -c $<
 
 fair_queue.o: fair_queue.cpp $(HEADERS)
-	$(CXX) -g -O0 -c $<
+	$(CXX) $(OPT) $(CXXFLAGS) -c $<
 
 corebinding.o: corebinding.cpp $(HEADERS)
-	$(CXX) -O2 $(CXXFLAGS) -c $<
+	$(CXX) $(OPT) $(CXXFLAGS) -c $<
 unique_thread.o: unique_thread.cpp $(HEADERS)
-	$(CXX) -O2 $(CXXFLAGS) -c $<
+	$(CXX) $(OPT) $(CXXFLAGS) -c $<
 
 buddy.o: buddy.cpp $(HEADERS)
-	$(CXX) -O2 $(CXXFLAGS) -c $<
+	$(CXX) $(OPT) $(CXXFLAGS) -c $<
 myfs.o: myfs.cpp $(HEADERS)
-	$(CXX) -g -O2 $(CXXFLAGS) -c $<
+	$(CXX) $(OPT) $(CXXFLAGS) -c $<
 
 io_ops.o: io_ops.cpp $(HEADERS)
 	$(CXX) -O0 $(CXXFLAGS) -c $<
 
 ncx_slab.o: ncx_slab.cpp $(HEADERS)
-	$(CXX) -O2 $(CXXFLAGS) -c $<
+	$(CXX) $(OPT) $(CXXFLAGS) -c $<
 queue_free_mem.o: queue_free_mem.cpp $(HEADERS)
-	$(CXX) -g -O2 $(CXXFLAGS) -c $<
+	$(CXX) $(OPT) $(CXXFLAGS) -c $<
 
 #put_get_client.o: client/put_get_client.cpp $(HEADERS)
 #	$(CXX) $(CXXFLAGS) -c $<
