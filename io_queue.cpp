@@ -677,15 +677,6 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 	int IdxMin, IdxMax, range;
 	long int nOp_Done=0;
 
-
-	// initialize random number generator
-	/*
-	struct timeval tm;
-	gettimeofday(&tm, NULL);
-	rseed[0] = tm.tv_sec;
-	rseed[1] = tm.tv_usec;
-	*/
-
 	CoreBinding.Bind_This_Thread();
 	idx_qp_server = thread_id % NUM_THREAD_IO_WORKER_INTER_SERVER;
 
@@ -700,19 +691,19 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 	// Each thread handles a subrange of input queues.
 	// Distribute those queues across threads as equally as possible.
 	{
-		int nThreads = NUM_THREAD_IO_WORKER - NUM_THREAD_IO_WORKER_INTER_SERVER;
-		int nQueues = MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER;
+		int n_threads = NUM_THREAD_IO_WORKER - NUM_THREAD_IO_WORKER_INTER_SERVER;
+		int n_queues = MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER;
 		int offset = NUM_THREAD_IO_WORKER_INTER_SERVER;
 		int worker_id = thread_id - NUM_THREAD_IO_WORKER_INTER_SERVER;
-		IdxMin = offset + worker_id * nQueues / nThreads;
-		IdxMax = offset + (worker_id+1) * nQueues / nThreads - 1;
+		IdxMin = offset + worker_id * n_queues / n_threads;
+		IdxMax = offset + (worker_id+1) * n_queues / n_threads - 1;
 	}
 
-	printf("DBG> FairQueue thread_id %d queues %d..%d (count=%d)\n", thread_id, IdxMin, IdxMax, IdxMax-IdxMin+1);
+	printf("DBG> FairQueue rank %d thread_id %d queues %d..%d (count=%d)\n", mpi_rank, thread_id, IdxMin, IdxMax, IdxMax-IdxMin+1);
 	
 	IO_CMD_MSG msg;
 	JobInfoLookup job_info_lookup(ActiveJobList, &nActiveJob);
-	FairQueue fair_queue(FairQueue::Mode::JOB_FAIR, job_info_lookup);
+	FairQueue fair_queue(FairQueue::Mode::JOB_FAIR, mpi_rank, thread_id, job_info_lookup);
 	int pending_count = 0;
 
 	while(1)	{	// loop forever

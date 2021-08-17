@@ -1,26 +1,39 @@
 #include "fair_queue.h"
 #include <sys/time.h>
+#include <random>
 
 
-FairQueue::FairQueue(Mode mode_, JobInfoLookup &job_info_lookup_, int max_idle_sec_) :
+FairQueue::FairQueue(Mode mode_, int mpi_rank_, int thread_id_,
+										 JobInfoLookup &job_info_lookup_, int max_idle_sec_) :
 	fairness_mode(mode_),
+	mpi_rank(mpi_rank_),
+	thread_id(thread_id_),
 	job_info_lookup(job_info_lookup_),
 	max_idle_sec(max_idle_sec_),
-	total_nonempty_weight(0),
+	message_count(0),
 	next_purge_timestamp(0)
 {
 
 	std::random_device rdev;
 	random_engine.seed(rdev());
+	start_time_usec = getTime();
 	
+	if (log_choices) {
+		char fairness_log_name[100];
+		snprintf(fairness_log_name, 100, "fair_queue.rank%d.thread%d.log", mpi_rank, thread_id);
+		choice_log = fopen(fairness_log_name, "w");
+	} else {
+		choice_log = nullptr;
+	}
 }
 
 
 FairQueue::~FairQueue() {
-	auto it = indexed_queues.begin();
-	while (it != indexed_queues.end()) {
+	if (choice_log) fclose(choice_log);
+	for (auto it = indexed_queues.begin();
+			 it != indexed_queues.end();
+			 it++) {
 		delete it->second;
-		it = indexed_queues.erase(it);
 	}
 }
 
@@ -30,24 +43,22 @@ void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 	MessageQueue *q;
 	bool was_empty;
 
+	message_count++;
 	auto iqt = indexed_queues.find(key);
 	if (iqt == indexed_queues.end()) {
 		// create new message queue
 		int weight = fairness_mode == Mode::SIZE_FAIR ? job_info_lookup.getNodeCount(msg) : 1;
-		q = new MessageQueue(now(), weight);
+		q = new MessageQueue(key, getTime(), weight);
 		was_empty = true;
 	} else {
 		q = iqt->second;
 		was_empty = q->messages.empty();
 	}
 
-	MessageContainer *mc = (MessageContainer*) msg;
-	q->messages.push(*mc);
+	q->add(msg);
 
 	if (was_empty) {
 		nonempty_queues.push_back(q);
-		nonempty_weights.push_back(q->weight);
-		total_nonempty_weight += q->weight;
 	}
 
 	if (msg->T_Queued > next_purge_timestamp) {
@@ -62,30 +73,50 @@ bool FairQueue::isEmpty() {
 }
 
 
-int FairQueue::chooseRandomNonemptyQueue() {
-	assert(!nonempty_weights.empty() && total_nonempty_weight > 0);
-	
-	if (fairness_mode == Mode::SIZE_FAIR) {
-		
-		// weighted random choice
-		std::uniform_int_distribution<long> distrib(0, total_nonempty_weight-1);
-		long r = distrib(random_engine);
-		for (size_t i = 0; i < nonempty_weights.size(); i++) {
-			if (r < nonempty_weights[i]) {
-				return i;
-			} else {
-				r -= nonempty_weights[i];
-			}
-		}
-		return nonempty_weights.size() - 1;
-		
-	} else {
-		
-		// nonweighted random choice
-		std::uniform_int_distribution<int> distrib(0, nonempty_queues.size()-1);
-		return distrib(random_engine);
+int FairQueue::getCount() {
+	return message_count;
+}
 
+
+int FairQueue::chooseRandomNonemptyQueue() {
+	long unsigned now = getTime();
+	int n = nonempty_queues.size();
+
+	double priority_sum = 0;
+	nonempty_priorities.resize(n);
+	for (int i=0; i < n; i++) {
+		nonempty_priorities[i] = nonempty_queues[i]->getPriority(now);
+		assert(nonempty_priorities[i] > 0);
+		priority_sum += nonempty_priorities[i];
 	}
+
+	std::uniform_real_distribution<double> distrib(0, priority_sum);
+	double r = distrib(random_engine), r_orig = r;
+
+	// if nothing is selected (possibly due to roundoff errors), select the last one
+	int choice_idx = n-1;
+
+	for (int i=0; i < n-1; i++) {
+		if (nonempty_priorities[i] > r) {
+			choice_idx = i;
+			break;
+		} else {
+			r -= nonempty_priorities[i];
+		}
+	}
+
+	if (log_choices) {
+		double timestamp = (now - start_time_usec) / 1000000.;
+		fprintf(choice_log, "choice %.6f, %d queue%s probsum=%lf r=%lf choice=%d\n",
+						timestamp, n, n==1 ? "" : "s", priority_sum, r_orig, choice_idx);
+		for (int i=0; i < n; i++) {
+			MessageQueue *q = nonempty_queues[i];
+			fprintf(choice_log, "  %d. id=%d age=%lu priority=%lf\n", i, q->id, now - q->front_timestamp,
+							nonempty_priorities[i]);
+		}
+	}
+
+	return choice_idx;
 }
 
 
@@ -95,26 +126,23 @@ bool FairQueue::getMessage(IO_CMD_MSG *msg) {
 	int queue_idx = chooseRandomNonemptyQueue();
 	
 	MessageQueue *q = nonempty_queues[queue_idx];
-	MessageContainer &msg_c = q->messages.front();
-	memcpy(msg, &msg_c.msg, sizeof *msg);
-	q->messages.pop();
-
+	q->remove(msg);
+	message_count--;
+	
 	if (q->messages.empty()) {
 		// mark this queue idle and move it off the nonempty list
-		q->idle_timestamp = now();
-		total_nonempty_weight -= q->weight;
+		q->idle_timestamp = getTime();
+
 		size_t last_idx = nonempty_queues.size() - 1;
 		nonempty_queues[queue_idx] = nonempty_queues[last_idx];
 		nonempty_queues.resize(last_idx);
-		nonempty_weights[queue_idx] = nonempty_weights[last_idx];
-		nonempty_weights.resize(last_idx);
 	}
 
 	return true;
 }
  
 
-long unsigned FairQueue::now() {
+long unsigned FairQueue::getTime() {
 	struct timeval t;
 	gettimeofday(&t, 0);
 	return t.tv_sec * 1000000 + t.tv_usec;
@@ -122,7 +150,8 @@ long unsigned FairQueue::now() {
 
 
 void FairQueue::purgeIdle() {
-	long unsigned too_old = now() - max_idle_sec * 1000000;
+	printf("%.6f purgeIdle thread %d\n", (getTime() - start_time_usec)/1000000., thread_id);
+	long unsigned too_old = getTime() - max_idle_sec * 1000000;
 
 	auto it = indexed_queues.begin();
 	while (it != indexed_queues.end()) {
@@ -134,4 +163,6 @@ void FairQueue::purgeIdle() {
 			it++;
 		}
 	}
+
+	if (log_choices) fflush(choice_log);
 }
