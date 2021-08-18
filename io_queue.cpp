@@ -703,7 +703,7 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 	
 	IO_CMD_MSG msg;
 	JobInfoLookup job_info_lookup(ActiveJobList, &nActiveJob);
-	FairQueue fair_queue(FairQueue::Mode::JOB_FAIR, mpi_rank, thread_id, job_info_lookup);
+	FairQueue fair_queue(Server_qp.fairness_mode, mpi_rank, thread_id, job_info_lookup);
 	int pending_count = 0;
 
 	while(1)	{	// loop forever

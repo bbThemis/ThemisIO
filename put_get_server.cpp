@@ -69,6 +69,38 @@ typedef	struct	{
 	char szIP[16];
 }FS_SEVER_INFO;
 
+
+/* Handle options that can be set on the command line.
+   Currently that's just the fairness mode.
+*/
+class ServerOptions {
+public:
+	ServerOptions() : fairness_mode(getDefaultFairnessMode()) {}
+
+	// Returns true iff the command line arguments are successfully parsed.
+	bool parseCommandLineArgs(int argc, char **argv);
+
+	// Prints help message explaining command line usage.
+	static void printHelp();
+
+	// FairnessMode is defined in qp.h
+	FairnessMode getFairnessMode() {return fairness_mode;}
+
+	// use this to change the default fairness mode
+	static FairnessMode getDefaultFairnessMode() {return SIZE_FAIR;};
+
+	static const char *fairnessModeToString(FairnessMode fairness_mode) {
+		return fairness_mode == SIZE_FAIR ? "size-fair"
+			: fairness_mode == JOB_FAIR ? "job-fair"
+			: "user-fair";
+	}
+
+private:
+	FairnessMode fairness_mode;
+};
+
+
+
 int Server_Started=0;
 FS_SEVER_INFO ThisNode;
 FS_SEVER_INFO AllFSNodes[MAX_FS_SERVER];
@@ -388,9 +420,21 @@ int main(int argc, char **argv)
 	pthread_attr_init(&thread_attr);
 	pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_DETACHED);
 
-    MPI_Init(NULL, NULL);
-    MPI_Comm_size(MPI_COMM_WORLD, &nFSServer);
-    MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
+	MPI_Init(NULL, NULL);
+	MPI_Comm_size(MPI_COMM_WORLD, &nFSServer);
+	MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
+
+
+	ServerOptions server_options;
+	if (!server_options.parseCommandLineArgs(argc, argv)) {
+		ServerOptions::printHelp();
+		MPI_Finalize();
+		return 1;
+	}
+
+	// Store the fairness_mode in Server_qp.  It will be used in Func_thread_IO_Worker_FairQueue.
+	Server_qp.fairness_mode = server_options.getFairnessMode();
+	printf("INFO> fairness mode: %s\n", ServerOptions::fairnessModeToString(Server_qp.fairness_mode));
 
 	Init_Memory();
 //	Test_File_System_Local();
@@ -498,3 +542,53 @@ int main(int argc, char **argv)
 	
 	return 0;
 }
+
+
+bool ServerOptions::parseCommandLineArgs(int argc, char **argv) {
+	fairness_mode = getDefaultFairnessMode();
+
+	for (int argno = 1; argno < argc; argno++) {
+		const char *arg = argv[argno];
+
+		if (!strcmp(arg, "-h") || !strcmp(arg, "--help")) {
+			printHelp();
+			return false;
+		}
+
+		else if (!strcmp(arg, "--policy")) {
+			if (argno+1 >= argc) return false;
+			arg = argv[++argno];
+			if (!strcmp(arg, "user-fair")) {
+				fairness_mode = USER_FAIR;
+			} else if (!strcmp(arg, "job-fair")) {
+				fairness_mode = JOB_FAIR;
+			} else if (!strcmp(arg, "size-fair")) {
+				fairness_mode = SIZE_FAIR;
+			} else {
+				return false;
+			}
+		}
+
+		else {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
+void ServerOptions::printHelp() {
+	if (mpi_rank != 0) return;
+	
+	printf("\n"
+				 "  server [<opts>]\n"
+				 "  opts:\n"
+				 "    --policy user-fair|job-fair|size-fair\n"
+				 "      Sets client throughput fairness policy. default=%s\n"
+				 "\n",
+				 fairnessModeToString(getDefaultFairnessMode()));
+}
+
+		
+		

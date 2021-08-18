@@ -50,13 +50,11 @@ private:
 */
 class FairQueue {
  public:
-	enum class Mode {SIZE_FAIR, JOB_FAIR, USER_FAIR};
-
-	/* mode: fairness mode
+	/* mode: fairness mode (enum defined in qp.h)
 		 job_info_lookup: a wrapper used to access the active job list
 		 max_idle_sec: deallocate queues that have been empty for at least this many seconds.
 	*/
-	FairQueue(Mode mode, int mpi_rank, int thread_id,
+	FairQueue(FairnessMode mode, int mpi_rank, int thread_id,
 						JobInfoLookup &job_info_lookup, int max_idle_sec = 10);
 	~FairQueue();
 	
@@ -138,7 +136,7 @@ private:
 
 	
 	int getKey(const IO_CMD_MSG *msg) {
-		if (fairness_mode == Mode::USER_FAIR) {
+		if (fairness_mode == USER_FAIR) {
 			return job_info_lookup.getUserId(msg);
 		} else {
 			return job_info_lookup.getSlurmJobId(msg);
@@ -150,8 +148,8 @@ private:
 	
 	// scan all message queues and remove those which have been idle for too long
 	void purgeIdle();
-
-	Mode fairness_mode;
+	
+	FairnessMode fairness_mode;
 	int mpi_rank, thread_id;
 	JobInfoLookup &job_info_lookup;
 	unsigned long start_time_usec;

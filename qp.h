@@ -44,6 +44,20 @@
 #define IB_QUEUE_SIZE	(1)
 #define CTX_POLL_BATCH		(16)
 
+
+enum FairnessMode {
+	// Priority based on jobs such that the throughput of each job is proportional
+	// to the number of nodes in the job.
+	SIZE_FAIR,
+
+	// Priority based on jobs such that each job gets equal throughput.
+	JOB_FAIR,
+
+	// Priority based on users such that each user gets equal throughput.
+	USER_FAIR
+};
+
+
 typedef	struct	{
 	int ready;
 	unsigned int psn;
@@ -112,7 +126,8 @@ public:
 	int nConnectionAccu = 0;
 	int max_qp, nQP, IdxLastQP, IdxLastQP64, FirstAV_QP;	// IdxLastQP64 is 64 aligned for IdxLastQP
 	int nSizeshm_Global;
-	pthread_mutex_t process_lock;	// for this process
+	FairnessMode fairness_mode;
+pthread_mutex_t process_lock;	// for this process
 
 	CHASHTABLE_INT *p_Hash_socket_fd = NULL;
 	struct elt_Int *elt_list_socket_fd = NULL;
