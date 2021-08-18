@@ -54,6 +54,7 @@ const long DEFAULT_FILE_SIZE = 1024*1024*100;
 int parseSize(const char *str, uint64_t *result);
 double getTime() {return MPI_Wtime() - t0;}
 int getNodeCount();
+std::string timestamp(int use_utc_time);
 
 
 struct Options {
@@ -183,7 +184,7 @@ struct Options {
 		
 		std::ostringstream buf;
 		// buf << filename_prefix << ".rank" << rank << ".node" << nodename << ".pid" << getpid() << ".uid" << getuid();
-		buf << filename_prefix << "." << nodename << "." << getpid();
+		buf << filename_prefix << "." << nodename << "." << getpid() << "_S00";
 		return buf.str();
 	}
 
@@ -324,6 +325,28 @@ int getNodeCount() {
 }
 
 
+/* Returns the current time in the form YYYY-mm-dd:HH:MM:SS.
+   If is_utc_time is nonzero, use the current UTC/GMT time. Otherwise
+   use local time. */
+std::string timestamp(int use_utc_time) {
+  struct tm tm_struct;
+  time_t now;
+	char buf[20];
+
+  time(&now);
+  
+  if (use_utc_time) {
+    gmtime_r(&now, &tm_struct);
+  } else {
+    localtime_r(&now, &tm_struct);
+  }
+
+  strftime(buf, 20, "%Y-%m-%d:%H:%M:%S", &tm_struct);
+
+  return buf;
+}
+
+
 void fillBuffer(vector<long> &data, long file_offset) {
 	for (size_t i=0; i < data.size(); i++) {
 		data[i] = file_offset;
@@ -392,8 +415,8 @@ int main(int argc, char **argv) {
 	bool done = false;
 
 	if (rank==0)
-		printf("rw_speed np=%d nn=%d -prefix=%s -iosize=%d -filesize=%ld -time=%.1f -tag=%s%s\n",
-					 np, node_count, opt.filename_prefix.c_str(), opt.io_size, opt.file_size,
+		printf("rw_speed time=%s np=%d nn=%d -prefix=%s -iosize=%d -filesize=%ld -time=%.1f -tag=%s%s\n",
+					 timestamp(0).c_str(), np, node_count, opt.filename_prefix.c_str(), opt.io_size, opt.file_size,
 					 opt.run_time_sec, opt.tag.c_str(), opt.cleanup ? "" : " -nodelete");
   
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -503,8 +526,8 @@ int main(int argc, char **argv) {
 		if (slurm_jobid && strlen(slurm_jobid) < 50)
 			snprintf(job_id, sizeof job_id, " jobid=%s", slurm_jobid);
 
-		printf("rw_speed%s nn=%d np=%d user=%ld%s mbps=%.3f mbps_rank_stddev=%.3f mbps_1sec_time_slices=%s\n",
-					 tag.c_str(), node_count, np, (long)getuid(), job_id, total_mbps, mbps_rank_stddev,
+		printf("rw_speed%s time=%s nn=%d np=%d user=%ld%s mbps=%.3f mbps_rank_stddev=%.3f mbps_1sec_time_slices=%s\n",
+					 tag.c_str(), timestamp(0).c_str(), node_count, np, (long)getuid(), job_id, total_mbps, mbps_rank_stddev,
 					 io_over_time.toString().c_str());
 	}
 

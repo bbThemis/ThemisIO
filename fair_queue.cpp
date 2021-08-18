@@ -3,7 +3,7 @@
 #include <random>
 
 
-FairQueue::FairQueue(Mode mode_, int mpi_rank_, int thread_id_,
+FairQueue::FairQueue(FairnessMode mode_, int mpi_rank_, int thread_id_,
 										 JobInfoLookup &job_info_lookup_, int max_idle_sec_) :
 	fairness_mode(mode_),
 	mpi_rank(mpi_rank_),
@@ -47,7 +47,7 @@ void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 	auto iqt = indexed_queues.find(key);
 	if (iqt == indexed_queues.end()) {
 		// create new message queue
-		int weight = fairness_mode == Mode::SIZE_FAIR ? job_info_lookup.getNodeCount(msg) : 1;
+		int weight = fairness_mode == SIZE_FAIR ? job_info_lookup.getNodeCount(msg) : 1;
 		q = new MessageQueue(key, getTime(), weight);
 		was_empty = true;
 	} else {
@@ -150,7 +150,7 @@ long unsigned FairQueue::getTime() {
 
 
 void FairQueue::purgeIdle() {
-	printf("%.6f purgeIdle thread %d\n", (getTime() - start_time_usec)/1000000., thread_id);
+	// printf("%.6f purgeIdle thread %d\n", (getTime() - start_time_usec)/1000000., thread_id);
 	long unsigned too_old = getTime() - max_idle_sec * 1000000;
 
 	auto it = indexed_queues.begin();
