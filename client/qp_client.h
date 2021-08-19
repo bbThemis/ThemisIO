@@ -305,6 +305,7 @@ void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t si
 //	Init_IB_Env();
 	IB_CreateQueuePair();
 
+	const char *fake_user_id = 0;
 	gethostname(szHostName, 63);
 	Take_ShortName(szHostName);
 //	Get_Exe_Name(szExeName);
@@ -314,6 +315,9 @@ void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t si
 	data_to_send.JobInfo.cip = pFileServerList->myip;
 	data_to_send.JobInfo.ctid = tid;
 	data_to_send.JobInfo.cuid = getuid();
+	fake_user_id = getenv("THEMIS_FAKE_USERID");
+	if (fake_user_id)
+		sscanf(fake_user_id, "%u", &data_to_send.JobInfo.cuid);
 	data_to_send.JobInfo.cgid = getgid();
 	memcpy(data_to_send.JobInfo.szClientHostName, szHostName, MAX_HOSTNAME_LEN);
 	memcpy(data_to_send.JobInfo.szClientExeName, szExeName, MAX_EXENAME_LEN);
@@ -1019,7 +1023,9 @@ void Init_Client()
 	}
 
 	if(jobid == 0)	{
-		szEnvJobID = getenv("SLURM_JOBID");
+		szEnvJobID = getenv("THEMIS_FAKE_JOBID");
+		if (!szEnvJobID)
+			szEnvJobID = getenv("SLURM_JOBID");
 		if(szEnvJobID == NULL)	{
 			printf("Waring: Fail to call getenv(\"SLURM_JOBID\")\n");
 		}
@@ -1028,7 +1034,9 @@ void Init_Client()
 		}
 	}
 	if(nnode_this_job == 0)	{
-		szEnvNNode = getenv("SLURM_NNODES");
+		szEnvNNode = getenv("THEMIS_FAKE_NNODES");
+		if (!szEnvNNode)
+			szEnvNNode = getenv("SLURM_NNODES");
 		if(szEnvNNode == NULL)	{
 			printf("Waring: Fail to call getenv(\"SLURM_NNODES\")\n");
 		}

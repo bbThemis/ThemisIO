@@ -127,13 +127,17 @@ void Init_Memory(void)
 
 //	FSSize = HashTableFileSize + HashTableDirSize + FileMetaDataSize + DirMetaDataSize + sizeof(CMEM_ALLOCATOR) + AllocatorSize + DataAreaSize;
 	FSSize = HashTableFileSize + HashTableDirSize + HashTableLargeFileSize + LargeFileStripeDataSize + FileMetaDataSize + DirMetaDataSize + BUDDY_PAGE_SIZE + AllocatorSize + DataAreaSize;
+	// printf("FSSize = HashTableFileSize (%lu) + HashTableDirSize (%lu) + HashTableLargeFileSize (%lu) + LargeFileStripeDataSize (%lu) + FileMetaDataSize (%lu) + DirMetaDataSize (%lu) + BUDDY_PAGE_SIZE (%lu) + AllocatorSize (%lu) + DataAreaSize (%lu)\n", HashTableFileSize, HashTableDirSize, HashTableLargeFileSize, LargeFileStripeDataSize, FileMetaDataSize, DirMetaDataSize, BUDDY_PAGE_SIZE, AllocatorSize, DataAreaSize);
 
 	if (ftruncate(fd_shm, FSSize) != 0) {
 		perror("ftruncate for fd_shm");
 	}
+
 	pMyfs = mmap(NULL, FSSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd_shm, 0);
 	if(pMyfs == MAP_FAILED)	{
-		perror("mmap for pMyfs");
+		// perror("mmap for pMyfs");
+		printf("mmap failed with FSSize=%luGB file=%s filedes=%d: %s\n", FSSize / (1<<30), szNameShm_Full, fd_shm, strerror(errno));
+		exit(1);
 	}
 	Offset = 0;
 
@@ -1155,7 +1159,7 @@ int Truncate_File(int file_idx, size_t size)
 			nExtraPointer = pFileMetaInfo->nExtraPointer;
 			if(pFileMetaInfo->nMaxExtraPointer <= nExtraPointer)	{	// Need to reallocate the storage for pExtraData[]
 				pExtraData_Org = pFileMetaInfo->pExtraData;
-				nExtraPointerNewlyAllocated = pFileMetaInfo->nMaxExtraPointer + max((pFileMetaInfo->nMaxExtraPointer)>>2, DEFAULT_NUM_EXTRA_PT);
+				nExtraPointerNewlyAllocated = pFileMetaInfo->nMaxExtraPointer + MAX((pFileMetaInfo->nMaxExtraPointer)>>2, DEFAULT_NUM_EXTRA_PT);
 				pFileMetaInfo->pExtraData = (DirectPointer *)ncx_slab_alloc(sp_ExtraPointers, nExtraPointerNewlyAllocated*sizeof(DirectPointer));
 				if(nExtraPointer)	memcpy(pFileMetaInfo->pExtraData, pExtraData_Org, sizeof(DirectPointer)*nExtraPointer);
 				if(pExtraData_Org)	ncx_slab_free(sp_ExtraPointers, pExtraData_Org);
@@ -1284,7 +1288,7 @@ void Append_DirectPointer_List(STRIPE_DATA_INFO *pStripeData, const ULongInt add
 	pStripeDataNew = (STRIPE_DATA_INFO *)(&Stripe_Data);
 
 	if( nMaxExtraPointer < ( nExtraPointer + 1) )	{	// need to expand the array of pStripeData[]
-		nExtraPointerNewlyAllocated = nMaxExtraPointer + max((nMaxExtraPointer>>2), DEFAULT_NUM_EXTRA_PT);
+		nExtraPointerNewlyAllocated = nMaxExtraPointer + MAX((nMaxExtraPointer>>2), DEFAULT_NUM_EXTRA_PT);
 		pExtraDataNew = (DirectPointer *)ncx_slab_alloc(sp_ExtraPointers, nExtraPointerNewlyAllocated*sizeof(DirectPointer));
 		pExtraDataNew[nExtraPointer].AddressofData = addr_newly_allocated;
 		pExtraDataNew[nExtraPointer].FileOffset = File_Offset;
@@ -1304,7 +1308,7 @@ void Append_DirectPointer_List(STRIPE_DATA_INFO *pStripeData, const ULongInt add
 		else	{
 			pStripeDataNew->MaxOffset += size_Allocated;
 		}
-		pStripeDataNew->MaxDataRange = max(min(pStripeDataNew->MaxOffset, FileOffsetMax), pStripeDataNew->MaxDataRange);
+		pStripeDataNew->MaxDataRange = MAX(MIN(pStripeDataNew->MaxOffset, FileOffsetMax), pStripeDataNew->MaxDataRange);
 		pStripeDataNew->pExtraData = pExtraDataNew;
 		_mm256_storeu_si256 ((__m256i *)pStripeData, Stripe_Data);
 
@@ -1338,7 +1342,7 @@ void Append_DirectPointer_List(STRIPE_DATA_INFO *pStripeData, const ULongInt add
 			pStripeDataNew->MaxOffset += size_Allocated;
 		}
 //		pStripeDataNew->MaxDataRange = pStripeDataNew->MaxOffset;
-		pStripeDataNew->MaxDataRange = max(min(pStripeDataNew->MaxOffset, FileOffsetMax), pStripeDataNew->MaxDataRange);
+		pStripeDataNew->MaxDataRange = MAX(MIN(pStripeDataNew->MaxOffset, FileOffsetMax), pStripeDataNew->MaxDataRange);
 		_mm256_storeu_si256 ((__m256i *)pStripeData, Stripe_Data);
 	}
 
@@ -1394,12 +1398,12 @@ size_t my_write_stripe(int fd, const char *szFileName, int server_shift, const v
 
 	while(nOffsetMax > pStripeDataLocal->MaxOffset)	{
 		nBytesResidue = pStripeDataLocal->MaxOffset & FILE_STRIPE_SIZE_M1;
-		nBytesToAllocate = min(nOffsetMax - pStripeDataLocal->MaxOffset, (FILE_STRIPE_SIZE-nBytesResidue));
+		nBytesToAllocate = MIN(nOffsetMax - pStripeDataLocal->MaxOffset, (FILE_STRIPE_SIZE-nBytesResidue));
 		pNewBuff = pMem_Allocator->Mem_Alloc( nBytesToAllocate, &nBytesJustAllocated);
 		assert( (pNewBuff != NULL) && (nBytesJustAllocated > 0) );
 		Append_DirectPointer_List(pStripeDataLocal, (const ULongInt)pNewBuff, (const size_t)pStripeDataLocal->MaxOffset, (const ULongInt)nBytesJustAllocated, nOffsetMax);
 	}
-	if(pStripeDataLocal->MaxDataRange < nOffsetMax )  pStripeDataLocal->MaxDataRange = max(min(pStripeDataLocal->MaxOffset, nOffsetMax), pStripeDataLocal->MaxDataRange);
+	if(pStripeDataLocal->MaxDataRange < nOffsetMax )  pStripeDataLocal->MaxDataRange = MAX(MIN(pStripeDataLocal->MaxOffset, nOffsetMax), pStripeDataLocal->MaxDataRange);
 
 	idx_Block = Query_Index_StorageBlock_with_Offset_Stripe(pStripeDataLocal, offset);
 	pthread_mutex_unlock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
@@ -1408,7 +1412,7 @@ size_t my_write_stripe(int fd, const char *szFileName, int server_shift, const v
 	if(nExtraPointer == 0)	{	// a new file
 		memcpy((char*)pStripeDataLocal->pExtraData[idx_Block].AddressofData + (offset-pStripeDataLocal->pExtraData[idx_Block].FileOffset), buf, count);
 //		my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, count, (void*)((char*)pStripeDataLocal->pExtraData[idx_Block].AddressofData + (offset-pStripeDataLocal->pExtraData[idx_Block].FileOffset)));
-//		pStripeDataLocal->MaxDataRange = max(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
+//		pStripeDataLocal->MaxDataRange = MAX(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
 //		Atomic_Increase(offset_Loc+nBytes_Written_OneTime, &(pStripeDataLocal->MaxDataRange));
 		nBytes_Written = count;
 		nBytes_ToWrite -= count;
@@ -1420,7 +1424,7 @@ size_t my_write_stripe(int fd, const char *szFileName, int server_shift, const v
 					nBytes_Written_OneTime = pStripeDataLocal->pExtraData[idx_Block].FileOffset + pStripeDataLocal->pExtraData[idx_Block].DataBlockSize - offset_Loc;
 					memcpy((void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
 //					my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, nBytes_Written_OneTime, (void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset));
-//					pStripeDataLocal->MaxDataRange = max(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
+//					pStripeDataLocal->MaxDataRange = MAX(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
 //					Atomic_Increase(offset_Loc+nBytes_Written_OneTime, &(pStripeDataLocal->MaxDataRange));
 					idx_Block++;	// move to next block!!!
 				}
@@ -1428,7 +1432,7 @@ size_t my_write_stripe(int fd, const char *szFileName, int server_shift, const v
 					nBytes_Written_OneTime = nBytes_ToWrite;
 					memcpy((void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
 //					my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, nBytes_Written_OneTime, (void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset));
-//					pStripeDataLocal->MaxDataRange = max(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
+//					pStripeDataLocal->MaxDataRange = MAX(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
 //					Atomic_Increase(offset_Loc+nBytes_Written_OneTime, &(pStripeDataLocal->MaxDataRange));
 				}
 				nBytes_Written += nBytes_Written_OneTime;
@@ -1490,20 +1494,20 @@ size_t my_write_stripe(int fd, const char *szFileName, int server_shift, const v
 	if(nOffsetMax > pStripeDataLocal->MaxOffset)	{	// Need to allocate memory to accommodate new data
 		nBytesResidue = pStripeDataLocal->MaxOffset % FILE_STRIPE_SIZE;
 		if(nBytesResidue)	{
-			nBytesToAllocate = min(nOffsetMax - pStripeDataLocal->MaxOffset, FILE_STRIPE_SIZE-nBytesResidue);
+			nBytesToAllocate = MIN(nOffsetMax - pStripeDataLocal->MaxOffset, FILE_STRIPE_SIZE-nBytesResidue);
 			pNewBuff = pMem_Allocator->Mem_Alloc( nBytesToAllocate, &nBytesJustAllocated);
 			assert( (pNewBuff != NULL) && (nBytesJustAllocated > 0) );
 			MaxOffsetNew += nBytesToAllocate;
 //			pStripeDataLocal->MaxOffset = pStripeDataLocal->MaxOffset + nBytesJustAllocated;
 			pStripeDataLocal->MaxDataRange = pStripeDataLocal->MaxDataRange + nBytesToAllocate;
-			Append_DirectPointer_List(pStripeDataLocal, (const ULongInt)pNewBuff, (const ULongInt)(pStripeDataLocal->MaxOffset), (const ULongInt)min(nBytesJustAllocated, FILE_STRIPE_SIZE-nBytesResidue));
+			Append_DirectPointer_List(pStripeDataLocal, (const ULongInt)pNewBuff, (const ULongInt)(pStripeDataLocal->MaxOffset), (const ULongInt)MIN(nBytesJustAllocated, FILE_STRIPE_SIZE-nBytesResidue));
 			MaxOffsetNew = pStripeDataLocal->MaxOffset;
 		}
 		// now the allocated memory block should be FILE_STRIPE_SIZE aligned. 
 
 		while(1)	{
 			if(nOffsetMax > MaxOffsetNew)	{	// Need to allocate memory to accommodate new data
-				nBytesToAllocate = min(nOffsetMax - MaxOffsetNew, FILE_STRIPE_SIZE);
+				nBytesToAllocate = MIN(nOffsetMax - MaxOffsetNew, FILE_STRIPE_SIZE);
 				pNewBuff = pMem_Allocator->Mem_Alloc( nBytesToAllocate, &nBytesJustAllocated);
 				assert( (pNewBuff != NULL) && (nBytesJustAllocated > 0) );
 				pStripeDataLocal->MaxDataRange = MaxOffsetNew + nBytesToAllocate;
@@ -1513,7 +1517,7 @@ size_t my_write_stripe(int fd, const char *szFileName, int server_shift, const v
 					MaxOffsetNew = pStripeDataLocal->MaxOffset;
 //					printf("DBG> offset = %ld size = %ld MaxDataRange = %ld\n", offset, count, pStripeDataLocal->MaxOffset);
 				}
-				Append_DirectPointer_List(pStripeDataLocal, (const ULongInt)pNewBuff, (const ULongInt)MaxOffsetNew, (const ULongInt)min(nBytesJustAllocated, FILE_STRIPE_SIZE-nBytesResidue));
+				Append_DirectPointer_List(pStripeDataLocal, (const ULongInt)pNewBuff, (const ULongInt)MaxOffsetNew, (const ULongInt)MIN(nBytesJustAllocated, FILE_STRIPE_SIZE-nBytesResidue));
 				MaxOffsetNew = pStripeDataLocal->MaxOffset;
 				// now the allocated memory block should be FILE_STRIPE_SIZE aligned. 
 			}
@@ -1541,13 +1545,13 @@ size_t my_write_stripe(int fd, const char *szFileName, int server_shift, const v
 				if( (pStripeDataLocal->pExtraData[idx_Block].FileOffset + pStripeDataLocal->pExtraData[idx_Block].DataBlockSize - offset_Loc) <= nBytes_ToWrite)	{	// need to go on
 					nBytes_Written_OneTime = pStripeDataLocal->pExtraData[idx_Block].FileOffset + pStripeDataLocal->pExtraData[idx_Block].DataBlockSize - offset_Loc;
 					memcpy((void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
-					pStripeDataLocal->MaxDataRange = max(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
+					pStripeDataLocal->MaxDataRange = MAX(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
 					idx_Block++;	// move to next block!!!
 				}
 				else	{
 					nBytes_Written_OneTime = nBytes_ToWrite;
 					memcpy((void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset), (char*)buf+nBytes_Written, nBytes_Written_OneTime);
-					pStripeDataLocal->MaxDataRange = max(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
+					pStripeDataLocal->MaxDataRange = MAX(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
 				}
 				nBytes_Written += nBytes_Written_OneTime;
 				offset_Loc += nBytes_Written_OneTime;
@@ -1668,19 +1672,19 @@ size_t my_write_stripe_RDMA(int fd, const char *szFileName, int server_shift, in
 	
 	while(nOffsetMax > pStripeDataLocal->MaxOffset)	{
 		nBytesResidue = pStripeDataLocal->MaxOffset & FILE_STRIPE_SIZE_M1;
-		nBytesToAllocate = min(nOffsetMax - pStripeDataLocal->MaxOffset, (FILE_STRIPE_SIZE-nBytesResidue));
+		nBytesToAllocate = MIN(nOffsetMax - pStripeDataLocal->MaxOffset, (FILE_STRIPE_SIZE-nBytesResidue));
 		pNewBuff = pMem_Allocator->Mem_Alloc( nBytesToAllocate, &nBytesJustAllocated);
 		assert( (pNewBuff != NULL) && (nBytesJustAllocated > 0) );
 		Append_DirectPointer_List(pStripeDataLocal, (const ULongInt)pNewBuff, (const size_t)pStripeDataLocal->MaxOffset, (const ULongInt)nBytesJustAllocated, nOffsetMax);
 	}
-	if(pStripeDataLocal->MaxDataRange < nOffsetMax )  pStripeDataLocal->MaxDataRange = max(min(pStripeDataLocal->MaxOffset, nOffsetMax), pStripeDataLocal->MaxDataRange);
+	if(pStripeDataLocal->MaxDataRange < nOffsetMax )  pStripeDataLocal->MaxDataRange = MAX(MIN(pStripeDataLocal->MaxOffset, nOffsetMax), pStripeDataLocal->MaxDataRange);
 	idx_Block = Query_Index_StorageBlock_with_Offset_Stripe(pStripeDataLocal, offset);
 	pthread_mutex_unlock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 
 	nBytes_Written = 0;
 	if(nExtraPointer == 0)	{	// a new file
 		my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, count, (void*)((char*)pStripeDataLocal->pExtraData[idx_Block].AddressofData + (offset-pStripeDataLocal->pExtraData[idx_Block].FileOffset)));
-//		pStripeDataLocal->MaxDataRange = max(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
+//		pStripeDataLocal->MaxDataRange = MAX(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
 //		Atomic_Increase(offset_Loc+nBytes_Written_OneTime, &(pStripeDataLocal->MaxDataRange));
 		nBytes_Written = count;
 		nBytes_ToWrite -= count;
@@ -1691,14 +1695,14 @@ size_t my_write_stripe_RDMA(int fd, const char *szFileName, int server_shift, in
 				if( (pStripeDataLocal->pExtraData[idx_Block].FileOffset + pStripeDataLocal->pExtraData[idx_Block].DataBlockSize - offset_Loc) <= nBytes_ToWrite)	{	// need to go on
 					nBytes_Written_OneTime = pStripeDataLocal->pExtraData[idx_Block].FileOffset + pStripeDataLocal->pExtraData[idx_Block].DataBlockSize - offset_Loc;
 					my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, nBytes_Written_OneTime, (void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset));
-//					pStripeDataLocal->MaxDataRange = max(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
+//					pStripeDataLocal->MaxDataRange = MAX(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
 //					Atomic_Increase(offset_Loc+nBytes_Written_OneTime, &(pStripeDataLocal->MaxDataRange));
 					idx_Block++;	// move to next block!!!
 				}
 				else	{
 					nBytes_Written_OneTime = nBytes_ToWrite;
 					my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, nBytes_Written_OneTime, (void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset));
-//					pStripeDataLocal->MaxDataRange = max(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
+//					pStripeDataLocal->MaxDataRange = MAX(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
 //					Atomic_Increase(offset_Loc+nBytes_Written_OneTime, &(pStripeDataLocal->MaxDataRange));
 				}
 				nBytes_Written += nBytes_Written_OneTime;
@@ -1761,9 +1765,9 @@ size_t my_read_stripe(int fd, const char *szFileName, int server_shift, void *bu
 	else	{
 		while(Done == 0)	{
 			if(idx_Block < nExtraPointer)	{
-				nBytesLeftInThisBlock = min(pExtraData[idx_Block].FileOffset + pExtraData[idx_Block].DataBlockSize, MaxDataRange) - offset_Loc;
+				nBytesLeftInThisBlock = MIN(pExtraData[idx_Block].FileOffset + pExtraData[idx_Block].DataBlockSize, MaxDataRange) - offset_Loc;
 				if(nBytes_ToRead < nBytesLeftInThisBlock)	{	// no more blocks are needed. 
-					nBytes_Read_OneTime = min(nBytes_ToRead, nBytesLeft);
+					nBytes_Read_OneTime = MIN(nBytes_ToRead, nBytesLeft);
 					memcpy((char*)buf+nBytes_Read, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset), nBytes_Read_OneTime);
 				}
 				else	{
@@ -1900,9 +1904,9 @@ size_t my_read_stripe_RDMA(int fd, const char *szFileName, int server_shift, int
 	else	{
 		while(Done == 0)	{
 			if(idx_Block < nExtraPointer)	{
-				nBytesLeftInThisBlock = min(pExtraData[idx_Block].FileOffset + pExtraData[idx_Block].DataBlockSize, MaxDataRange) - offset_Loc;
+				nBytesLeftInThisBlock = MIN(pExtraData[idx_Block].FileOffset + pExtraData[idx_Block].DataBlockSize, MaxDataRange) - offset_Loc;
 				if(nBytes_ToRead < nBytesLeftInThisBlock)	{	// no more blocks are needed. 
-					nBytes_Read_OneTime = min(nBytes_ToRead, nBytesLeft);
+					nBytes_Read_OneTime = MIN(nBytes_ToRead, nBytesLeft);
 //					memcpy((char*)buf+nBytes_Read, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset), nBytes_Read_OneTime);
 					my_Adaptive_Read(idx_qp, loc_buf, lkey, (void*)((char*)rem_buf+nBytes_Read), rkey, nBytes_Read_OneTime, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset));
 				}
@@ -1968,7 +1972,7 @@ size_t my_read(int fd, void *buf, size_t count, off_t offset)
 				nBytesLeftInThisBlock = pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset + pFileMetaInfo->DiretData[fd_List[fd].idx_block].DataBlockSize - fd_List[fd].Offset;
 //				if(count <= nBytesLeftInThisBlock)	{	// no more blocks are needed. 
 				if(count < nBytesLeftInThisBlock)	{	// no more blocks are needed. 
-					nBytes_Read_OneTime = min(count, nBytesLeft);
+					nBytes_Read_OneTime = MIN(count, nBytesLeft);
 					memcpy((char*)buf+nBytes_Read, (void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset), nBytes_Read_OneTime);
 				}
 				else	{
@@ -1995,7 +1999,7 @@ size_t my_read(int fd, void *buf, size_t count, off_t offset)
 				nBytesLeftInThisBlock = pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset + pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].DataBlockSize - fd_List[fd].Offset;
 //				if(count <= nBytesLeftInThisBlock)	{	// no more blocks are needed. 
 				if(count < nBytesLeftInThisBlock)	{	// no more blocks are needed. 
-					nBytes_Read_OneTime = min(count, nBytesLeft);
+					nBytes_Read_OneTime = MIN(count, nBytesLeft);
 					memcpy((char*)buf+nBytes_Read, (void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset), nBytes_Read_OneTime);
 				}
 				else	{
@@ -2061,7 +2065,7 @@ size_t my_read_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void *
 				nBytesLeftInThisBlock = pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset + pFileMetaInfo->DiretData[fd_List[fd].idx_block].DataBlockSize - fd_List[fd].Offset;
 //				if(count <= nBytesLeftInThisBlock)	{	// no more blocks are needed. 
 				if(count < nBytesLeftInThisBlock)	{	// no more blocks are needed. 
-					nBytes_Read_OneTime = min(count, nBytesLeft);
+					nBytes_Read_OneTime = MIN(count, nBytesLeft);
 //					memcpy((char*)buf+nBytes_Read, (void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset), nBytes_Read_OneTime);
 					my_Adaptive_Read(idx_qp, loc_buf, lkey, (void*)((char*)rem_buf+nBytes_Read), rkey, nBytes_Read_OneTime, (void*)(pFileMetaInfo->DiretData[fd_List[fd].idx_block].AddressofData + fd_List[fd].Offset - pFileMetaInfo->DiretData[fd_List[fd].idx_block].FileOffset));
 				}
@@ -2091,7 +2095,7 @@ size_t my_read_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void *
 				nBytesLeftInThisBlock = pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset + pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].DataBlockSize - fd_List[fd].Offset;
 //				if(count <= nBytesLeftInThisBlock)	{	// no more blocks are needed. 
 				if(count < nBytesLeftInThisBlock)	{	// no more blocks are needed. 
-					nBytes_Read_OneTime = min(count, nBytesLeft);
+					nBytes_Read_OneTime = MIN(count, nBytesLeft);
 //					memcpy((char*)buf+nBytes_Read, (void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset), nBytes_Read_OneTime);
 					my_Adaptive_Read(idx_qp, loc_buf, lkey, (void*)((char*)rem_buf+nBytes_Read), rkey, nBytes_Read_OneTime, (void*)(pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].AddressofData + fd_List[fd].Offset - pFileMetaInfo->pExtraData[fd_List[fd].idx_block-NUM_DIRCT_PT].FileOffset));
 				}
@@ -2829,10 +2833,10 @@ int my_opendir_by_index(int dir_idx, void *loc_buf, long int offset, long int nB
 	
 	nEntryThreshold = (IO_RESULT_BUFFER_SIZE - sizeof(RW_FUNC_RETURN) - 3*sizeof(int))/(sizeof(int) + MAX_ENTRY_NAME_LEN);
 	nEntry = pDirMetaData[dir_idx].nEntries;
-	nEntryToSend = min(MAX_NUM_DIR_ENTRY_PER_REQUEST, max(0, nEntry - offset) );	// limit the number of entries
+	nEntryToSend = MIN(MAX_NUM_DIR_ENTRY_PER_REQUEST, MAX(0, nEntry - offset) );	// limit the number of entries
 
 	nDirEntryListBuffSize = pDirMetaData[dir_idx].nLenAllEntries + sizeof(int)*(3 + nEntryToSend);
-	nDirEntryListBuffSize = min(min(nDirEntryListBuffSize, MAX_SIZE_DIR_ENTRY_BUFF_PER_REQUEST), nBuffSize);	// limit the size of buffer
+	nDirEntryListBuffSize = MIN(MIN(nDirEntryListBuffSize, MAX_SIZE_DIR_ENTRY_BUFF_PER_REQUEST), nBuffSize);	// limit the size of buffer
 	nBytesDirEntryNameAccuMax = nDirEntryListBuffSize - sizeof(int)*(3 + nEntryToSend);
 
 	if(nEntryToSend <= nEntryThreshold)	{	// Returning buffer is sufficient
@@ -2918,10 +2922,10 @@ int my_opendir_by_index(int dir_idx, void *loc_buf, long int offset, long int nB
 	RW_FUNC_RETURN_EXT *pResult_Ext;
 	
 	nEntry = pDirMetaData[dir_idx].nEntries;
-	nEntryToSend = min(MAX_NUM_DIR_ENTRY_PER_REQUEST, max(0, nEntry - offset) );	// limit the number of entries
+	nEntryToSend = MIN(MAX_NUM_DIR_ENTRY_PER_REQUEST, MAX(0, nEntry - offset) );	// limit the number of entries
 
 	nDirEntryListBuffSize = pDirMetaData[dir_idx].nLenAllEntries + sizeof(int)*(3 + nEntryToSend);
-	nDirEntryListBuffSize = min(min(nDirEntryListBuffSize, MAX_SIZE_DIR_ENTRY_BUFF_PER_REQUEST), nBuffSize);	// limit the size of buffer
+	nDirEntryListBuffSize = MIN(MIN(nDirEntryListBuffSize, MAX_SIZE_DIR_ENTRY_BUFF_PER_REQUEST), nBuffSize);	// limit the size of buffer
 	nBytesDirEntryNameAccuMax = nDirEntryListBuffSize - sizeof(int)*(3 + nEntryToSend);
 	
 	if(nDirEntryListBuffSize > (IO_RESULT_BUFFER_SIZE - sizeof(RW_FUNC_RETURN)) )	{	// too large to fit in result buffer (loc_buf)
@@ -3205,7 +3209,7 @@ void Test_File_System_Local(void)
 		while(nBytesTotal > 0)	{
 			nBytes = random()%3228;
 //			nBytes = 8192;
-			nBytes = min(nBytes, nBytesTotal);
+			nBytes = MIN(nBytes, nBytesTotal);
 //			nFreePages = pMem_Allocator->Get_Num_Free_Page();
 //            printf("DBG> nBytes = %d nPage = %d\n", nBytes, nBytes >> 12);
 			nBytesWritten = my_write(fd, (char*)input+nBytesWritten_Accum, nBytes);
@@ -3266,7 +3270,7 @@ void Test_File_System_Local(void)
 		while(nBytesTotal > 0)	{
 			nBytes = rand()%52288;
 //			nBytes = 8192;
-			nBytes = min(nBytes, nBytesTotal);
+			nBytes = MIN(nBytes, nBytesTotal);
 			nBytesRead = my_read(fd, (char*)output+nBytesRead_Accum, nBytes);
 			assert(nBytesRead == nBytes);
 			nBytesTotal -= nBytesRead;

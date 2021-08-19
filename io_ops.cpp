@@ -456,7 +456,7 @@ void RW_Unlink(IO_CMD_MSG *pRF_Op_Msg)
 
 	if(nFileSize > FILE_STRIPE_SIZE)	{	// more than one strip. Send requests to other following servers
 		if(nFSServer > 1)	{
-			nExtStripeServers = min( (nFileSize + FILE_STRIPE_SIZE -1) / FILE_STRIPE_SIZE, nFSServer - 1);
+			nExtStripeServers = MIN( (nFileSize + FILE_STRIPE_SIZE -1) / FILE_STRIPE_SIZE, nFSServer - 1);
 			idx_Server_Shift = 1;
 			while(idx_Server_Shift <= nExtStripeServers)	{
 				Request_Free_Stripe_Data( (mpi_rank + idx_Server_Shift)%nFSServer, pRF_Op_Msg->szName);
