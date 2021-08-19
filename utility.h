@@ -3,9 +3,10 @@
 
 #include <stdint.h>
 
+// min and max conflict with std::min and std::max
 //#ifndef min(a,b)
-#define min(a,b)	( ((a)<(b)) ? (a) : (b) )
-#define max(a,b)	( ((a)>(b)) ? (a) : (b) )
+#define MIN(a,b)	( ((a)<(b)) ? (a) : (b) )
+#define MAX(a,b)	( ((a)>(b)) ? (a) : (b) )
 //#endif
 
 #ifndef	BUDDY_PAGE_SHIFT
@@ -16,6 +17,8 @@ static inline uint64_t rotl(const uint64_t x, int k) {
 	return (x << k) | (x >> (64 - k));
 }
 
+/* pseudo-random number generator.
+   Using s[] as a seed, returns a random 64-bit value */
 static inline uint64_t next(uint64_t s[2])
 {
 	const uint64_t s0 = s[0];
@@ -147,6 +150,11 @@ static inline size_t __cmpxchg(volatile size_t *ptr, size_t old, size_t new_valu
         return old;
 }
 
+// Suggest __atomic_fetch_add() instead. This implementation only
+// handles 32-bit integers, but __atomic_fetch_add() handles 64-bit
+// integers as well.  Also, it is portable.  __atomic_fetch_add() is
+// GCC-specific, but the use of "__thread" thread-local variables
+// already makes this code GCC-specific.
 static inline int fetch_and_add(int* variable, int value)
 {
     __asm__ volatile("lock; xaddl %0, %1"

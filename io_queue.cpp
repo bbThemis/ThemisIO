@@ -10,15 +10,37 @@
 #include "io_ops.h"
 #include "utility.h"
 #include "corebinding.h"
+#include "fair_queue.h"
 
 extern CORE_BINDING CoreBinding;
 extern int nFSServer, mpi_rank;
+
+// defined in put_get_server.cpp
 extern SERVER_QUEUEPAIR Server_qp;
 
+
 int active_prob=0;	// the index of active probability set. Only can be 0 or 1. ^ 1 to flip it. 
+
+// size of array of possible operations to execute in Func_thread_IO_Worker_FairQueue
+// must be larger than 'range', where range = IdxMax - IdxMin + 1
+#define FIRSTOPLIST_SIZE 640
+
+// XXX each counter in this array is updated by a different thread (via nOPs_Done[thread_id]++)
+// so the performance of those updates will suffer from false sharing
 long int nOPs_Done[NUM_THREAD_IO_WORKER];
+
+// Current number of valid entries is nActiveJob (defined below).
+// Writes to ActiveJobList[] and nActiveJob are synchronized with lock_Modify_ActiveJob_List in qp.cpp, reads are not synchronized
 JOBREC ActiveJobList[MAX_NUM_ACTIVE_JOB];
+
+// size=nActiveJob
+// IdxJobRecList[i].idx_rec_ht is an index into ActiveJobList
+// new jobs are appended to this in Init_NewActiveJobRecord()
+// XXX there needs to be a way to remove inactive jobs, and this should be made thread-safe
 LISTJOBREC IdxJobRecList[MAX_NUM_ACTIVE_JOB];
+
+// Set in ConstructJobProbabilityList each time Init_NewActiveJobRecord is called,
+// this is used by Random_Pick_a_TargetJob to choose jobs.
 float ActiveJobProbability[2][MAX_NUM_ACTIVE_JOB];	// two set of list of probablities since we keep updating them. 
 
 CIO_QUEUE __attribute__((aligned(64))) IO_Queue_List[MAX_NUM_QUEUE];
@@ -33,6 +55,7 @@ CHASHTABLE_INT *pHT_ActiveJobs=NULL;
 struct elt_Int *elt_list_ActiveJobs = NULL;
 int *ht_table_ActiveJobs=NULL;
 
+// defined in qp.cpp, this protects ActiveJobList
 extern pthread_mutex_t lock_Modify_ActiveJob_List;
 extern pthread_mutex_t *pAccess_qp0_lock;
 
@@ -150,7 +173,7 @@ void Sum_OP_Done_All_Servers(long int T_Download)
 
 		Server_qp.pJobScale_Remote->Job_Scale[idx_job].jobid = JobList.Job_Op[idx_job].jobid;
 		scale = (float)( 1.0 * JobList.Job_Op[idx_job].nnode * nOP_Done_Total/(JobList.Job_Op[idx_job].nOps_Done*nNode_Total) );
-		scale = min(scale, nFSServer*1.0);
+		scale = MIN(scale, nFSServer*1.0);
 		if(JobList.Job_Op[idx_job].nOps_Done < N_OP_DONE_THRESHOLD)	{	// Not an active job on this node
 			scale = PROB_LOWWER_BOUND;
 		}
@@ -160,6 +183,10 @@ void Sum_OP_Done_All_Servers(long int T_Download)
 	}
 
 }
+
+// return a string description of a message tag, IO_CMD_MSG::op
+const char *opCodeName(int op_tag);
+
 
 void Init_ActiveJobList(void)
 {
@@ -191,6 +218,10 @@ void Init_ActiveJobList(void)
 
 //void Update_Active_JobList(void);
 
+/* Fills ActiveJobProbability[] with a cumulative probability table,
+   one entry per active job, where the magnitude of each entry is
+   proportional to the number of nodes in the job, and the total is 1.
+   This is used by Random_Pick_a_TargetJob. */
 void ConstructJobProbabilityList(void)
 {
 	int i;
@@ -274,7 +305,7 @@ void Scale_Probability_List(void)
 	active_prob ^= 1;
 }
 
-void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode)
+void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id)
 {
 	int i;
 	JOB_OP_SEND *pJob_OP = Server_qp.pJob_OP_Send;
@@ -283,6 +314,7 @@ void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode)
 	ActiveJobList[idx_rec].jobid = jobid;
 	ActiveJobList[idx_rec].nnode = nnode;
 	ActiveJobList[idx_rec].nQP = 1;	// A new QP was just established. 
+	ActiveJobList[idx_rec].uid = user_id;
 	ActiveJobList[idx_rec].nTokenAV = 0;
 	ActiveJobList[idx_rec].nTokenReload = 0;
 	ActiveJobList[idx_rec].nOps_Done = 0;
@@ -330,6 +362,8 @@ void Init_QueueList(void)
 
 }
 
+/* Returns the an index into ActiveJobList[] of a randomly selected
+	 job, weighted by number of nodes in the job. */
 int Random_Pick_a_TargetJob(uint64_t s[2], int *p_Idx_Job)
 {
 	int i;
@@ -337,7 +371,9 @@ int Random_Pick_a_TargetJob(uint64_t s[2], int *p_Idx_Job)
 	float *pJobProb;
 
 	pJobProb = ActiveJobProbability[active_prob];
-//	r = 1.0f*next(s)/RAND_MAX;
+
+	// choose a random float in the range [0,1)
+	//	r = 1.0f*next(s)/RAND_MAX;
 	r = (next(s) >> 11) * 0x1.0p-53;
 
 	for(i=0; i<nActiveJob; i++)	{
@@ -350,15 +386,19 @@ int Random_Pick_a_TargetJob(uint64_t s[2], int *p_Idx_Job)
 	return (-1);
 }
 
-void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
+
+void* Func_thread_IO_Worker_LeiSizeFair(void *pParam)	// process all IO wrok
 {
 //	int i, idxTask, thread_id, idx_op, IdxMin, IdxMax, idx_JobRec, nNumQueuePerWorker, *pNext_IO_OP_Idx_Queue_List=NULL, range, nValid_Next_IO_OP=0;
 	int i, idxTask, thread_id, idx_op, IdxMin, IdxMax, idx_JobRec, nNumQueuePerWorker, range, nValid_Next_IO_OP=0;
 	int idx_job;
 	IO_CMD_MSG Op_Msg;
 	CIO_QUEUE *pIO_Queue=NULL;
-//	FIRSTOPLIST *pFirstOPList=NULL;
-	FIRSTOPLIST pFirstOPList[640];	// need to make sure it is larger than range!!!!!
+
+	// array of possible operations to execute
+	// must be larger than 'range'  (range = IdxMax - IdxMin + 1)
+	FIRSTOPLIST pFirstOPList[FIRSTOPLIST_SIZE];
+
 	unsigned long int T_queue_Earlyest, T_queue_Earlyest_TargetJob;
 	int idx_Earlyest, idx_Earlyest_TargetJob, idx_rec_ht_Picked, nValidOPs, ToProcOP, IdxQueue_PreviousSelected=-1, idx_Cur;
 	struct timeval tm1, tm2;	// tm1.tv_sec
@@ -424,8 +464,9 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 				if( pIO_Queue->Dequeue(&Op_Msg) )	{	// failed
 					continue;
 				}
-//				memcpy(&Op_Msg, pOP_Msg_Retrieve, sizeof(IO_CMD_MSG));
+				// XXX this performs a 32-bit update of a 64-bit counter, so at 2**32-1, it will overflow back down to 0
 				fetch_and_add((int*)&(ActiveJobList[Op_Msg.idx_JobRec].nOps_Done), 1);	// ??????????????????????????????????????????????????????
+
 				Op_Msg.tid = thread_id;
 				
 				if (pthread_mutex_lock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
@@ -433,7 +474,7 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 					exit(2);
 				}
 				
-				Process_One_IO_OP(&Op_Msg);	// Do the real IO work!
+				Process_One_IO_OP(&Op_Msg);// Do the real IO work!
 				nOPs_Done[thread_id]++;
 				
 				if (pthread_mutex_unlock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
@@ -443,6 +484,7 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 			}
 		}
 	}
+
 	else	{
 		if( ( ( MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER ) % ( NUM_THREAD_IO_WORKER - NUM_THREAD_IO_WORKER_INTER_SERVER ) ) == 0 )	{
 			nNumQueuePerWorker = ( MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER ) / ( NUM_THREAD_IO_WORKER - NUM_THREAD_IO_WORKER_INTER_SERVER ) ;
@@ -451,17 +493,18 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 			nNumQueuePerWorker = ( MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER ) / ( NUM_THREAD_IO_WORKER - NUM_THREAD_IO_WORKER_INTER_SERVER ) + 1;
 		}
 		IdxMin = NUM_THREAD_IO_WORKER_INTER_SERVER + (thread_id-NUM_THREAD_IO_WORKER_INTER_SERVER)*nNumQueuePerWorker;
-		IdxMax = min( (IdxMin + nNumQueuePerWorker - 1), (MAX_NUM_QUEUE - 1));
+		IdxMax = MIN( (IdxMin + nNumQueuePerWorker - 1), (MAX_NUM_QUEUE - 1));
 		printf("DBG> worker %d, (%d, %d)\n", thread_id, IdxMin, IdxMax);
 
 		range = IdxMax-IdxMin+1;
+		assert(FIRSTOPLIST_SIZE >= range);
 
-//		pNext_IO_OP_Idx_Queue_List = (int*)malloc(sizeof(int)*range + sizeof(FIRSTOPLIST)*range);	// the list of index to sorted list according to T_Queued
-//		assert(pNext_IO_OP_Idx_Queue_List != NULL);
-//		pFirstOPList = (FIRSTOPLIST *)((char*)pNext_IO_OP_Idx_Queue_List + sizeof(int)*range);
+		//pNext_IO_OP_Idx_Queue_List = (int*)malloc(sizeof(int)*range + sizeof(FIRSTOPLIST)*range);// the list of index to sorted list according to T_Queued
+		//assert(pNext_IO_OP_Idx_Queue_List != NULL);
+		//pFirstOPList = (FIRSTOPLIST *)((char*)pNext_IO_OP_Idx_Queue_List + sizeof(int)*range);
 
-		for(i=0; i<range; i++)	{
-//			pNext_IO_OP_Idx_Queue_List[i] = i;
+		for(i=0; i<range; i++){
+			//pNext_IO_OP_Idx_Queue_List[i] = i;
 
 			pFirstOPList[i].idx_queue = -1;
 			pFirstOPList[i].idx_op = -1;
@@ -471,24 +514,25 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 	}
 	
 	IdxQueue_PreviousSelected = IdxMin - 1;
-	while(1)	{	// loop forever
-		if(nActiveJob == 0)	continue;
+	while(1){// loop forever
+		if(nActiveJob == 0)continue;
+		//gettimeofday(&tm1, NULL);
 		idx_rec_ht_Picked = Random_Pick_a_TargetJob(rseed, &idx_job);
-		if(idx_rec_ht_Picked < 0)	continue;
+		if(idx_rec_ht_Picked < 0)continue;
 
 		// loop over all queues this IO worker needs to cover and extract job info for the first OP
 		T_queue_Earlyest = T_queue_Earlyest_TargetJob = LARGE_T_QUEUED;
 		idx_Earlyest = idx_Earlyest_TargetJob = -1;
 		nValidOPs = 0;
 
-		for(i=1; i<=range; i++)	{	// All IO worker handle queues independently now!!! No lock is needed now.
+		for(i=1; i<=range; i++){// All IO worker handle queues independently now!!! No lock is needed now.
 			idx_Cur = IdxQueue_PreviousSelected + i;
-			if(idx_Cur > IdxMax)	idx_Cur -= range;
+			if(idx_Cur > IdxMax)idx_Cur -= range;
 			idxTask = idx_Cur -IdxMin;
 
-			if(pFirstOPList[idxTask].idx_queue < 0)	{	// An invalid record. Need to grab the first OP info. 
+			if(pFirstOPList[idxTask].idx_queue < 0){// An invalid record. Need to grab the first OP info. 
 				pIO_Queue = &(IO_Queue_List[idx_Cur]);
-				if( (pIO_Queue->back) >= (pIO_Queue->front) )	{	// A queue that is not empty.
+				if( (pIO_Queue->back) >= (pIO_Queue->front) ){// A queue that is not empty.
 					pFirstOPList[idxTask].idx_queue = idx_Cur;
 					idx_op = pIO_Queue->front & IO_QUEUE_SIZE_M1;
 					pFirstOPList[idxTask].idx_op = idx_op;
@@ -498,59 +542,59 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 					nValidOPs++;
 					// Need to insert this new record into the sorted list!!!!!!!!!!!!!!!!!!!!!!!
 				}
-				else	{
+				else{
 					pFirstOPList[idxTask].T_Queued = LARGE_T_QUEUED;
 				}
 			}
 
-			if(pFirstOPList[idxTask].T_Queued < LARGE_T_QUEUED)	{	// a valid record!
-				if(pFirstOPList[idxTask].idx_rec_ht == idx_rec_ht_Picked)	{
-					if(pFirstOPList[idxTask].T_Queued < T_queue_Earlyest_TargetJob)	{
+			if(pFirstOPList[idxTask].T_Queued < LARGE_T_QUEUED){// a valid record!
+				if(pFirstOPList[idxTask].idx_rec_ht == idx_rec_ht_Picked){
+					if(pFirstOPList[idxTask].T_Queued < T_queue_Earlyest_TargetJob){
 						T_queue_Earlyest_TargetJob = pFirstOPList[idxTask].T_Queued;
 						idx_Earlyest_TargetJob = idxTask;
 					}
 				}
-				if(pFirstOPList[idxTask].T_Queued < T_queue_Earlyest)	{	// find the earliest OP
+				if(pFirstOPList[idxTask].T_Queued < T_queue_Earlyest){// find the earliest OP
 					T_queue_Earlyest = pFirstOPList[idxTask].T_Queued;
 					idx_Earlyest = idxTask;
 				}
 			}
 		}
 
-//		printf("DBG> Rank = %d idx_rec_ht_Picked = %d\n", mpi_rank, idx_rec_ht_Picked);
+		//printf("DBG> Rank = %d idx_rec_ht_Picked = %d\n", mpi_rank, idx_rec_ht_Picked);
 		ToProcOP = 0;
-		if( idx_Earlyest_TargetJob >=0 )	{	// process the earliest target job request
+		if( idx_Earlyest_TargetJob >=0 ){// process the earliest target job request
 			IdxQueue_PreviousSelected = pFirstOPList[idx_Earlyest_TargetJob].idx_queue;
 			pIO_Queue = &(IO_Queue_List[IdxQueue_PreviousSelected]);
 			idx_op = pIO_Queue->front & IO_QUEUE_SIZE_M1;
 			ToProcOP = 1;
-//			printf("INFO> Proc target   OP %3d queue %4d Time %ld\n", pFirstOPList[idx_Earlyest_TargetJob].idx_queue, pIO_Queue->front, pFirstOPList[idx_Earlyest_TargetJob].T_Queued);
+			//printf("INFO> Proc target   OP %3d queue %4d Time %ld\n", pFirstOPList[idx_Earlyest_TargetJob].idx_queue, pIO_Queue->front, pFirstOPList[idx_Earlyest_TargetJob].T_Queued);
 			pFirstOPList[idx_Earlyest_TargetJob].idx_queue = -1;
 		}
 
-		else if( idx_Earlyest >=0 )	{	// process the earliest request then
+		else if( idx_Earlyest >=0 ){// process the earliest request then
 			IdxQueue_PreviousSelected = pFirstOPList[idx_Earlyest].idx_queue;
 			pIO_Queue = &(IO_Queue_List[IdxQueue_PreviousSelected]);
 			idx_op = pIO_Queue->front & IO_QUEUE_SIZE_M1;
 			ToProcOP = 1;
-//			printf("INFO> Proc earliest OP %3d queue %4d Time %ld\n", pFirstOPList[idx_Earlyest].idx_queue, pIO_Queue->front, pFirstOPList[idx_Earlyest].T_Queued);
+			//printf("INFO> Proc earliest OP %3d queue %4d Time %ld\n", pFirstOPList[idx_Earlyest].idx_queue, pIO_Queue->front, pFirstOPList[idx_Earlyest].T_Queued);
 			pFirstOPList[idx_Earlyest].idx_queue = -1;
 		}
 
 
-		if(ToProcOP)	{
-//			gettimeofday(&tm2, NULL);
-//			t_accum += ( (tm2.tv_sec - tm1.tv_sec) * 1000000 + (tm2.tv_usec - tm1.tv_usec) );
+		if(ToProcOP){
+			//gettimeofday(&tm2, NULL);
+			//t_accum += ( (tm2.tv_sec - tm1.tv_sec) * 1000000 + (tm2.tv_usec - tm1.tv_usec) );
 			nOp_Done++;
-//			if(nOp_Done % 100000 == 0)	{
-//				printf("INFO> thread_id = %d Overhead %5.3lf\n", thread_id, 1.0 * t_accum / nOp_Done);
-//			}
+			//if(nOp_Done % 100000 == 0){
+			//printf("INFO> thread_id = %d Overhead %5.3lf\n", thread_id, 1.0 * t_accum / nOp_Done);
+			//}
 
-//			pOP_Msg_Retrieve = pIO_Queue->Dequeue();
-			if( pIO_Queue->Dequeue(&Op_Msg) )	{	// failed
+			//pOP_Msg_Retrieve = pIO_Queue->Dequeue();
+			if( pIO_Queue->Dequeue(&Op_Msg) ){// failed
 				continue;
 			}
-//			memcpy(&Op_Msg, pOP_Msg_Retrieve, sizeof(IO_CMD_MSG));
+			//memcpy(&Op_Msg, pOP_Msg_Retrieve, sizeof(IO_CMD_MSG));
 			fetch_and_add((int*)&(ActiveJobList[Op_Msg.idx_JobRec].nOps_Done), 1);
 			fetch_and_add((int*)&(Server_qp.pJob_OP_Send->Job_Op[idx_job].nOps_Done), 1);
 			Op_Msg.tid = thread_id;
@@ -560,7 +604,7 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 				exit(2);
 			}
 			
-			Process_One_IO_OP(&Op_Msg);	// Do the real IO work!
+			Process_One_IO_OP(&Op_Msg);// Do the real IO work!
 			nOPs_Done[thread_id]++;
 			
 			if (pthread_mutex_unlock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
@@ -572,8 +616,160 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 }
 
 
-/*
-void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
+static void Inter_server_communication_loop(int thread_id, CIO_QUEUE *queue) {
+	IO_CMD_MSG msg;
+
+	while(1)	{
+		if (queue->Dequeue(&msg)) {
+			// queue was empty. wait for a little bit without burning CPU time or descheduling this thread
+			// https://software.intel.com/content/www/us/en/develop/articles/benefitting-power-and-performance-sleep-loops.html
+			_mm_pause();
+			continue;
+		}
+
+		// queue was not empty
+		fetch_and_add((int*)&(ActiveJobList[msg.idx_JobRec].nOps_Done), 1);
+
+		// use a little encapsulation rather than manually incrementing nOps_Done with fetch_and_add
+		// also, JOBREC::nOps_Done is a long, which is handled incorrectly by fetch_and_add().
+		// ActiveJobList[msg.idx_JobRec].addOpsDone(1);
+
+		msg.tid = thread_id;
+				
+		pthread_mutex_t *qp_lock = &Server_qp.pQP_Data[msg.idx_qp].qp_lock;
+		if (pthread_mutex_lock(qp_lock)) {
+			perror("pthread_mutex_lock");
+			exit(2);
+		}
+				
+		Process_One_IO_OP(&msg);	// Do the real IO work!
+		nOPs_Done[thread_id]++;
+				
+		if (pthread_mutex_unlock(qp_lock)) {
+			perror("pthread_mutex_unlock");
+			exit(2);
+		}
+	}
+
+
+}
+
+
+void printMessage(const IO_CMD_MSG *msg, const char *prefix) {
+	char hex_content[sizeof(IO_CMD_MSG)*2+1];
+
+	const unsigned char *msg_raw = (const unsigned char *)msg;
+	for (int i=0; i < sizeof(IO_CMD_MSG); i++) {
+		sprintf(hex_content+i*2, "%02x", msg_raw[i]);
+	}
+
+	printf("%s msg tid=%d tag=%d name=%s jobidx=%d time=%.6f content=%s\n", 
+				 prefix, msg->tid, msg->op & 0xff, opCodeName(msg->op), msg->idx_JobRec,
+				 msg->T_Queued/1000000., hex_content);
+}
+
+
+// IO worker thread implementing fair queue
+
+void* Func_thread_IO_Worker_FairQueue(void *pParam)
+{
+	const int thread_id = *((int*)pParam);
+	int IdxMin, IdxMax, range;
+	long int nOp_Done=0;
+
+	CoreBinding.Bind_This_Thread();
+	idx_qp_server = thread_id % NUM_THREAD_IO_WORKER_INTER_SERVER;
+
+	// the first thread is dedicated for inter-server communication via queue[0]
+	if(thread_id < NUM_THREAD_IO_WORKER_INTER_SERVER)	{
+		printf("DBG> FairQueue thread_id %d inter-server-queue %d\n", thread_id, thread_id);
+		Inter_server_communication_loop(thread_id, &(IO_Queue_List[thread_id]));
+		// never returns
+		return NULL;
+	}
+
+	// Each thread handles a subrange of input queues.
+	// Distribute those queues across threads as equally as possible.
+	{
+		int n_threads = NUM_THREAD_IO_WORKER - NUM_THREAD_IO_WORKER_INTER_SERVER;
+		int n_queues = MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER;
+		int offset = NUM_THREAD_IO_WORKER_INTER_SERVER;
+		int worker_id = thread_id - NUM_THREAD_IO_WORKER_INTER_SERVER;
+		IdxMin = offset + worker_id * n_queues / n_threads;
+		IdxMax = offset + (worker_id+1) * n_queues / n_threads - 1;
+	}
+
+	printf("DBG> FairQueue rank %d thread_id %d queues %d..%d (count=%d)\n", mpi_rank, thread_id, IdxMin, IdxMax, IdxMax-IdxMin+1);
+	
+	IO_CMD_MSG msg;
+	JobInfoLookup job_info_lookup(ActiveJobList, &nActiveJob);
+	FairQueue fair_queue(Server_qp.fairness_mode, mpi_rank, thread_id, job_info_lookup);
+	int pending_count = 0;
+
+	while(1)	{	// loop forever
+
+		// ERR busy loop on unsynchronized variable
+		if (nActiveJob == 0){
+			_mm_pause();
+			continue;
+		}
+
+		// long now = getTimeMicros();
+
+		// move all incoming messages into fair queue object
+		for (CIO_QUEUE *queue = IO_Queue_List + IdxMin;
+				 queue <= IO_Queue_List + IdxMax;
+				 queue++) {
+			if (!queue->isEmptyUnsafe()) {
+				if (queue->Dequeue(&msg) == 0) {
+					msg.tid = thread_id;
+					// printMessage(&msg, "incomingMsg");
+					fair_queue.putMessage(&msg);
+					pending_count++;
+				}
+			}
+		}
+
+		// If there is nothing to do, pause and try again
+		if (pending_count == 0) {
+			_mm_pause();
+			continue;
+		}
+
+		// select one message
+		if (!fair_queue.getMessage(&msg)) continue;
+
+		// printMessage(&msg, "msgSelected");
+
+		// function-local counter
+		nOp_Done++;
+
+		// per-job counter
+		fetch_and_add((int*)&(ActiveJobList[msg.idx_JobRec].nOps_Done), 1);
+		
+		pthread_mutex_t *qp_lock = &Server_qp.pQP_Data[msg.idx_qp].qp_lock;
+		if (pthread_mutex_lock(qp_lock)) {
+			perror("pthread_mutex_lock");
+			exit(2);
+		}
+		
+		Process_One_IO_OP(&msg);// Do the real IO work!
+		pending_count--;
+
+		// per-thread counter
+		nOPs_Done[thread_id]++;
+
+		if (pthread_mutex_unlock(qp_lock)) {
+			perror("pthread_mutex_unlock");
+			exit(2);
+		}
+	}
+}
+
+
+// IO worker thread implementing FIFO queue
+
+void* Func_thread_IO_Worker_FIFO(void *pParam)	// process all IO wrok
 {
 	int i, thread_id, idx_op, IdxMin, IdxMax, idx_JobRec, nNumQueuePerWorker;
 	IO_CMD_MSG Op_Msg;
@@ -581,7 +777,7 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 	struct timeval tm;
 	
 	thread_id = *((int*)pParam);
-	printf("DBG> Func_thread_IO_Worker(): thread_id = %d\n", thread_id);
+	printf("DBG> Func_thread_IO_Worker_FIFO(): thread_id = %d\n", thread_id);
 	CoreBinding.Bind_This_Thread();
 	idx_qp_server = thread_id % NUM_THREAD_IO_WORKER_INTER_SERVER;
 
@@ -625,7 +821,7 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 			nNumQueuePerWorker = ( MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER ) / ( NUM_THREAD_IO_WORKER - NUM_THREAD_IO_WORKER_INTER_SERVER ) + 1;
 		}
 		IdxMin = NUM_THREAD_IO_WORKER_INTER_SERVER + (thread_id-NUM_THREAD_IO_WORKER_INTER_SERVER)*nNumQueuePerWorker;
-		IdxMax = min( (IdxMin + nNumQueuePerWorker - 1), (MAX_NUM_QUEUE - 1));
+		IdxMax = MIN( (IdxMin + nNumQueuePerWorker - 1), (MAX_NUM_QUEUE - 1));
 		printf("DBG> worker %d, (%d, %d)\n", thread_id, IdxMin, IdxMax);
 	}
 	
@@ -661,12 +857,123 @@ void* Func_thread_IO_Worker(void *pParam)	// process all IO wrok
 		}
 	}
 }
-*/
+
+
+// IO worker thread, either fair or FIFO
+void* Func_thread_IO_Worker(void *pParam)
+{
+
+	// return Func_thread_IO_Worker_LeiSizeFair(pParam);
+	// return Func_thread_IO_Worker_FairQueue(pParam);
+	return Func_thread_IO_Worker_FIFO(pParam);
+
+}
+
+
+const int OP_CODE_LIST_SIZE = 81;
+const char *OP_CODE_LIST[] = {
+  /* 0 */ "open(read-only)",
+  /* 1 */ "close(read-only)",
+  /* 2 */ "done(read-only)",
+  /* 3 */ "unknown-op-3",
+  /* 4 */ "unknown-op-4",
+  /* 5 */ "unknown-op-5",
+  /* 6 */ "unknown-op-6",
+  /* 7 */ "unknown-op-7",
+  /* 8 */ "unknown-op-8",
+  /* 9 */ "unknown-op-9",
+  /* a */ "unknown-op-10",
+  /* b */ "unknown-op-11",
+  /* c */ "unknown-op-12",
+  /* d */ "unknown-op-13",
+  /* e */ "unknown-op-14",
+  /* f */ "unknown-op-15",
+  /* 10 */ "unknown-op-16",
+  /* 11 */ "open",
+  /* 12 */ "read",
+  /* 13 */ "write",
+  /* 14 */ "close",
+  /* 15 */ "stat",
+  /* 16 */ "lstat",
+  /* 17 */ "remove_file",
+  /* 18 */ "remove_dir	",
+  /* 19 */ "mkdir",
+  /* 1a */ "opendir",
+  /* 1b */ "addentry_parent_dir",
+  /* 1c */ "removeentry_parent_dir",
+  /* 1d */ "dir_exist",
+  /* 1e */ "seek",
+  /* 1f */ "fstat",
+  /* 20 */ "unknown-op-32",
+  /* 21 */ "file_allocate",
+  /* 22 */ "posix_file_allocate",
+  /* 23 */ "truncate",
+  /* 24 */ "ftruncate",
+  /* 25 */ "fsync	",
+  /* 26 */ "posix_fadvise",
+  /* 27 */ "faccessat",
+  /* 28 */ "pread",
+  /* 29 */ "pwrite",
+  /* 2a */ "futimens",
+  /* 2b */ "utimes	",
+  /* 2c */ "free_stripe_data",
+  /* 2d */ "stat_fs",
+  /* 2e */ "read_dir_entries",
+  /* 2f */ "unknown-op-47",
+  /* 30 */ "unknown-op-48",
+  /* 31 */ "unknown-op-49",
+  /* 32 */ "unknown-op-50",
+  /* 33 */ "unknown-op-51",
+  /* 34 */ "unknown-op-52",
+  /* 35 */ "unknown-op-53",
+  /* 36 */ "unknown-op-54",
+  /* 37 */ "unknown-op-55",
+  /* 38 */ "unknown-op-56",
+  /* 39 */ "unknown-op-57",
+  /* 3a */ "unknown-op-58",
+  /* 3b */ "unknown-op-59",
+  /* 3c */ "unknown-op-60",
+  /* 3d */ "unknown-op-61",
+  /* 3e */ "unknown-op-62",
+  /* 3f */ "unknown-op-63",
+  /* 40 */ "unknown-op-64",
+  /* 41 */ "unknown-op-65",
+  /* 42 */ "unknown-op-66",
+  /* 43 */ "unknown-op-67",
+  /* 44 */ "unknown-op-68",
+  /* 45 */ "unknown-op-69",
+  /* 46 */ "unknown-op-70",
+  /* 47 */ "unknown-op-71",
+  /* 48 */ "unknown-op-72",
+  /* 49 */ "unknown-op-73",
+  /* 4a */ "unknown-op-74",
+  /* 4b */ "unknown-op-75",
+  /* 4c */ "unknown-op-76",
+  /* 4d */ "unknown-op-77",
+  /* 4e */ "hello",
+  /* 4f */ "print_mem",
+  /* 50 */ "disconnect"
+};
+
+
+const char *opCodeName(int op_tag) {
+	op_tag &= 0xff;
+	if (op_tag < 0 || op_tag >= OP_CODE_LIST_SIZE) {
+		return "invalid_op_code";
+	} else {
+		return OP_CODE_LIST[op_tag];
+	}
+}
+
+
 void Process_One_IO_OP(IO_CMD_MSG *pOP_Msg)
 {
 	int Op_Tag;
 
 	Op_Tag = pOP_Msg->op & 0xFF;
+
+	// printf("  Process_One_IO_OP tag=%d name=%s tid=%d jobrec=%d time=%.6f offset=%ld nLen=%lu\n", Op_Tag, opCodeName(Op_Tag), pOP_Msg->tid, pOP_Msg->idx_JobRec, pOP_Msg->T_Queued/1000000., pOP_Msg->offset, pOP_Msg->nLen);
+	// printMessage(pOP_Msg, "Process_One_IO_OP");
 
 	switch(Op_Tag)	{
 	case RF_RW_OP_OPEN:

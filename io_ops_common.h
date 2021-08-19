@@ -110,7 +110,7 @@ typedef struct	{
 	int idx_qp;			// index of queue pair
 	int nTokenNeeded;	// the number of token needed to finish this operation
 	int tid;			// the index of IO worker that is handling this request
-	int idx_JobRec;		// the index of job record. It is determined by jobid which is known from QP. 
+	int idx_JobRec;		// the index of job record in ActiveJobList[]. It is determined by jobid which is known from QP.
 	unsigned long int T_Queued;	// time in us when this OP was queued. 
 	int tag_magic;
 	int op;		// operation tag. Containing a magic tag at the end!
@@ -147,6 +147,8 @@ typedef struct	{
 	int idx_qp;			// index of queue pair
 	int tid;			// the index of IO worker that is handling this request
 	int idx_JobRec;		// the index of job record. It is determined by jobid which is known from QP. 
+										// this is the index into ActiveJobList[]
+
 	int nTokenNeeded;	// the number of token needed to finish this operation
 	unsigned long int T_Queued;	// time in us when this OP was queued. 
 }IO_CMD_MSG, *PIO_CMD_MSG;
