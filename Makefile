@@ -11,7 +11,10 @@ ifeq ($(SHELL),sh.exe)
 endif
 
 #all: server fsclient
-all: server
+all: server iops_stat_mpi
+
+iops_stat_mpi:
+	mpicc -g -O0 -o tests/iops_stat_mpi tests/iops_stat_mpi.c
 
 server: $(OBJS)
 	$(CXX) -O2 $(CXXFLAGS) -g -o $@ put_get_server.o qp.o io_queue.o buddy.o myfs.o io_ops.o corebinding.o unique_thread.o dict.o xxhash.o ncx_slab.o queue_free_mem.o -libverbs -lpthread -lrt -Wunused-variable -L/opt/intel/compilers_and_libraries_2018.6.288/linux/mpi/intel64/lib/release_mt -L/opt/intel/compilers_and_libraries_2018.6.288/linux/mpi/intel64/lib -lmpicxx -lmpifort -lmpi -ldl
