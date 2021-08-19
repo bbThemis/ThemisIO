@@ -3482,6 +3482,8 @@ extern "C" int statfs(const char *pathname, struct statfs *buf)
 	Standardlize_Path(pathname, szFullPath);
 
 	if(strncmp(szFullPath, MYFS_ROOT_DIR, 5) == 0)	{
+		if(loc_buff == NULL)	Allocate_loc_rem_buff();
+
 		memcpy(buf, &fs_stat_shm, sizeof(struct statfs));
 		fs_Stat_Sum.fs_nblocks = 0;
 		fs_Stat_Sum.fs_bfreeblocks = 0;
@@ -3547,6 +3549,8 @@ extern "C" int statvfs(const char *pathname, struct statvfs *buf)
 	Standardlize_Path(pathname, szFullPath);
 
 	if(strncmp(szFullPath, MYFS_ROOT_DIR, 5) == 0)	{
+		if(loc_buff == NULL)	Allocate_loc_rem_buff();
+
 		memcpy(buf, &vfs_stat_shm, sizeof(struct statvfs));
 		
 		fs_Stat_Sum.fs_nblocks = 0;
