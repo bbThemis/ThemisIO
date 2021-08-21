@@ -414,11 +414,14 @@ int main(int argc, char **argv) {
 	long file_offset;
 	bool done = false;
 
-	if (rank==0)
-		printf("rw_speed time=%s np=%d nn=%d -prefix=%s -iosize=%d -filesize=%ld -time=%.1f -tag=%s%s\n",
-					 timestamp(0).c_str(), np, node_count, opt.filename_prefix.c_str(), opt.io_size, opt.file_size,
+	if (rank==0) {
+		char hostname[256];
+		gethostname(hostname, sizeof hostname);
+		printf("rw_speed time=%s np=%d nn=%d rank0host=%s -prefix=%s -iosize=%d -filesize=%ld -time=%.1f -tag=%s%s\n",
+					 timestamp(0).c_str(), np, node_count, hostname, opt.filename_prefix.c_str(), opt.io_size, opt.file_size,
 					 opt.run_time_sec, opt.tag.c_str(), opt.cleanup ? "" : " -nodelete");
-  
+	}
+
 	MPI_Barrier(MPI_COMM_WORLD);
 	double start_time = MPI_Wtime();
 	int iteration = 0;
