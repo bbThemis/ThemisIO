@@ -2,9 +2,12 @@
 // #include <cstdlib>
 #include <cstring>
 #include <pthread.h>
+#include <vector>
 #include <queue>
 #include <unordered_map>
 #include <random>
+#include <sstream>
+#include <iomanip>
 #include "qp.h"
 #include "io_queue.h"
 
@@ -70,6 +73,15 @@ class FairQueue {
 	// Otherwise this copies the message to 'msg' and returns true.
 	bool getMessage(IO_CMD_MSG *msg);
 
+	// This will be called occasionally.
+	// It provides a way to print status output or perform garbage collection.
+	void housekeeping();
+
+	// Returns the current time in microseconds since epoch.
+	static long unsigned getTime();
+
+	// Returns the number of seconds since the object was created.
+	double getElapsed();
 	
 private:
 	struct MessageContainer {
@@ -84,13 +96,15 @@ private:
 	};
 	
 	struct MessageQueue {
-		MessageQueue(int id_, long now, int weight_)
-			: id(id_), idle_timestamp(now), weight(weight_) {}
+		MessageQueue(int id_, int job_id_, int user_id_, long now, int weight_)
+			: id(id_), job_id(job_id_), user_id(user_id_), idle_timestamp(now), weight(weight_) {}
 								 
 		std::queue<MessageContainer> messages;
 
 		// id, either job id or user id, depending on fairness mode
-		int id; 
+		int id;
+
+		int job_id, user_id;
 
 		// timestamp this queue was most recently nonempty
 		long unsigned idle_timestamp;
@@ -120,16 +134,88 @@ private:
 			return true;
 		}
 
-		// compute a priority for this queue, which is the age of the message on
-		// the front of the queue times the weight of the job.
+		/* Computes a priority for this queue, which is currently just the 
+			 weight of the queue. For job-fair and user-fair queues it's 1,
+			 and for size-fair queues it's the node count of the job. */
 		double getPriority(long unsigned now) {
+			
+			/*
+				Weighting by age of the request ends up performing just like FIFO.
+
 			long usec_waiting = now - front_timestamp;
 			if (usec_waiting <= 0)
 				usec_waiting = 1;
 			return usec_waiting * weight;
+			*/
+
+			return weight;
 		}
 		
 	};
+
+
+	/* This is for debugging FairQueue::getMessage.
+		 It is a scheme for quickly storing the data the went into each choice
+		 and which choice was selected. A summary of recent decisions can then
+		 be formatted as a debug message. 
+
+		 Each choice is stored as a series of 32-bit integers.
+		   <n = # of MessageQueues>
+			 <id of the choice>
+			 {  (repeated n times)
+			    <id>
+					<priority as a float>
+       }
+			 storage for each: 2n+2
+	*/
+	class DecisionLog {
+	public:
+		static const bool enabled = false;
+		
+		DecisionLog(int thread_id_, int max_size_ = 50000000)
+			: thread_id(thread_id_) , max_size(max_size_) {}
+		
+		void log(std::vector<MessageQueue*> &nonempty_queues, int choice_id,
+						 long now) {
+
+			if (!enabled || data.size() >= max_size) return;
+
+			// how many items are we adding to the data?
+			int n = nonempty_queues.size();
+
+			// mark the current end of data
+			size_t pos = data.size();
+
+			// reserve all the space we'll need, so we can directly write to
+			// data[] without bounds checks
+			data.resize(data.size() + 2 * n + 2);
+
+			data[pos++] = n;
+			data[pos++] = choice_id;
+
+			for (MessageQueue *q : nonempty_queues) {
+				data[pos++] = q->id;
+				*(float*)&data[pos++] = q->getPriority(now);
+			}
+			assert(pos == data.size());
+
+			if (data.size() >= max_size) {
+				fprintf(stderr, "DecisionLog thread_id=%d max size reached\n",
+								thread_id);
+			}
+		}
+
+		std::string report();
+
+		bool empty() {
+			return data.empty();
+		}
+		
+	private:
+		int thread_id, max_size;
+		std::vector<int> data;
+	};
+
 
 	// return index into nonempty_queues
 	int chooseRandomNonemptyQueue();
@@ -142,11 +228,9 @@ private:
 			return job_info_lookup.getSlurmJobId(msg);
 		}
 	}
-
-	// return the current time in microseconds since epoch
-	static long unsigned getTime();
 	
-	// scan all message queues and remove those which have been idle for too long
+	// Scans all message queues and removes those which have been idle for too long.
+	// This is called by housekeeping().
 	void purgeIdle();
 	
 	FairnessMode fairness_mode;
@@ -176,4 +260,6 @@ private:
 
 	const bool log_choices = false;
 	FILE *choice_log;
+
+	DecisionLog decision_log;
 };
