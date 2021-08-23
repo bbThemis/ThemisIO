@@ -59,6 +59,15 @@ int *ht_table_ActiveJobs=NULL;
 extern pthread_mutex_t lock_Modify_ActiveJob_List;
 extern pthread_mutex_t *pAccess_qp0_lock;
 
+
+// Returns the current time in microseconds since epoch.
+long getTimeMicros() {
+	struct timeval t;
+	gettimeofday(&t, 0);
+	return t.tv_sec * 1000000 + t.tv_usec;
+}
+	
+
 // Send my record of job OP to rank 0
 void Upload_Job_OP_List(long int T_Upload)
 {
@@ -680,7 +689,11 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 	CoreBinding.Bind_This_Thread();
 	idx_qp_server = thread_id % NUM_THREAD_IO_WORKER_INTER_SERVER;
 
-	// the first thread is dedicated for inter-server communication via queue[0]
+	if (thread_id == 0) {
+		printf("INFO> fairness policy: %s\n", ServerOptions::fairnessModeToString(Server_qp.fairness_mode));
+	}
+
+	// the first few threads are dedicated for inter-server communication via queue[0]
 	if(thread_id < NUM_THREAD_IO_WORKER_INTER_SERVER)	{
 		printf("DBG> FairQueue thread_id %d inter-server-queue %d\n", thread_id, thread_id);
 		Inter_server_communication_loop(thread_id, &(IO_Queue_List[thread_id]));
@@ -706,7 +719,17 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 	FairQueue fair_queue(Server_qp.fairness_mode, mpi_rank, thread_id, job_info_lookup);
 	int pending_count = 0;
 
+	// Call FairQueue::housekeeping() at regular intervals.
+	const long FAIRQUEUE_HOUSEKEEPING_FREQ_MICROS = 1000000 * 2;
+	long next_housekeeping_time = getTimeMicros() + FAIRQUEUE_HOUSEKEEPING_FREQ_MICROS;
+
 	while(1)	{	// loop forever
+
+		long now = getTimeMicros();
+		if (now > next_housekeeping_time) {
+			fair_queue.housekeeping();
+			next_housekeeping_time = now + FAIRQUEUE_HOUSEKEEPING_FREQ_MICROS;
+		}
 
 		// ERR busy loop on unsynchronized variable
 		if (nActiveJob == 0){
@@ -864,8 +887,8 @@ void* Func_thread_IO_Worker(void *pParam)
 {
 
 	// return Func_thread_IO_Worker_LeiSizeFair(pParam);
-	// return Func_thread_IO_Worker_FairQueue(pParam);
-	return Func_thread_IO_Worker_FIFO(pParam);
+	return Func_thread_IO_Worker_FairQueue(pParam);
+	// return Func_thread_IO_Worker_FIFO(pParam);
 
 }
 
