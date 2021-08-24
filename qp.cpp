@@ -199,9 +199,9 @@ void SERVER_QUEUEPAIR::Destroy_A_QueuePair(int idx)
 		IdxLastQP64 = Align64_Int(IdxLastQP+1);	// +1 is needed since IdxLastQP is included!
 	}
 
-	printf("DBG> Rank = %d Destroyed %d QP in job %d (idx %d: %d qps). Client hostname %s ExeName = %s tid = %d nQP = %d FirstAV_QP = %d IdxLastQP = %d\n", 
+	/* printf("DBG> Rank = %d Destroyed %d QP in job %d (idx %d: %d qps). Client hostname %s ExeName = %s tid = %d nQP = %d FirstAV_QP = %d IdxLastQP = %d\n", 
 		mpi_rank, idx, pQP_Data[idx].jobid, pQP_Data[idx].idx_JobRec, ActiveJobList[pQP_Data[idx].idx_JobRec].nQP, pQP_Data[idx].szClientHostName, 
-		pQP_Data[idx].szClientExeName, pQP_Data[idx].ctid, nQP, FirstAV_QP, IdxLastQP);
+		pQP_Data[idx].szClientExeName, pQP_Data[idx].ctid, nQP, FirstAV_QP, IdxLastQP); */
 
 	if( FirstAV_QP > (nQP+NUM_THREAD_IO_WORKER_INTER_SERVER) )	{
 		printf("DBG> Something wrong!\n");
@@ -757,8 +757,8 @@ void* Func_thread_Finish_QP_Setup(void *pParam)
 	pServer_QP->pQP_Data[idx].bTimeout = 0;
 	pServer_QP->pQP_Data[idx].bServerReady = 1;
 
-	printf("DBG> Rank = %d Creating QP: Jobid = %d userid = %d idx_qp = %d idx_Queue = %d (%d qps) from %s on client %s nQP = %d FirstAV_QP = %d IdxLastQP = %d\n", 
-				 mpi_rank, pData_to_recv->JobInfo.jobid, pData_to_recv->JobInfo.cuid, idx, idx_Queue, ActiveJobList[idx_JobRec].nQP, pData_to_recv->JobInfo.szClientExeName, pData_to_recv->JobInfo.szClientHostName, pServer_QP->nQP, pServer_QP->FirstAV_QP, pServer_QP->IdxLastQP);
+	/* printf("DBG> Rank = %d Creating QP: Jobid = %d userid = %d idx_qp = %d idx_Queue = %d (%d qps) from %s on client %s nQP = %d FirstAV_QP = %d IdxLastQP = %d\n", 
+		 mpi_rank, pData_to_recv->JobInfo.jobid, pData_to_recv->JobInfo.cuid, idx, idx_Queue, ActiveJobList[idx_JobRec].nQP, pData_to_recv->JobInfo.szClientExeName, pData_to_recv->JobInfo.szClientHostName, pServer_QP->nQP, pServer_QP->FirstAV_QP, pServer_QP->IdxLastQP); */
 	
 //	Global_Addr_Data.comm_tag = TAG_GLOBAL_ADDR_INFO;
 //	Global_Addr_Data.addr_NewMsgFlag = (uint64_t)pServer_QP->p_shm_NewMsgFlag + sizeof(char)*idx;
@@ -1247,7 +1247,8 @@ void SERVER_QUEUEPAIR::IB_CreateQueuePair(int idx)
 	
 	pQP_Data[idx].bServerReady = 0;
 	idx_io_worker = Get_IO_Worker_Index_from_QP_Index(idx);
-	printf("DBG> rank = %d idx = %d idx_io_worker = %d\n", mpi_rank, idx, idx_io_worker);
+	// output qp-to-iothread mapping
+	// printf("DBG> rank = %d idx = %d idx_io_worker = %d\n", mpi_rank, idx, idx_io_worker);
 	pQP->send_complete_queue = send_complete_queue[idx_io_worker];
 	pQP->recv_complete_queue = send_complete_queue[idx_io_worker];
 

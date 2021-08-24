@@ -19,7 +19,10 @@
 
 #define NUM_THREAD_IO_WORKER_INTER_SERVER  (8)
 #define NUM_THREAD_IO_WORKER  (16+NUM_THREAD_IO_WORKER_INTER_SERVER)
-//#define NUM_THREAD_IO_WORKER  (14+NUM_THREAD_IO_WORKER_INTER_SERVER)
+
+// to simpilfy testing, switch to one inter-server thread and one io thread
+// #define NUM_THREAD_IO_WORKER_INTER_SERVER  (1)
+// #define NUM_THREAD_IO_WORKER  (1+NUM_THREAD_IO_WORKER_INTER_SERVER)
 
 #define MAX_NUM_ACTIVE_JOB	(1024)	// max number of concurrent slurm job id
 //#define MAX_NUM_QUEUE (1120 + NUM_THREAD_IO_WORKER_INTER_SERVER)
