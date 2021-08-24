@@ -74,9 +74,9 @@ def main(args):
       if max_time == None or end_time > max_time:
         max_time = end_time
 
-  print('min_start_time = ' + str(min_time))
-  for (tag, (start_time, slices_array)) in jobs.items():
-    print(f'{tag} : {start_time}, {slices_array}[{len(slices_array)}]')
+  # print('min_start_time = ' + str(min_time))
+  # for (tag, (start_time, slices_array)) in jobs.items():
+  #   print(f'{tag} : {start_time}, {slices_array}[{len(slices_array)}]')
 
   tags = list(jobs.keys())
   tags.sort()
