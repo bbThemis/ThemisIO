@@ -54,6 +54,8 @@ const long DEFAULT_FILE_SIZE = 1024*1024*100;
 int parseSize(const char *str, uint64_t *result);
 double getTime() {return MPI_Wtime() - t0;}
 int getNodeCount();
+// use SLURM_NNODES and THEMIS_FAKE_NNODES the same way qp_client uses them to get the node count for a job
+int getSimulatedNodeCount();
 std::string timestamp(int use_utc_time);
 
 
@@ -184,7 +186,8 @@ struct Options {
 		
 		std::ostringstream buf;
 		// buf << filename_prefix << ".rank" << rank << ".node" << nodename << ".pid" << getpid() << ".uid" << getuid();
-		buf << filename_prefix << "." << nodename << "." << getpid() << "_S00";
+		// buf << filename_prefix << "." << nodename << "." << getpid() << "_S00";
+		buf << filename_prefix << "." << nodename << "." << getpid();
 		return buf.str();
 	}
 
@@ -325,6 +328,17 @@ int getNodeCount() {
 }
 
 
+// use SLURM_NNODES and THEMIS_FAKE_NNODES the same way qp_client uses them to get the node count for a job
+int getSimulatedNodeCount() {
+	const char *nodes_str = getenv("THEMIS_FAKE_NNODES");
+	if (!nodes_str)
+		nodes_str = getenv("SLURM_NNODES");
+	if (!nodes_str)
+		return 0;
+	return atoi(nodes_str);
+}
+
+
 /* Returns the current time in the form YYYY-mm-dd:HH:MM:SS.
    If is_utc_time is nonzero, use the current UTC/GMT time. Otherwise
    use local time. */
@@ -381,6 +395,7 @@ int main(int argc, char **argv) {
 	MPI_Comm_size(MPI_COMM_WORLD, &np);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	node_count = getNodeCount();
+	int simulated_node_count = getSimulatedNodeCount();
 	t0 = MPI_Wtime();
 
 	Options opt;
@@ -414,11 +429,14 @@ int main(int argc, char **argv) {
 	long file_offset;
 	bool done = false;
 
-	if (rank==0)
-		printf("rw_speed time=%s np=%d nn=%d -prefix=%s -iosize=%d -filesize=%ld -time=%.1f -tag=%s%s\n",
-					 timestamp(0).c_str(), np, node_count, opt.filename_prefix.c_str(), opt.io_size, opt.file_size,
+	if (rank==0) {
+		char hostname[256];
+		gethostname(hostname, sizeof hostname);
+		printf("rw_speed time=%s np=%d nn=%d sim_nn=%d rank0host=%s -prefix=%s -iosize=%d -filesize=%ld -time=%.1f -tag=%s%s\n",
+					 timestamp(0).c_str(), np, node_count, simulated_node_count, hostname, opt.filename_prefix.c_str(), opt.io_size, opt.file_size,
 					 opt.run_time_sec, opt.tag.c_str(), opt.cleanup ? "" : " -nodelete");
-  
+	}
+
 	MPI_Barrier(MPI_COMM_WORLD);
 	double start_time = MPI_Wtime();
 	int iteration = 0;

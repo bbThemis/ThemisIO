@@ -70,36 +70,6 @@ typedef	struct	{
 }FS_SEVER_INFO;
 
 
-/* Handle options that can be set on the command line.
-   Currently that's just the fairness mode.
-*/
-class ServerOptions {
-public:
-	ServerOptions() : fairness_mode(getDefaultFairnessMode()) {}
-
-	// Returns true iff the command line arguments are successfully parsed.
-	bool parseCommandLineArgs(int argc, char **argv);
-
-	// Prints help message explaining command line usage.
-	static void printHelp();
-
-	// FairnessMode is defined in qp.h
-	FairnessMode getFairnessMode() {return fairness_mode;}
-
-	// use this to change the default fairness mode
-	static FairnessMode getDefaultFairnessMode() {return SIZE_FAIR;};
-
-	static const char *fairnessModeToString(FairnessMode fairness_mode) {
-		return fairness_mode == SIZE_FAIR ? "size-fair"
-			: fairness_mode == JOB_FAIR ? "job-fair"
-			: "user-fair";
-	}
-
-private:
-	FairnessMode fairness_mode;
-};
-
-
 
 int Server_Started=0;
 FS_SEVER_INFO ThisNode;
@@ -434,7 +404,6 @@ int main(int argc, char **argv)
 
 	// Store the fairness_mode in Server_qp.  It will be used in Func_thread_IO_Worker_FairQueue.
 	Server_qp.fairness_mode = server_options.getFairnessMode();
-	printf("INFO> fairness mode: %s\n", ServerOptions::fairnessModeToString(Server_qp.fairness_mode));
 
 	Init_Memory();
 //	Test_File_System_Local();
