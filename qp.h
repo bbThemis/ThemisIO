@@ -194,5 +194,37 @@ typedef struct	{
 }PARAM_PREALLOCATE_QP;
 
 
+/* Handle options that can be set on the command line.
+   Currently that's just the fairness mode.
+*/
+class ServerOptions {
+public:
+	ServerOptions() : fairness_mode(getDefaultFairnessMode()) {}
+
+	// Returns true iff the command line arguments are successfully parsed.
+	// defined in put_get_server.cpp
+	bool parseCommandLineArgs(int argc, char **argv);
+
+	// Prints help message explaining command line usage.
+	// defined in put_get_server.cpp
+	static void printHelp();
+
+	// FairnessMode is defined in qp.h
+	FairnessMode getFairnessMode() {return fairness_mode;}
+
+	// use this to change the default fairness mode
+	static FairnessMode getDefaultFairnessMode() {return SIZE_FAIR;};
+
+	static const char *fairnessModeToString(FairnessMode fairness_mode) {
+		return fairness_mode == SIZE_FAIR ? "size-fair"
+			: fairness_mode == JOB_FAIR ? "job-fair"
+			: "user-fair";
+	}
+
+private:
+	FairnessMode fairness_mode;
+};
+
+
 #endif
 
