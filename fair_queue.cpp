@@ -1,6 +1,12 @@
 #include "fair_queue.h"
 #include <sys/time.h>
 #include <random>
+#include <iomanip>
+
+/* Set this to a nonzero value to enable a debug output message each time a
+	 new job is encountered, and a message when that job is considered idle
+	 and is purged. */
+#define REPORT_JOB_START_AND_END 0
 
 
 FairQueue::FairQueue(FairnessMode mode_, int mpi_rank_, int thread_id_,
@@ -11,7 +17,8 @@ FairQueue::FairQueue(FairnessMode mode_, int mpi_rank_, int thread_id_,
 	job_info_lookup(job_info_lookup_),
 	max_idle_sec(max_idle_sec_),
 	message_count(0),
-	next_purge_timestamp(0)
+	next_purge_timestamp(0),
+	decision_log(thread_id_)
 {
 
 	std::random_device rdev;
@@ -42,14 +49,24 @@ void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 	int key = getKey(msg);
 	MessageQueue *q;
 	bool was_empty;
+	static bool first_output = true;
 
 	message_count++;
 	auto iqt = indexed_queues.find(key);
 	if (iqt == indexed_queues.end()) {
 		// create new message queue
 		int weight = fairness_mode == SIZE_FAIR ? job_info_lookup.getNodeCount(msg) : 1;
-		q = new MessageQueue(key, getTime(), weight);
+		int job_id = job_info_lookup.getSlurmJobId(msg);
+		int user_id = job_info_lookup.getUserId(msg);
+		q = new MessageQueue(key, job_id, user_id, getTime(), weight);
+		indexed_queues[key] = q;
 		was_empty = true;
+
+#ifdef REPORT_JOB_START_AND_END
+		printf("FairQueue::putMessage.newqueue time=%.2f threadid=%d key=%d jobid=%d userid=%d nodecount=%d weight=%d\n", 
+					 getTime()/1000000., thread_id, key, job_id, user_id, job_info_lookup.getNodeCount(msg), weight);
+#endif
+
 	} else {
 		q = iqt->second;
 		was_empty = q->messages.empty();
@@ -59,11 +76,6 @@ void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 
 	if (was_empty) {
 		nonempty_queues.push_back(q);
-	}
-
-	if (msg->T_Queued > next_purge_timestamp) {
-		purgeIdle();
-		next_purge_timestamp = msg->T_Queued + max_idle_sec * (long)1000000;
 	}
 }
 
@@ -75,6 +87,34 @@ bool FairQueue::isEmpty() {
 
 int FairQueue::getCount() {
 	return message_count;
+}
+
+
+std::string FairQueue::DecisionLog::report() {
+	std::ostringstream buf;
+	buf << "FairQueue.DecisionLog thread_id=" << thread_id
+			<< " time=" << std::fixed << std::setprecision(6)
+			<< (FairQueue::getTime() * 0.000001)
+			<< " format=(n,choice_id,[id,priority,...])"
+			<< " choices=";
+			
+	size_t pos = 0;
+	while (pos < data.size()) {
+		if (pos > 0) buf << ';';
+		int n = data[pos++];
+		buf << '(' << n << ',' << data[pos++];
+		buf << std::scientific << std::setprecision(3);
+		for (int i=0; i < n; i++) {
+			buf << ',' << data[pos++] << ',';
+			float f = *(float*)&data[pos++];
+			buf << f;
+		}
+			
+		buf << ')';
+	}
+	buf << '\n';
+	data.resize(0);
+	return buf.str();
 }
 
 
@@ -105,10 +145,11 @@ int FairQueue::chooseRandomNonemptyQueue() {
 		}
 	}
 
+	decision_log.log(nonempty_queues, nonempty_queues[choice_idx]->id, now);
+
 	if (log_choices) {
-		double timestamp = (now - start_time_usec) / 1000000.;
 		fprintf(choice_log, "choice %.6f, %d queue%s probsum=%lf r=%lf choice=%d\n",
-						timestamp, n, n==1 ? "" : "s", priority_sum, r_orig, choice_idx);
+						getElapsed(), n, n==1 ? "" : "s", priority_sum, r_orig, choice_idx);
 		for (int i=0; i < n; i++) {
 			MessageQueue *q = nonempty_queues[i];
 			fprintf(choice_log, "  %d. id=%d age=%lu priority=%lf\n", i, q->id, now - q->front_timestamp,
@@ -140,8 +181,20 @@ bool FairQueue::getMessage(IO_CMD_MSG *msg) {
 
 	return true;
 }
+
+
+void FairQueue::housekeeping() {
+	// printf("FairQueue report thread_id=%d time=%lu\n", thread_id, getTime());
+	if (decision_log.enabled && !decision_log.empty()) {
+		std::string choices = decision_log.report();
+		write(STDERR_FILENO, choices.data(), choices.length());
+	}
+
+	purgeIdle();
+}
  
 
+// Returns the current time in microseconds since epoch.
 long unsigned FairQueue::getTime() {
 	struct timeval t;
 	gettimeofday(&t, 0);
@@ -149,14 +202,30 @@ long unsigned FairQueue::getTime() {
 }
 
 
+// Returns the number of seconds since the object was created.
+double FairQueue::getElapsed() {
+	return (getTime() - start_time_usec) * .000001;
+}
+
+
+// Scans all message queues and removes those which have been idle for too long.
 void FairQueue::purgeIdle() {
-	// printf("%.6f purgeIdle thread %d\n", (getTime() - start_time_usec)/1000000., thread_id);
-	long unsigned too_old = getTime() - max_idle_sec * 1000000;
+	long now = getTime();
+
+	// printf("%.6f purgeIdle thread %d\n", getElapsed(), thread_id);
+	long unsigned too_old = now - max_idle_sec * 1000000;
 
 	auto it = indexed_queues.begin();
 	while (it != indexed_queues.end()) {
 		MessageQueue *q = it->second;
+		/* printf("FairQueue::purgeIdle thread_id=%d job %d idle time %.6f, empty=%s\n",
+					 thread_id, q->job_id, (now - q->idle_timestamp) / 1000000.,
+					 q->messages.empty() ? "true" : "false"); */
 		if (q->messages.empty() && q->idle_timestamp < too_old) {
+#ifdef REPORT_JOB_START_AND_END
+			printf("FairQueue::purgeIdle time=%.2f thread_id=%d purge job %d, idle for %.2f sec\n",
+						 now/1000000., thread_id, q->job_id, (now - q->idle_timestamp) / 1000000.);
+#endif
 			delete q;
 			it = indexed_queues.erase(it);
 		} else {
