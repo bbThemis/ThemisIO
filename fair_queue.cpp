@@ -3,6 +3,11 @@
 #include <random>
 #include <iomanip>
 
+/* Set this to a nonzero value to enable a debug output message each time a
+	 new job is encountered, and a message when that job is considered idle
+	 and is purged. */
+#define REPORT_JOB_START_AND_END 0
+
 
 FairQueue::FairQueue(FairnessMode mode_, int mpi_rank_, int thread_id_,
 										 JobInfoLookup &job_info_lookup_, int max_idle_sec_) :
@@ -57,9 +62,10 @@ void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 		indexed_queues[key] = q;
 		was_empty = true;
 
-		// report new jobs
-		/* printf("FairQueue::putMessage.newqueue threadid=%d key=%d jobid=%d userid=%d nodecount=%d weight=%d\n", 
-			 thread_id, key, job_id, user_id, job_info_lookup.getNodeCount(msg), weight); */
+#ifdef REPORT_JOB_START_AND_END
+		printf("FairQueue::putMessage.newqueue time=%.2f threadid=%d key=%d jobid=%d userid=%d nodecount=%d weight=%d\n", 
+					 getTime()/1000000., thread_id, key, job_id, user_id, job_info_lookup.getNodeCount(msg), weight);
+#endif
 
 	} else {
 		q = iqt->second;
@@ -213,11 +219,13 @@ void FairQueue::purgeIdle() {
 	while (it != indexed_queues.end()) {
 		MessageQueue *q = it->second;
 		/* printf("FairQueue::purgeIdle thread_id=%d job %d idle time %.6f, empty=%s\n",
-			 thread_id, q->job_id, (now - q->idle_timestamp) / 1000000.,
-			 q->messages.empty() ? "true" : "false"); */
+					 thread_id, q->job_id, (now - q->idle_timestamp) / 1000000.,
+					 q->messages.empty() ? "true" : "false"); */
 		if (q->messages.empty() && q->idle_timestamp < too_old) {
-			/* printf("FairQueue::purgeIdle time=%.2f thread_id=%d purge job %d, idle for %.2f sec\n",
-				 getElapsed(), thread_id, q->job_id, (now - q->idle_timestamp) / 1000000.); */
+#ifdef REPORT_JOB_START_AND_END
+			printf("FairQueue::purgeIdle time=%.2f thread_id=%d purge job %d, idle for %.2f sec\n",
+						 now/1000000., thread_id, q->job_id, (now - q->idle_timestamp) / 1000000.);
+#endif
 			delete q;
 			it = indexed_queues.erase(it);
 		} else {

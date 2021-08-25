@@ -25,6 +25,11 @@ int active_prob=0;	// the index of active probability set. Only can be 0 or 1. ^
 // must be larger than 'range', where range = IdxMax - IdxMin + 1
 #define FIRSTOPLIST_SIZE 640
 
+/* If we have not received any requests from a job for this many seconds,
+	 purge it from the FairQueue data structures. This is passed as an argument
+	 to the FairQueue constructor. */
+#define MAX_JOB_IDLE_SEC 10
+
 // XXX each counter in this array is updated by a different thread (via nOPs_Done[thread_id]++)
 // so the performance of those updates will suffer from false sharing
 long int nOPs_Done[NUM_THREAD_IO_WORKER];
@@ -716,7 +721,7 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 	
 	IO_CMD_MSG msg;
 	JobInfoLookup job_info_lookup(ActiveJobList, &nActiveJob);
-	FairQueue fair_queue(Server_qp.fairness_mode, mpi_rank, thread_id, job_info_lookup);
+	FairQueue fair_queue(Server_qp.fairness_mode, mpi_rank, thread_id, job_info_lookup, MAX_JOB_IDLE_SEC);
 	int pending_count = 0;
 
 	// Call FairQueue::housekeeping() at regular intervals.
