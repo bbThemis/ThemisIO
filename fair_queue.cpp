@@ -9,6 +9,12 @@
 #define REPORT_JOB_START_AND_END 0
 
 
+pthread_mutex_t FairQueue::shared_decision_log_lock = PTHREAD_MUTEX_INITIALIZER;
+FairQueue::DecisionLog FairQueue::shared_decision_log;
+int FairQueue::thread_count = 0;
+int FairQueue::n_threads_reported = 0;
+
+
 FairQueue::FairQueue(FairnessMode mode_, int mpi_rank_, int thread_id_,
 										 JobInfoLookup &job_info_lookup_, int max_idle_sec_) :
 	fairness_mode(mode_),
@@ -17,26 +23,19 @@ FairQueue::FairQueue(FairnessMode mode_, int mpi_rank_, int thread_id_,
 	job_info_lookup(job_info_lookup_),
 	max_idle_sec(max_idle_sec_),
 	message_count(0),
-	next_purge_timestamp(0),
-	decision_log(thread_id_)
+	next_purge_timestamp(0)
 {
 
 	std::random_device rdev;
 	random_engine.seed(rdev());
 	start_time_usec = getTime();
 	
-	if (log_choices) {
-		char fairness_log_name[100];
-		snprintf(fairness_log_name, 100, "fair_queue.rank%d.thread%d.log", mpi_rank, thread_id);
-		choice_log = fopen(fairness_log_name, "w");
-	} else {
-		choice_log = nullptr;
-	}
+	decision_log.changeThreadCount(1);
 }
 
 
 FairQueue::~FairQueue() {
-	if (choice_log) fclose(choice_log);
+	decision_log.changeThreadCount(-1);
 	for (auto it = indexed_queues.begin();
 			 it != indexed_queues.end();
 			 it++) {
@@ -62,7 +61,7 @@ void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 		indexed_queues[key] = q;
 		was_empty = true;
 
-#ifdef REPORT_JOB_START_AND_END
+#if REPORT_JOB_START_AND_END
 		printf("FairQueue::putMessage.newqueue time=%.2f threadid=%d key=%d jobid=%d userid=%d nodecount=%d weight=%d\n", 
 					 getTime()/1000000., thread_id, key, job_id, user_id, job_info_lookup.getNodeCount(msg), weight);
 #endif
@@ -87,34 +86,6 @@ bool FairQueue::isEmpty() {
 
 int FairQueue::getCount() {
 	return message_count;
-}
-
-
-std::string FairQueue::DecisionLog::report() {
-	std::ostringstream buf;
-	buf << "FairQueue.DecisionLog thread_id=" << thread_id
-			<< " time=" << std::fixed << std::setprecision(6)
-			<< (FairQueue::getTime() * 0.000001)
-			<< " format=(n,choice_id,[id,priority,...])"
-			<< " choices=";
-			
-	size_t pos = 0;
-	while (pos < data.size()) {
-		if (pos > 0) buf << ';';
-		int n = data[pos++];
-		buf << '(' << n << ',' << data[pos++];
-		buf << std::scientific << std::setprecision(3);
-		for (int i=0; i < n; i++) {
-			buf << ',' << data[pos++] << ',';
-			float f = *(float*)&data[pos++];
-			buf << f;
-		}
-			
-		buf << ')';
-	}
-	buf << '\n';
-	data.resize(0);
-	return buf.str();
 }
 
 
@@ -145,17 +116,7 @@ int FairQueue::chooseRandomNonemptyQueue() {
 		}
 	}
 
-	decision_log.log(nonempty_queues, nonempty_queues[choice_idx]->id, now);
-
-	if (log_choices) {
-		fprintf(choice_log, "choice %.6f, %d queue%s probsum=%lf r=%lf choice=%d\n",
-						getElapsed(), n, n==1 ? "" : "s", priority_sum, r_orig, choice_idx);
-		for (int i=0; i < n; i++) {
-			MessageQueue *q = nonempty_queues[i];
-			fprintf(choice_log, "  %d. id=%d age=%lu priority=%lf\n", i, q->id, now - q->front_timestamp,
-							nonempty_priorities[i]);
-		}
-	}
+	decision_log.log(nonempty_queues, nonempty_queues[choice_idx]->id);
 
 	return choice_idx;
 }
@@ -184,11 +145,8 @@ bool FairQueue::getMessage(IO_CMD_MSG *msg) {
 
 
 void FairQueue::housekeeping() {
-	// printf("FairQueue report thread_id=%d time=%lu\n", thread_id, getTime());
-	if (decision_log.enabled && !decision_log.empty()) {
-		std::string choices = decision_log.report();
-		write(STDERR_FILENO, choices.data(), choices.length());
-	}
+
+	if (decision_log.enabled) reportDecisionLog();
 
 	purgeIdle();
 }
@@ -208,6 +166,50 @@ double FairQueue::getElapsed() {
 }
 
 
+
+void FairQueue::reportDecisionLog() {
+
+	// single-thread report
+	/*
+		std::ostringstream buf;
+		buf << "FairQueue report thread_id=" << thread_id << " time=" << 
+		std::fixed << std::setprecision(2) << getElapsed() << " " << decision_log.toString() << '\n';
+		std::string report = buf.str();
+		write(STDERR_FILENO, report.data(), report.length());
+	*/
+
+	// combine the data from this thread with the shared data
+	std::string shared_report;
+
+	pthread_mutex_lock(&shared_decision_log_lock);
+
+	shared_decision_log.addLog(decision_log);
+
+	// after a cycle of everyone checking in, produced a shared report
+	if (++n_threads_reported == thread_count) {
+		shared_report = shared_decision_log.toString();
+		shared_decision_log.clear();
+		n_threads_reported = 0;
+	}
+			
+	pthread_mutex_unlock(&shared_decision_log_lock);
+
+	// my data has been moved to the shared log; clear this copy
+	decision_log.clear();
+
+	// to minimize time holding the lock, the report was generated and saved into a string,
+	// then after the lock was released we'll print the report
+	if (shared_report.length()) {
+		std::ostringstream buf;
+		buf << "FairQueue::reportDecisionLog rank " << mpi_rank << " time=" << 
+			std::fixed << std::setprecision(2) << getElapsed() << " " << shared_report << '\n';
+		std::string report = buf.str();
+		write(STDERR_FILENO, report.data(), report.length());
+	}
+
+}
+
+
 // Scans all message queues and removes those which have been idle for too long.
 void FairQueue::purgeIdle() {
 	long now = getTime();
@@ -222,7 +224,7 @@ void FairQueue::purgeIdle() {
 					 thread_id, q->job_id, (now - q->idle_timestamp) / 1000000.,
 					 q->messages.empty() ? "true" : "false"); */
 		if (q->messages.empty() && q->idle_timestamp < too_old) {
-#ifdef REPORT_JOB_START_AND_END
+#if REPORT_JOB_START_AND_END
 			printf("FairQueue::purgeIdle time=%.2f thread_id=%d purge job %d, idle for %.2f sec\n",
 						 now/1000000., thread_id, q->job_id, (now - q->idle_timestamp) / 1000000.);
 #endif
@@ -233,5 +235,129 @@ void FairQueue::purgeIdle() {
 		}
 	}
 
-	if (log_choices) fflush(choice_log);
+}
+
+
+void FairQueue::DecisionLog::log(const std::vector<MessageQueue*> &nonempty_queues, int choice_id) {
+
+	if (!enabled) return;
+             
+	// make a copy of the all the ids of the queues from which the choice
+	// was made.  Use persistent temp_storage object to minimize reallocations.
+	int n = nonempty_queues.size();
+	temp_storage.resize(n + 1);
+	int *temp = temp_storage.data();
+	temp[0] = n;
+    
+	for (int i=0; i < n; i++) {
+		int id = nonempty_queues[i]->id;
+		temp[i+1] = id;
+	}
+
+	// order the ids so alternate orderings are merged
+	std::sort(temp+1, temp+1+n);
+
+	// find where choice_id ended up in the sorted array
+	int *choice_ptr = std::lower_bound(temp+1, temp+1+n, choice_id);
+	// check that I did the binary search correctly
+	assert(choice_ptr >= temp+1 && choice_ptr < temp+1+n);
+	// check that choice_id matches one of the inputs
+	assert(*choice_ptr == choice_id);
+    
+	int choice_idx = choice_ptr - (temp+1);
+
+	// see if this set already exists
+	int *decision;
+	auto it = decisions.find(temp);
+	if (it == decisions.end()) {
+		// first time; create the set with all counters set to zero
+		decision = new int[n * 2 + 1];
+		memcpy(decision, temp, sizeof(int) * (n + 1));
+		memset(decision + n + 1, 0, sizeof(int) * n);
+		// add it to the decision set
+		decisions.insert(decision);
+	} else {
+		decision = *it;
+	}
+
+	// offset of frequency counter for choice_idx
+	int freq_idx = n + 1 + choice_idx;
+
+	// increment frequency counter
+	decision[freq_idx] += 1;
+}
+
+
+// combine the counts from that to this
+void FairQueue::DecisionLog::addLog(const FairQueue::DecisionLog &that) {
+	for (auto that_iter = that.decisions.begin();
+			 that_iter != that.decisions.end();
+			 that_iter++) {
+
+		// see if we have an entry with the same key
+		int *that_dec = *that_iter;
+		int n = that_dec[0];
+		auto this_iter = decisions.find(that_dec);
+
+		if (this_iter == decisions.end()) {
+			// this is new; make a copy of it
+			int len = n * 2 + 1;
+			int *dec_copy = new int[len];
+			memcpy(dec_copy, that_dec, len * sizeof(int));
+			decisions.insert(dec_copy);
+		} 
+
+		else {
+			// this key exists. Verify that the key matches, just in case
+			int *this_dec = *this_iter;
+			assert(0 == memcmp(this_dec, that_dec, sizeof(int) * (n + 1)));
+			
+			// add counters from that to this
+			for (int i=n+1; i <= n*2; i++) {
+				this_dec[i] += that_dec[i];
+			}
+		}
+	}
+}
+
+
+// Represent all the decision sets in an easy-to-parse way
+std::string FairQueue::DecisionLog::toString() {
+	std::ostringstream buf;
+	auto it = decisions.begin();
+	for (it = decisions.begin();
+			 it != decisions.end();
+			 it++) {
+		if (it != decisions.begin())
+			buf << ';';
+		int *dset = *it;
+		buf << decisionSetToString(dset);
+	}
+	return buf.str();
+}
+
+
+void FairQueue::DecisionLog::clear() {
+	auto it = decisions.begin();
+	while (it != decisions.end()) {
+		delete [] *it;
+		it = decisions.erase(it);
+	}
+}
+
+
+// represent one decision set as an easy-to-parse string
+std::string FairQueue::DecisionLog::decisionSetToString(int *data) {
+	std::ostringstream buf;
+	int n = data[0];
+	for (int i=0; i < n; i++) {
+		if (i > 0) buf << ',';
+		buf << data[i+1];
+	}
+	buf << ':';
+	for (int i=0; i < n; i++) {
+		if (i > 0) buf << ',';
+		buf << data[n+i+1];
+	}
+	return buf.str();
 }
