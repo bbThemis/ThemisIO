@@ -64,6 +64,9 @@ int *ht_table_ActiveJobs=NULL;
 extern pthread_mutex_t lock_Modify_ActiveJob_List;
 extern pthread_mutex_t *pAccess_qp0_lock;
 
+// Number of microseconds between calls to FairQueue::housekeeping().
+#define FAIRQUEUE_HOUSEKEEPING_FREQ_MICROS (1000000 * 5)
+
 
 // Returns the current time in microseconds since epoch.
 long getTimeMicros() {
@@ -683,28 +686,9 @@ void printMessage(const IO_CMD_MSG *msg, const char *prefix) {
 }
 
 
-// IO worker thread implementing fair queue
-
-void* Func_thread_IO_Worker_FairQueue(void *pParam)
-{
-	const int thread_id = *((int*)pParam);
+void fairQueueWorker(int thread_id) {
 	int IdxMin, IdxMax, range;
 	long int nOp_Done=0;
-
-	CoreBinding.Bind_This_Thread();
-	idx_qp_server = thread_id % NUM_THREAD_IO_WORKER_INTER_SERVER;
-
-	if (thread_id == 0) {
-		printf("INFO> fairness policy: %s\n", ServerOptions::fairnessModeToString(Server_qp.fairness_mode));
-	}
-
-	// the first few threads are dedicated for inter-server communication via queue[0]
-	if(thread_id < NUM_THREAD_IO_WORKER_INTER_SERVER)	{
-		printf("DBG> FairQueue thread_id %d inter-server-queue %d\n", thread_id, thread_id);
-		Inter_server_communication_loop(thread_id, &(IO_Queue_List[thread_id]));
-		// never returns
-		return NULL;
-	}
 
 	// Each thread handles a subrange of input queues.
 	// Distribute those queues across threads as equally as possible.
@@ -725,7 +709,6 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 	int pending_count = 0;
 
 	// Call FairQueue::housekeeping() at regular intervals.
-	const long FAIRQUEUE_HOUSEKEEPING_FREQ_MICROS = 1000000 * 2;
 	long next_housekeeping_time = getTimeMicros() + FAIRQUEUE_HOUSEKEEPING_FREQ_MICROS;
 
 	while(1)	{	// loop forever
@@ -792,6 +775,31 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 			exit(2);
 		}
 	}
+}
+
+
+// IO worker thread implementing fair queue
+
+void* Func_thread_IO_Worker_FairQueue(void *pParam)
+{
+	const int thread_id = *((int*)pParam);
+
+	CoreBinding.Bind_This_Thread();
+	idx_qp_server = thread_id % NUM_THREAD_IO_WORKER_INTER_SERVER;
+
+	if (thread_id == 0) {
+		printf("INFO> fairness policy: %s\n", ServerOptions::fairnessModeToString(Server_qp.fairness_mode));
+	}
+
+	// the first few threads are dedicated for inter-server communication via queue[0]
+	if (thread_id < NUM_THREAD_IO_WORKER_INTER_SERVER)	{
+		printf("DBG> FairQueue thread_id %d inter-server-queue %d\n", thread_id, thread_id);
+		Inter_server_communication_loop(thread_id, &(IO_Queue_List[thread_id]));
+	} else {
+		fairQueueWorker(thread_id);
+	}
+
+	return NULL;
 }
 
 

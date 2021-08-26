@@ -5,6 +5,8 @@
 #include <vector>
 #include <queue>
 #include <unordered_map>
+#include <set>
+#include <algorithm>
 #include <random>
 #include <sstream>
 #include <iomanip>
@@ -154,67 +156,77 @@ private:
 	};
 
 
-	/* This is for debugging FairQueue::getMessage.
-		 It is a scheme for quickly storing the data the went into each choice
-		 and which choice was selected. A summary of recent decisions can then
-		 be formatted as a debug message. 
+	/* Log fairness decisions, tracking the set of messages queues with
+		 data and which was selected. Choices from the same set of queues
+		 will be consolidated into one entry.
 
-		 Each choice is stored as a series of 32-bit integers.
-		   <n = # of MessageQueues>
-			 <id of the choice>
-			 {  (repeated n times)
-			    <id>
-					<priority as a float>
-       }
-			 storage for each: 2n+2
-	*/
+		 Each set of choices is represented with an integer array.
+       array[0] = N = # of queues from choice a choice was made
+			 array[1..N] = id numbers for the input queues. These may be job ids
+			   or user ids, depending on the fairness mode
+			 array[0..N] is the key for the 'decisions' set
+			 array[N+1..2N] = frequency count for each choice
+
+     For example, if a set of possible ids (50,123,999) were
+     considered in 1000 instances, and 50 was chosen 10% of the time,
+     123 40% of the time, and 999 50% of the time, this will be stored
+     as [3, 50, 128, 999, 100, 400, 500] and in toString form it will
+     be "50,123,999:100,400,500".
+  */
 	class DecisionLog {
 	public:
+		// using a constant so the compiler can easily disable the code with no overhead
 		static const bool enabled = false;
-		
-		DecisionLog(int thread_id_, int max_size_ = 50000000)
-			: thread_id(thread_id_) , max_size(max_size_) {}
-		
-		void log(std::vector<MessageQueue*> &nonempty_queues, int choice_id,
-						 long now) {
 
-			if (!enabled || data.size() >= max_size) return;
+		DecisionLog() {}
+		~DecisionLog() {clear();}
 
-			// how many items are we adding to the data?
-			int n = nonempty_queues.size();
-
-			// mark the current end of data
-			size_t pos = data.size();
-
-			// reserve all the space we'll need, so we can directly write to
-			// data[] without bounds checks
-			data.resize(data.size() + 2 * n + 2);
-
-			data[pos++] = n;
-			data[pos++] = choice_id;
-
-			for (MessageQueue *q : nonempty_queues) {
-				data[pos++] = q->id;
-				*(float*)&data[pos++] = q->getPriority(now);
-			}
-			assert(pos == data.size());
-
-			if (data.size() >= max_size) {
-				fprintf(stderr, "DecisionLog thread_id=%d max size reached\n",
-								thread_id);
-			}
-		}
-
-		std::string report();
-
-		bool empty() {
-			return data.empty();
+		// track how many threads there are, so we know how many need to check in before
+		// we output a report containing everyone's data.
+		static void changeThreadCount(int count) {
+			pthread_mutex_lock(&shared_decision_log_lock);
+			thread_count += count;
+			pthread_mutex_unlock(&shared_decision_log_lock);
 		}
 		
+		void log(const std::vector<MessageQueue*> &nonempty_queues, int choice_id);
+
+		// combine the counts from that to this
+		void addLog(const DecisionLog &that);
+		
+		bool empty() {return decisions.empty();}
+
+		// represent all the decision sets in an easy-to-parse way
+		std::string toString();
+
+		// reset all the counters, deallocating memory
+		void clear();
+
 	private:
-		int thread_id, max_size;
-		std::vector<int> data;
-	};
+
+		// order decision sets by size and then ids
+		struct DecisionSetLessThan {
+			bool operator()(const int *a, const int *b) {
+				int n = a[0];
+				if (n != b[0])
+					return n < b[0];
+
+				for (int i=1; i < n+1; i++)
+					if (a[i] != b[i])
+						return a[i] < b[i];
+
+				return false;
+			}
+		};
+
+
+		// represent one decision set as an easy-to-parse string
+		std::string decisionSetToString(int *data);
+  
+		std::vector<int> temp_storage;
+		std::set<int*, DecisionSetLessThan> decisions;
+
+	};  // DecisionLog
 
 
 	// return index into nonempty_queues
@@ -228,6 +240,8 @@ private:
 			return job_info_lookup.getSlurmJobId(msg);
 		}
 	}
+
+	void reportDecisionLog();
 	
 	// Scans all message queues and removes those which have been idle for too long.
 	// This is called by housekeeping().
@@ -258,8 +272,10 @@ private:
 	// Call purgeIdle() when a message comes in with a timestamp after this.
 	long unsigned next_purge_timestamp;
 
-	const bool log_choices = false;
-	FILE *choice_log;
-
 	DecisionLog decision_log;
+
+	// shared by all threads, shared_decision_log_lock protects these variables
+	static pthread_mutex_t shared_decision_log_lock;
+	static DecisionLog shared_decision_log;
+	static int thread_count, n_threads_reported;
 };
