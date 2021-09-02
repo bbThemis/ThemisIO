@@ -3920,36 +3920,41 @@ void Update_CWD(void)
 	}
 }
 
-
 char *getcwd(char *buf, size_t size)
 {
-	char *szPath=NULL;
-	
-	if(real_getcwd == NULL) {
-		real_getcwd = (org_getcwd)dlsym(RTLD_NEXT, "getcwd");
-	}
+        if(real_getcwd == NULL) {
+                real_getcwd = (org_getcwd)dlsym(RTLD_NEXT, "getcwd");
+        }
 
-	if(Inited == 0) {       // init() not finished yet
-		return real_getcwd(szPath, size);
-	}
+        if(Inited == 0) {       // init() not finished yet
+                return real_getcwd(buf, size);
+        }
 
-	if( strncmp(szCurDir, MYFS_ROOT_DIR, 5) != 0)	{
-		return real_getcwd(szPath, size);
-	}
-	
-	if(buf == NULL) {
-		szPath = (char*)malloc(strlen(szCurDir) + 256);
-		if(szPath == NULL)      {
-			printf("Fail to allocate memory for szPath in getcwd().\nQuit\n");
-			exit(1);
-		}
-		strcpy(szPath, szCurDir);
-		return szPath;
-	}
-	else    {
-		strcpy(buf, szCurDir);
-		return buf;
-	}
+        if(szCurDir[0] != '/')  {       // Not initlized yet
+                printf("DBG> szCurDir = %s\n", szCurDir);
+                Update_CWD();
+                printf("DBG> szCurDir = %s\n", szCurDir);
+        }
+
+        if( strncmp(szCurDir, MYFS_ROOT_DIR, 5) != 0)   {
+                return real_getcwd(buf, size);
+        }
+
+        if(buf == NULL) {
+                char *szPath=NULL;
+                szPath = (char*)malloc(strlen(szCurDir) + 256);
+                if(szPath == NULL)      {
+                        printf("Fail to allocate memory for szPath in getcwd().\nQuit\n");
+                        exit(1);
+                }
+                strcpy(szPath, szCurDir);
+                return szPath;
+        }
+        else    {
+                strcpy(buf, szCurDir);
+                return buf;
+        }
+
 }
 
 static void Find_Func_Addr(char szPathLib[], char szFunc_List[][MAX_LEN_FUNC_NAME], long int func_addr[], long int func_len[], long int img_base_addr, int nhook)
