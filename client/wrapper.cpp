@@ -1542,7 +1542,7 @@ int dup2(int oldfd, int newfd)
 	else if( (fd_Directed == newfd) && (fd_Directed>=FD_FILE_BASE) )	{
 		return newfd;
 	}
-	else	real_dup2(oldfd, newfd);
+	else	return real_dup2(oldfd, newfd);
 }
 extern int __dup2(int oldfd, int newfd) __attribute__ ( (alias ("dup2")) );
 
