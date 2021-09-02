@@ -712,7 +712,6 @@ void fairQueueWorker(int thread_id) {
 	long next_housekeeping_time = getTimeMicros() + FAIRQUEUE_HOUSEKEEPING_FREQ_MICROS;
 
 	while(1)	{	// loop forever
-
 		long now = getTimeMicros();
 		if (now > next_housekeeping_time) {
 			fair_queue.housekeeping();
@@ -731,7 +730,9 @@ void fairQueueWorker(int thread_id) {
 		for (CIO_QUEUE *queue = IO_Queue_List + IdxMin;
 				 queue <= IO_Queue_List + IdxMax;
 				 queue++) {
-			if (!queue->isEmptyUnsafe()) {
+			// Move all queued msg to fair queue!!! Fast response to the new incoming requests from new jobs!
+			while(!queue->isEmptyUnsafe())	{
+//			if (!queue->isEmptyUnsafe()) {
 				if (queue->Dequeue(&msg) == 0) {
 					msg.tid = thread_id;
 					// printMessage(&msg, "incomingMsg");
@@ -901,7 +902,7 @@ void* Func_thread_IO_Worker(void *pParam)
 
 	// return Func_thread_IO_Worker_LeiSizeFair(pParam);
 	return Func_thread_IO_Worker_FairQueue(pParam);
-	// return Func_thread_IO_Worker_FIFO(pParam);
+//	return Func_thread_IO_Worker_FIFO(pParam);
 
 }
 
