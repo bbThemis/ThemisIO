@@ -361,6 +361,20 @@ static void sigsegv_handler(int sig, siginfo_t *siginfo, void *uc)
 //	else	exit(1);
 }
 
+typedef void (*org_sighandler)(int sig, siginfo_t *siginfo, void *ptr);
+static org_sighandler org_int=NULL;
+
+static void sigint_handler(int sig, siginfo_t *siginfo, void *uc)
+{
+	char szMsg[]="Received sigint.\n";
+	write(STDERR_FILENO, szMsg, strlen(szMsg));
+	fsync(STDERR_FILENO);
+
+        if(org_int)     org_int(sig, siginfo, uc);
+        else    exit(0);
+}
+
+
 int main(int argc, char **argv)
 {
 	int i;
@@ -382,6 +396,15 @@ int main(int argc, char **argv)
         perror("Error: sigaction");
         exit(1);
     }
+
+    act.sa_sigaction = sigint_handler;
+    if (sigaction(SIGINT, &act, &old_action) == -1) {
+        perror("Error: sigaction");
+       exit(1);
+    }
+        if( (old_action.sa_handler != SIG_DFL) && (old_action.sa_handler != SIG_IGN) )  {
+                org_int = old_action.sa_sigaction;
+        }
 
 
 	CoreBinding.Init_Core_Binding();
