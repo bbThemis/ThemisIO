@@ -1750,7 +1750,10 @@ size_t my_read_stripe(int fd, const char *szFileName, int server_shift, void *bu
 		}
 		else	pStripeDataLocal = &(pStripeData[idx_file]);
 	}
-
+	if(offset >= pStripeDataLocal->MaxOffset)	{
+		pthread_mutex_unlock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+		return 0;	// no data available. Out of range
+	}
 	idx_Block = Query_Index_StorageBlock_with_Offset_Stripe(pStripeDataLocal, offset);
 	MaxDataRange = pStripeDataLocal->MaxDataRange;
 	pthread_mutex_unlock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
@@ -1889,6 +1892,11 @@ size_t my_read_stripe_RDMA(int fd, const char *szFileName, int server_shift, int
 		}
 		else	pStripeDataLocal = &(pStripeData[idx_file]);
 	}
+
+        if(offset >= pStripeDataLocal->MaxOffset)       {
+                pthread_mutex_unlock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+                return 0;       // no data available. Out of range
+        }
 
 	idx_Block = Query_Index_StorageBlock_with_Offset_Stripe(pStripeDataLocal, offset);
 	MaxDataRange = pStripeDataLocal->MaxDataRange;
