@@ -108,6 +108,9 @@ void Init_Memory(void)
 	int i, nQP_Server;
 	char szNameShm_Full[128];
 
+        // Make sure the parameters are consistent
+        assert( IO_RESULT_BUFFER_SIZE == (1<<SHIFT_FOR_DIV_FILE_STRIPE_SIZE) );
+	
 	sprintf(szNameShm_Full, "%s_%d", szNameShm, mpi_rank%nNUMAPerNode);
 	fd_shm = shm_open(szNameShm_Full, O_RDWR | O_CREAT, 0600);
 	if(fd_shm == -1)    {	// failed to create
