@@ -230,7 +230,10 @@ private:
 
 
 	// return index into nonempty_queues
-	int chooseRandomNonemptyQueue();
+	std::pair<int, int> chooseRandomNonemptyQueue();
+
+    // return index into nonempty_queues
+	int chooseRandomNonemptyQueuePerUser(std::vector<MessageQueue*>& nonempty_queues);
 
 	
 	int getKey(const IO_CMD_MSG *msg) {
@@ -260,10 +263,15 @@ private:
 	
 	// all current message queues
 	// key is job_id or user_id
-	std::unordered_map<int, MessageQueue*> indexed_queues;
+	//std::unordered_map<int, MessageQueue*> indexed_queues;
+
+    //user to job queues
+    std::unordered_map<int, std::unordered_map<int, MessageQueue*>> user_to_job_queues;
 
 	// all nonempty message queues
-	std::vector<MessageQueue*> nonempty_queues;
+	//std::vector<MessageQueue*> nonempty_queues;
+
+    std::unordered_map<int, std::vector<MessageQueue*>> user_to_nonempty_queues;
 
 	// Used in chooseRandomNonemptyQueue(). This is filled with the
 	// priority for each nonempty queue, then one is chosen randomly.

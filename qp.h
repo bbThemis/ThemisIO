@@ -54,7 +54,13 @@ enum FairnessMode {
 	JOB_FAIR,
 
 	// Priority based on users such that each user gets equal throughput.
-	USER_FAIR
+	USER_FAIR,
+
+    // Priority based on users then job
+    USER_JOB_FAIR,
+
+    // Priority based on users then size
+    USER_SIZE_FAIR
 };
 
 

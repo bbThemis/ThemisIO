@@ -36,29 +36,35 @@ FairQueue::FairQueue(FairnessMode mode_, int mpi_rank_, int thread_id_,
 
 FairQueue::~FairQueue() {
 	decision_log.changeThreadCount(-1);
-	for (auto it = indexed_queues.begin();
-			 it != indexed_queues.end();
-			 it++) {
-		delete it->second;
+	for (auto it = user_to_job_queues.begin(); it != user_to_job_queues.end(); it++) {
+        
+        for(auto itt = it->second.begin(); itt != it->second.end(); itt++){
+            delete itt->second;
+        }
 	}
 }
 
 
 void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 	int key = getKey(msg);
+
+    int user_key = job_info_lookup.getUserId(msg);
+    int job_key = job_info_lookup.getSlurmJobId(msg);
+
 	MessageQueue *q;
 	bool was_empty;
 	static bool first_output = true;
 
 	message_count++;
-	auto iqt = indexed_queues.find(key);
-	if (iqt == indexed_queues.end()) {
+	auto iqt = user_to_job_queues.find(user_key);
+	if (iqt == user_to_job_queues.end()) {
 		// create new message queue
-		int weight = fairness_mode == SIZE_FAIR ? job_info_lookup.getNodeCount(msg) : 1;
-		int job_id = job_info_lookup.getSlurmJobId(msg);
-		int user_id = job_info_lookup.getUserId(msg);
-		q = new MessageQueue(key, job_id, user_id, getTime(), weight);
-		indexed_queues[key] = q;
+        bool size_fair = fairness_mode == SIZE_FAIR || fairness_mode == USER_SIZE_FAIR;
+		int weight = size_fair ? job_info_lookup.getNodeCount(msg) : 1;
+
+		q = new MessageQueue(job_key, job_key, user_key, getTime(), weight);
+        
+		user_to_job_queues[user_key][job_key] = q;
 		was_empty = true;
 
 #if REPORT_JOB_START_AND_END
@@ -67,20 +73,37 @@ void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 #endif
 
 	} else {
-		q = iqt->second;
+		auto job_map_for_user = iqt->second;
+        auto it = job_map_for_user.find(job_key);
+
+        bool size_fair = fairness_mode == SIZE_FAIR || fairness_mode == USER_SIZE_FAIR;
+		int weight = size_fair ? job_info_lookup.getNodeCount(msg) : 1;
+        
+        if(it == job_map_for_user.end()){
+            q = new MessageQueue(job_key, job_key, user_key, getTime(), weight);  
+            job_map_for_user[job_key] = q;  
+        }
+        else{
+            q = job_map_for_user[job_key];
+        }
 		was_empty = q->messages.empty();
 	}
 
 	q->add(msg);
 
 	if (was_empty) {
-		nonempty_queues.push_back(q);
+		//nonempty_queues.push_back(q);
+        user_to_nonempty_queues[user_key].push_back(q);
 	}
 }
 
 
 bool FairQueue::isEmpty() {
-	return nonempty_queues.empty();
+    bool ans = true;
+    for(auto it : user_to_nonempty_queues){
+        ans = ans && it.second.empty();
+    }
+	return ans;
 }
 
 
@@ -88,12 +111,12 @@ int FairQueue::getCount() {
 	return message_count;
 }
 
-
-int FairQueue::chooseRandomNonemptyQueue() {
-	long unsigned now = getTime();
+int FairQueue::chooseRandomNonemptyQueuePerUser(std::vector<MessageQueue*>& nonempty_queues){
+    long unsigned now = getTime();
 	int n = nonempty_queues.size();
 
 	double priority_sum = 0;
+    nonempty_priorities.clear();
 	nonempty_priorities.resize(n);
 	for (int i=0; i < n; i++) {
 		nonempty_priorities[i] = nonempty_queues[i]->getPriority(now);
@@ -121,13 +144,33 @@ int FairQueue::chooseRandomNonemptyQueue() {
 	return choice_idx;
 }
 
+std::pair<int, int> FairQueue::chooseRandomNonemptyQueue() {
+    int num_nonempty_users = user_to_nonempty_queues.size();
+    auto it = user_to_nonempty_queues.begin();
+    int random_index = rand() % num_nonempty_users;
+    std::advance(it, random_index);
+
+    int user_key = it->first;
+    int q_idx = chooseRandomNonemptyQueuePerUser(it->second);
+
+    return std::make_pair(user_key, q_idx);
+
+}
+
 
 bool FairQueue::getMessage(IO_CMD_MSG *msg) {
 	if (isEmpty()) return false;
-
-	int queue_idx = chooseRandomNonemptyQueue();
 	
-	MessageQueue *q = nonempty_queues[queue_idx];
+	std::pair<int, int> user_key_and_q_idx = chooseRandomNonemptyQueue();
+
+    int user_key = user_key_and_q_idx.first;
+    int q_idx = user_key_and_q_idx.second;  
+
+    std::vector<MessageQueue*> nonempty_queues = user_to_nonempty_queues[user_key];
+
+    MessageQueue * q = nonempty_queues[q_idx];
+    
+
 	q->remove(msg);
 	message_count--;
 	
@@ -136,8 +179,11 @@ bool FairQueue::getMessage(IO_CMD_MSG *msg) {
 		q->idle_timestamp = getTime();
 
 		size_t last_idx = nonempty_queues.size() - 1;
-		nonempty_queues[queue_idx] = nonempty_queues[last_idx];
+		nonempty_queues[q_idx] = nonempty_queues[last_idx];
 		nonempty_queues.resize(last_idx);
+        if(nonempty_queues.empty()){
+            user_to_nonempty_queues.erase(user_key);
+        }
 	}
 
 	return true;
@@ -217,23 +263,26 @@ void FairQueue::purgeIdle() {
 	// printf("%.6f purgeIdle thread %d\n", getElapsed(), thread_id);
 	long unsigned too_old = now - max_idle_sec * 1000000;
 
-	auto it = indexed_queues.begin();
-	while (it != indexed_queues.end()) {
-		MessageQueue *q = it->second;
-		/* printf("FairQueue::purgeIdle thread_id=%d job %d idle time %.6f, empty=%s\n",
-					 thread_id, q->job_id, (now - q->idle_timestamp) / 1000000.,
-					 q->messages.empty() ? "true" : "false"); */
-		if (q->messages.empty() && q->idle_timestamp < too_old) {
-#if REPORT_JOB_START_AND_END
-			printf("FairQueue::purgeIdle time=%.2f thread_id=%d purge job %d, idle for %.2f sec\n",
-						 now/1000000., thread_id, q->job_id, (now - q->idle_timestamp) / 1000000.);
-#endif
-			delete q;
-			it = indexed_queues.erase(it);
-		} else {
-			it++;
-		}
-	}
+    for(auto & itt : user_to_job_queues){
+        auto user_queue = itt.second;
+        auto it = user_queue.begin();
+        while (it != user_queue.end()) {
+            MessageQueue *q = it->second;
+            /* printf("FairQueue::purgeIdle thread_id=%d job %d idle time %.6f, empty=%s\n",
+                        thread_id, q->job_id, (now - q->idle_timestamp) / 1000000.,
+                        q->messages.empty() ? "true" : "false"); */
+            if (q->messages.empty() && q->idle_timestamp < too_old) {
+    #if REPORT_JOB_START_AND_END
+                printf("FairQueue::purgeIdle time=%.2f thread_id=%d purge job %d, idle for %.2f sec\n",
+                            now/1000000., thread_id, q->job_id, (now - q->idle_timestamp) / 1000000.);
+    #endif
+                delete q;
+                it = user_queue.erase(it);
+            } else {
+                it++;
+            }
+        }
+    }
 
 }
 
