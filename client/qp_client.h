@@ -480,6 +480,9 @@ void CLIENT_QUEUEPAIR::Init_IB_Env(void)
 			}
 			context_ = ibv_open_device(dev_list_[i]);
 			if (!context_)	continue;
+            else{
+                break;
+            }
 		}
 		
 		if (!context_) {

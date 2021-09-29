@@ -1054,6 +1054,9 @@ void SERVER_QUEUEPAIR::Init_Server_IB_Env(int remote_buff_size)
 		if (!context_) {
 			continue;
 		}
+        else{
+            break;
+        }
 	}
 
 	assert(context_ != NULL);

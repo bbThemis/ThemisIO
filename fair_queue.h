@@ -270,7 +270,6 @@ private:
 
 	// all nonempty message queues
 	//std::vector<MessageQueue*> nonempty_queues;
-
     std::unordered_map<int, std::vector<MessageQueue*>> user_to_nonempty_queues;
 
 	// Used in chooseRandomNonemptyQueue(). This is filled with the

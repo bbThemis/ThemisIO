@@ -46,9 +46,7 @@ FairQueue::~FairQueue() {
 
 
 void FairQueue::putMessage(const IO_CMD_MSG *msg) {
-	int key = getKey(msg);
-
-    int user_key = job_info_lookup.getUserId(msg);
+	int user_key = job_info_lookup.getUserId(msg);
     int job_key = job_info_lookup.getSlurmJobId(msg);
 
 	MessageQueue *q;
@@ -73,18 +71,18 @@ void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 #endif
 
 	} else {
-		auto job_map_for_user = iqt->second;
-        auto it = job_map_for_user.find(job_key);
+		auto job_queue_map = iqt->second;
+        auto it = job_queue_map.find(job_key);
 
         bool size_fair = fairness_mode == SIZE_FAIR || fairness_mode == USER_SIZE_FAIR;
 		int weight = size_fair ? job_info_lookup.getNodeCount(msg) : 1;
         
-        if(it == job_map_for_user.end()){
+        if(it == job_queue_map.end()){
             q = new MessageQueue(job_key, job_key, user_key, getTime(), weight);  
-            job_map_for_user[job_key] = q;  
+            job_queue_map[job_key] = q;  
         }
         else{
-            q = job_map_for_user[job_key];
+            q = job_queue_map[job_key];
         }
 		was_empty = q->messages.empty();
 	}
@@ -92,7 +90,6 @@ void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 	q->add(msg);
 
 	if (was_empty) {
-		//nonempty_queues.push_back(q);
         user_to_nonempty_queues[user_key].push_back(q);
 	}
 }
@@ -181,6 +178,7 @@ bool FairQueue::getMessage(IO_CMD_MSG *msg) {
 		size_t last_idx = nonempty_queues.size() - 1;
 		nonempty_queues[q_idx] = nonempty_queues[last_idx];
 		nonempty_queues.resize(last_idx);
+        
         if(nonempty_queues.empty()){
             user_to_nonempty_queues.erase(user_key);
         }
