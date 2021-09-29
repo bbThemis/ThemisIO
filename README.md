@@ -8,6 +8,16 @@ ThemisIO can precisely allocate I/O resources to jobs so that every job gets at 
 ThemisIO can decrease the slowdown of real applications due to I/O interference by two to three orders of magnitude when using fair sharing polices compared to the first-in-first-out (FIFO) baseline.
 
 
+<img src="https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/test.size-fair.4v1.pdf" width="320">
+<!--- ![alt text](https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/test.size-fair.4v1.pdf =320x240 " Size-fair, 4-node job competing with 1-node job") --->
+
+<img src="https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/test.job-fair.4v1.pdf" width="320">
+<!--- ![alt text](https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/test.size-fair.4v1.pdf =320x240 " Job-fair, 4-node job competing with 1-node job") --->
+
+<img src="https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/test.user-fair.4v1.pdf" width="320">
+<!--- ![alt text](https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/test.size-fair.4v1.pdf =320x240 " User-fair, Two 2-node jobs competing with a 1-node job") --->
+
+## Build Instruction
 Compile server and wrapper.so, <br>
 `git clone https://github.com/bbThemis/ThemisIO`<br>
 `cd ThemisIO`<br>
