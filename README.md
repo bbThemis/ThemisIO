@@ -1,8 +1,8 @@
 # ThemisIO
 
 Compile server and wrapper.so, <br>
-`git clone https://github.com/bbThemis/themisio`<br>
-`cd themisio`<br>
+`git clone https://github.com/bbThemis/ThemisIO`<br>
+`cd ThemisIO`<br>
 `make`<br>
 `cd src/client`<br>
 `./compile.sh`<br>
@@ -11,12 +11,12 @@ Compile server and wrapper.so, <br>
 You need to revise the impi path in Makefile.<br>
 
 Run a server, <br>
-`cd themisio`<br>
+`cd ThemisIO`<br>
 `./server`<br>
 <br>
 Run on client side<br>
-`export MYFS_CONF="/full_path/themisio/myfs.param"`<br>
-`export LD_PRELOAD="/full_path/themisio/wrapper.so"`<br>
+`export MYFS_CONF="/full_path/ThemisIO/myfs.param"`<br>
+`export LD_PRELOAD="/full_path/ThemisIO/wrapper.so"`<br>
 <br>
 `ls -l /myfs`<br>
 `touch /myfs/a`<br>
