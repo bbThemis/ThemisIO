@@ -1,6 +1,12 @@
 # ThemisIO
 
-ThemisIO is an I/O library that supports sharing IO resources across multiple applications, using a variety of sharing policies.
+ThemisIO is a first of its kind software-defined I/O system for supercomputers. 
+It enables policy-driven I/O capacity sharing on supercomputers. 
+At its core, ThemisIO disassociates I/O control (i.e., I/O request processing order) from processing by incorporating job metadata such as user, job id, and job size (i.e., node count)
+ThemisIO can precisely balance the I/O cycles between applications via time slicing to enforce processing isolation, enabling a variety of fair sharing policies. 
+ThemisIO can precisely allocate I/O resources to jobs so that every job gets at least its fair share of the I/O capacity as defined by the sharing policy.
+ThemisIO can decrease the slowdown of real applications due to I/O interference by two to three orders of magnitude when using fair sharing polices compared to the first-in-first-out (FIFO) baseline.
+
 
 Compile server and wrapper.so, <br>
 `git clone https://github.com/bbThemis/ThemisIO`<br>
