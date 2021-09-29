@@ -1,5 +1,7 @@
 # ThemisIO
 
+ThemisIO is an I/O library that supports sharing IO resources across multiple applications, using a variety of sharing policies.
+
 Compile server and wrapper.so, <br>
 `git clone https://github.com/bbThemis/ThemisIO`<br>
 `cd ThemisIO`<br>
