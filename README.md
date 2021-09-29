@@ -15,11 +15,21 @@ ThemisIO can decrease the slowdown of real applications due to I/O interference 
 Fig.1 - Size-fair, 4-node job competing with 1-node job
 </p>
 
+<p align = "center">
 <img src="https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/test.job-fair.4v1.png" width="320">
 <!--- ![alt text](https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/test.size-fair.4v1.png =320x240 " Job-fair, 4-node job competing with 1-node job") --->
+</p>
+<p align = "center">
+Fig.2 - Job-fair, 4-node job competing with 1-node job
+</p>
 
+<p align = "center">
 <img src="https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/test.user-fair.4v1.png" width="320">
 <!--- ![alt text](https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/test.size-fair.4v1.png =320x240 " User-fair, Two 2-node jobs competing with a 1-node job") --->
+</p>
+<p align = "center">
+Fig.3 - User-fair, Two 2-node jobs competing with a 1-node job
+</p>
 
 ## Build Instruction
 Compile server and wrapper.so, <br>
