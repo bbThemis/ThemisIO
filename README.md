@@ -4,7 +4,7 @@ Compile server and wrapper.so, <br>
 `git clone https://github.com/bbThemis/TBD`<br>
 `cd TBD`<br>
 `make`<br>
-`cd client`<br>
+`cd src/client`<br>
 `./compile.sh`<br>
 <br>
 
