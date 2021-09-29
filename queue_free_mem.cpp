@@ -125,7 +125,7 @@ void* Func_thread_Free_Memory(void *pParam)	// a thread running to release all m
 				
 				for(idx=0; idx<PACKED_FREE_EX_POINTER_OP_SIZE; idx++)	{
 					idx_mod = (front_ex_p_Save + idx) & LEN_QUEUE_FREE_EX_POINTER_M1;
-					ncx_slab_free_locked(sp_ExtraPointers, CQueue_Free_Mem.pMemList_Ex_Pointer[idx_mod]);
+					if(CQueue_Free_Mem.pMemList_Ex_Pointer[idx_mod])	ncx_slab_free_locked(sp_ExtraPointers, CQueue_Free_Mem.pMemList_Ex_Pointer[idx_mod]);
 				}
 				
 				if (pthread_mutex_unlock(&(sp_ExtraPointers->mutex)) != 0) {
@@ -153,7 +153,7 @@ void* Func_thread_Free_Memory(void *pParam)	// a thread running to release all m
 				
 				for(idx=0; idx<PACKED_FREE_DIR_ENTRY_OP_SIZE; idx++)	{
 					idx_mod = (front_Dir_Entry_Save + idx) & LEN_QUEUE_FREE_DIR_ENTRY_M1;
-					ncx_slab_free_locked(sp_DirEntryHashTableBuff, CQueue_Free_Mem.pMemList_Dir_Entry[idx_mod]);
+					if(CQueue_Free_Mem.pMemList_Dir_Entry[idx_mod])	ncx_slab_free_locked(sp_DirEntryHashTableBuff, CQueue_Free_Mem.pMemList_Dir_Entry[idx_mod]);
 				}
 				
 				if (pthread_mutex_unlock(&(sp_DirEntryHashTableBuff->mutex)) != 0) {

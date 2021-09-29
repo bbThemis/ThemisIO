@@ -452,7 +452,7 @@ int CLIENT_QUEUEPAIR::Done_IB_PD_Init = 0;
 
 void CLIENT_QUEUEPAIR::Init_IB_Env(void)
 {
-	int ret;
+	int ret, Found_IB=0;
 	int nDevices;
 	struct ibv_device_attr device_attr;
 	struct timeval tm1, tm2;	// tm1.tv_sec
@@ -461,7 +461,6 @@ void CLIENT_QUEUEPAIR::Init_IB_Env(void)
 	pthread_mutex_lock(&process_lock);
 	
 	if(Done_IB_PD_Init == 0)	{
-//		gettimeofday(&tm1, NULL);
 		dev_list_ = ibv_get_device_list(&nDevices);
 		
 		if (!dev_list_) {
@@ -469,53 +468,37 @@ void CLIENT_QUEUEPAIR::Init_IB_Env(void)
 			fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_get_device_list (errno=%d).\n", __FILE__, __LINE__, errno_backup);
 			exit(1);
 		}
-//		gettimeofday(&tm2, NULL);
-//		t = 1000000 * (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec);
-//		printf("DBG> rank = %d ibv_get_device_list = %lld\n", mpi_rank, t);
 
-//		gettimeofday(&tm1, NULL);
 		for (int i = 0; i < nDevices; i++) {
 			if (!dev_list_[i]) {
 				continue;
 			}
 			context_ = ibv_open_device(dev_list_[i]);
 			if (!context_)	continue;
+
+			ret = ibv_query_device(context_, &device_attr);
+			ret = ibv_query_port(context_, 1, &port_attr_);
+			if (ret != 0 || port_attr_.lid == 0) {
+//				fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_query_port.\n", __FILE__, __LINE__);
+//				exit(1);
+				ibv_close_device(context_);
+				continue;
+			}
+
+			Found_IB = 1;
+			break;
 		}
 		
-		if (!context_) {
+		if (!Found_IB) {
 			fprintf(stderr, "Error occured at %s:L%d. Failure: No HCA can use.\n", __FILE__, __LINE__);
 			exit(1);
 		}
-//		gettimeofday(&tm2, NULL);
-//		t = 1000000 * (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec);
-//		printf("DBG> rank = %d t_ibv_open_device = %lld\n", mpi_rank, t);
-		
-//		gettimeofday(&tm1, NULL);
-		ret = ibv_query_device(context_, &device_attr);
-//		printf("max_qp = %d max_qp_wr = %d\n", device_attr.max_qp, device_attr.max_qp_wr);
-//		gettimeofday(&tm2, NULL);
-//		t = 1000000 * (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec);
-//		printf("DBG> rank = %d t_ibv_query_device = %lld\n", mpi_rank, t);
-		
-//		gettimeofday(&tm1, NULL);
-		ret = ibv_query_port(context_, 1, &port_attr_);
-		if (ret != 0 || port_attr_.lid == 0) {
-			fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_query_port.\n", __FILE__, __LINE__);
-			exit(1);
-		}
-//		gettimeofday(&tm2, NULL);
-//		t = 1000000 * (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec);
-//		printf("DBG> rank = %d t_ibv_query_port = %lld\n", mpi_rank, t);
-		
-//		gettimeofday(&tm1, NULL);
+
 		pd_ = ibv_alloc_pd(context_);
 		if (!pd_) {
 			fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_alloc_pd.\n", __FILE__, __LINE__);
 			exit(1);
 		}
-//		gettimeofday(&tm2, NULL);
-//		t = 1000000 * (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec);
-//		printf("DBG> rank = %d t_ibv_alloc_pd = %lld\n", mpi_rank, t);
 		Done_IB_PD_Init = 1;
 	}
 	pthread_mutex_unlock(&process_lock);
@@ -684,6 +667,7 @@ struct ibv_mr* CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote(void* buf, size_
 	struct ibv_mr* mr_buf = ibv_reg_mr(pd_, buf, len, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
 	if (mr_buf == 0) {
 		fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_reg_mr on RW_Local_Remote.\n", __FILE__, __LINE__);
+		perror("ibv_reg_mr().");
 		exit(1);
 	}
 	

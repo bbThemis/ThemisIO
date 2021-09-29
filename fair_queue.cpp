@@ -29,6 +29,10 @@ FairQueue::FairQueue(FairnessMode mode_, int mpi_rank_, int thread_id_,
 	std::random_device rdev;
 	random_engine.seed(rdev());
 	start_time_usec = getTime();
+	weight_sum = 0;
+	nJob = 0;
+	IdxActiveJob = -1;
+//	it_ActiveJob = NULL;
 	
 	decision_log.changeThreadCount(1);
 }
@@ -42,7 +46,6 @@ FairQueue::~FairQueue() {
 		delete it->second;
 	}
 }
-
 
 void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 	int key = getKey(msg);
@@ -78,6 +81,98 @@ void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 	}
 }
 
+void FairQueue::SetFirstJobActive(void)
+{
+	IdxActiveJob = 0;
+	
+	MessageQueue *q = all_queues[IdxActiveJob];
+	q->T_Cycle_Start = (long int)getTime();
+}
+
+void FairQueue::SetNextJobActive(void)
+{
+	if(indexed_queues.empty())	{
+		IdxActiveJob = -1;
+		return;
+	}
+
+	IdxActiveJob++;
+
+	if(IdxActiveJob >= nJob)	{	// reaching the end. Rewind to the beginning
+		IdxActiveJob = 0;
+	}
+//	MessageQueue *q = all_queues[IdxActiveJob];
+//	if(q->T_Balance > 0)	q->T_Cycle_Start = (long int)getTime();
+}
+
+void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg) {
+	int key = getKey(msg);
+	MessageQueue *q;
+	static bool first_output = true;
+
+	message_count++;
+	auto iqt = indexed_queues.find(key);
+	if (iqt == indexed_queues.end()) {
+		// create new message queue
+		int weight = fairness_mode == SIZE_FAIR ? job_info_lookup.getNodeCount(msg) : 1;
+		int job_id = job_info_lookup.getSlurmJobId(msg);
+		int user_id = job_info_lookup.getUserId(msg);
+		q = new MessageQueue(key, job_id, user_id, getTime(), weight);
+		indexed_queues[key] = q;
+		all_queues.push_back(q);
+
+		nJob++;
+		// Start the first job, set it as the active job. 
+		if(nJob == 1)	{
+			SetFirstJobActive();
+		}
+
+		// Need to update the reload time length for all jobs
+		weight_sum += weight;
+
+		for(int i=0; i<nJob; i++)	{
+			MessageQueue *q_loc = all_queues[i];
+			q_loc->dT_Reload = TIME_PER_CYCLE_MICROSEC * (q_loc->weight) / weight_sum;
+			q_loc->T_Balance = q_loc->dT_Reload;	// charge the time balance for a new job
+		}
+
+#if REPORT_JOB_START_AND_END
+		printf("FairQueue::putMessage_TimeSharing.newqueue time=%.2f threadid=%d key=%d jobid=%d userid=%d nodecount=%d weight=%d\n", 
+					 getTime()/1000000., thread_id, key, job_id, user_id, job_info_lookup.getNodeCount(msg), weight);
+#endif
+
+	} else {
+		q = iqt->second;
+	}
+
+	q->add(msg);
+
+	if( (msg->op & 0xFFFFFF00) != IO_OP_MAGIC)	{
+		printf("Stop here. Wrong msg!!!\n");
+	}
+
+//	printf("DBG> Put jobid %d OP %x\n", q->job_id, msg->op & 0xFF);
+}
+
+void FairQueue::reload(void) {
+	if(indexed_queues.empty())	{
+		IdxActiveJob = -1;
+		return;
+	}
+
+	IdxActiveJob = -1;
+
+	for (int i=0; i<all_queues.size(); i++) {	// loop all jobs and reload
+		MessageQueue *q = all_queues[i];
+		q->T_Balance += q->dT_Reload;	// charge the time balance for a new job
+		if( (q->T_Balance > 0) && (IdxActiveJob == (-1)) )	{	// Find the first job with positive balance
+			IdxActiveJob = i;
+			q->T_Cycle_Start = getTime();
+			break;
+		}
+	}
+
+}
 
 bool FairQueue::isEmpty() {
 	return nonempty_queues.empty();
@@ -143,6 +238,62 @@ bool FairQueue::getMessage(IO_CMD_MSG *msg) {
 	return true;
 }
 
+bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg) {
+	long int t_Now;
+
+	if (nJob == 0) return false;
+
+//	assert( (IdxActiveJob>=0) && (IdxActiveJob <nJob) );
+	MessageQueue *q = all_queues[IdxActiveJob];
+
+	t_Now = (long int)getTime();
+	q->T_Balance -= (t_Now - q->T_Cycle_Start);
+
+	if(q->T_Balance <= 0)	{
+		int nDone = 1;
+
+		while(1)	{
+			// Make the next job active
+			SetNextJobActive();
+			q = all_queues[IdxActiveJob];
+
+			if(q->T_Balance <= 0)	nDone++;
+			else	{
+				q->T_Cycle_Start = t_Now;
+				break;
+			}
+
+			if(nDone >= nJob)	{	// All jobs are done. Need to restart a new cycle. 
+				IdxActiveJob = -1;
+				while( IdxActiveJob == (-1) )	{	// Might need to recharge multiple times
+					reload();
+				}
+				break;
+			}
+		}
+//		assert( (IdxActiveJob>=0) && (IdxActiveJob <nJob) );
+		q = all_queues[IdxActiveJob];
+	}
+	if (q->messages.empty()) {
+//		q->idle_timestamp = t_Now;
+		return false;
+	}
+
+	q->remove(msg);
+	if( (msg->op & 0xFFFFFF00) != IO_OP_MAGIC)	{
+		printf("Stop here.\n");
+	}
+//	printf("DBG> %d %x\n", q->job_id, msg->op & 0xFF);
+
+	message_count--;
+	
+	if (q->messages.empty()) {
+		// mark this queue idle and move it off the nonempty list
+		q->idle_timestamp = t_Now;
+	}
+
+	return true;
+}
 
 void FairQueue::housekeeping() {
 
@@ -209,6 +360,34 @@ void FairQueue::reportDecisionLog() {
 
 }
 
+/*
+// Scans all message queues and removes those which have been idle for too long.
+void FairQueue::purgeIdle() {
+	long now = getTime();
+
+	// printf("%.6f purgeIdle thread %d\n", getElapsed(), thread_id);
+	long unsigned too_old = now - max_idle_sec * 1000000;
+
+	auto it = indexed_queues.begin();
+	while (it != indexed_queues.end()) {
+		MessageQueue *q = it->second;
+		// printf("FairQueue::purgeIdle thread_id=%d job %d idle time %.6f, empty=%s\n",
+		//			 thread_id, q->job_id, (now - q->idle_timestamp) / 1000000.,
+		//			 q->messages.empty() ? "true" : "false");
+		if (q->messages.empty() && q->idle_timestamp < too_old) {
+#if REPORT_JOB_START_AND_END
+			printf("FairQueue::purgeIdle time=%.2f thread_id=%d purge job %d, idle for %.2f sec\n",
+						 now/1000000., thread_id, q->job_id, (now - q->idle_timestamp) / 1000000.);
+#endif
+			delete q;
+			it = indexed_queues.erase(it);
+		} else {
+			it++;
+		}
+	}
+
+}
+*/
 
 // Scans all message queues and removes those which have been idle for too long.
 void FairQueue::purgeIdle() {
@@ -224,14 +403,44 @@ void FairQueue::purgeIdle() {
 					 thread_id, q->job_id, (now - q->idle_timestamp) / 1000000.,
 					 q->messages.empty() ? "true" : "false"); */
 		if (q->messages.empty() && q->idle_timestamp < too_old) {
+			weight_sum -= q->weight;
+
+			for(int i=0; i<nJob; i++)	{
+				if(q == all_queues[i])	{
+					if(i != (nJob - 1) )	{	// not the last element, then move the last element to this spot
+						all_queues[i] = all_queues[nJob - 1];
+					}
+					break;
+				}
+			}
+
+			nJob--;
+
 #if REPORT_JOB_START_AND_END
 			printf("FairQueue::purgeIdle time=%.2f thread_id=%d purge job %d, idle for %.2f sec\n",
 						 now/1000000., thread_id, q->job_id, (now - q->idle_timestamp) / 1000000.);
 #endif
+			if(nJob > 0)	{
+				if(IdxActiveJob == nJob)	{	// reaching the end. Rewind to the beginning
+					IdxActiveJob = 0;
+				}
+			}
+			else if(nJob == 0)	{
+				IdxActiveJob = -1;
+			}
+
 			delete q;
 			it = indexed_queues.erase(it);
 		} else {
 			it++;
+		}
+	}
+
+
+	if(weight_sum > 0)	{
+		for(int i=0; i<nJob; i++)	{
+			MessageQueue *q = all_queues[i];
+			q->dT_Reload = TIME_PER_CYCLE_MICROSEC * (q->weight) / weight_sum;
 		}
 	}
 

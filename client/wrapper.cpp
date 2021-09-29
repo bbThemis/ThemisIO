@@ -262,6 +262,7 @@ long int FirstBlockSize=0;
 static char szFunc_List[NHOOK][MAX_LEN_FUNC_NAME]={"my_open", "my_close_nocancel", "my_read", "my_write", "my_lseek", "my_unlink", "my_fxstat", "my_xstat"};	// C 
 static char szOrgFunc_List[NHOOK][MAX_LEN_FUNC_NAME]={"open64", "__close_nocancel", "__read", "__write", "lseek64", "unlink", "__fxstat", "__xstat64"};
 
+extern "C" int my_fxstat(int vers, int fd, struct stat *buf);
 
 typedef int (*org_system)(const char *command);
 static org_system real_system=NULL;
@@ -418,8 +419,15 @@ org_realpath real_realpath=NULL;
 typedef int (*org_rename)(const char *OldName, const char *NewName);
 org_rename real_rename=NULL;
 
+/*
+double t_MPI_Init, t_MPI_Finalize;
+
+typedef int (*org_MPI_Init)(int *argc, char ***argv);
+org_MPI_Init real_MPI_Init=NULL;
+
 typedef int (*org_MPI_Finalize)(void);
 org_MPI_Finalize real_MPI_Finalize=NULL;
+*/
 
 typedef int (*org_flock)(int fd, int operation);
 org_flock real_flock=NULL;
@@ -547,9 +555,9 @@ inline void Standardlize_Path(const char *szInput, char *szFullPath)
 	if( szInput[0] == '/')	{	// absolute path
 		strcpy(szFullPath, szInput);
 	}
-	else if( szInput[0] == '.')	{
-		strcpy(szFullPath, szCurDir);
-	}
+//	else if( szInput[0] == '.')	{
+//		strcpy(szFullPath, szCurDir);
+//	}
 	else	{	// relative path
 		sprintf(szFullPath, "%s/%s", szCurDir, szInput);
 	}
@@ -653,7 +661,6 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 		va_end (arg);
 		two_args=0;
 	}
-
 	Standardlize_Path(pathname, szFullPath);
 	
 	if(strncmp(szFullPath, MYFS_ROOT_DIR, 5) == 0)	{
@@ -752,6 +759,7 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 			strcpy(FileList[idx_fd].szFileName, szFullPath);
 //			printf("DBG> File %s idx_fs = %d\n", szFullPath, idx_fs);
 //			printf("DBG> File %s inode = %lx size = %ld\n", szFullPath, FileList[idx_fd].st_ino, FileList[idx_fd].FileSize);
+
 			return (idx_fd+FD_FILE_BASE);
 //		}
 	}
@@ -778,8 +786,8 @@ extern "C" int system(const char *command)
 
 	return real_system(command);
 }
-//extern "C" int __libc_system(const char *command) __attribute__ ( (alias ("system")) );
-
+extern "C" int __libc_system(const char *command) __attribute__ ( (alias ("system")) );
+*/
 typedef int (*org_mkostemp)(char *name_template, int flags);
 org_mkostemp real_mkostemp=NULL;
 
@@ -799,7 +807,7 @@ extern "C" int mkostemp(char *name_template, int flags)
 	return real_mkostemp(name_template, flags);
 }
 extern "C" int mkostemp64(char *name_template, int flags) __attribute__ ( (alias ("mkostemp")) );
-*/
+
 
 extern "C" int close(int fd)
 {
@@ -1434,6 +1442,7 @@ extern "C" off_t my_lseek(int fd, off_t offset, int whence)
 			new_offset = FileList[idx_fd].offset + offset;
 			break;
 		case SEEK_END:	// There is NO reliable ways to accurately estimate the current file size. Have to execute it now!!!
+/*
 			pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 			pResult = (RW_FUNC_RETURN *)rem_buff;
 			pResult->nDataSize = 0;	// init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data. 
@@ -1446,11 +1455,15 @@ extern "C" off_t my_lseek(int fd, off_t offset, int whence)
 //			pIO_Cmd->nTokenNeeded = 0;
 			pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_SEEK;
 			Send_IO_Request(idx_fs);
-			
-			if(pResult->ret_value < 0)	errno = pResult->myerrno;
-			else	FileList[idx_fd].offset = pResult->ret_value;
-			return pResult->ret_value;
-//			break;
+*/
+			struct stat fstat;
+			ret = my_fxstat(1, fd, &fstat);		
+			if(ret != 0)	return (-1);
+			else	{
+				FileList[idx_fd].offset = fstat.st_size + offset;
+				return (FileList[idx_fd].offset);
+			}
+			break;
 		default:
 			printf("ERROR> Unknown parameter for lseek(). (%d, %td, %d)\n", fd, offset, whence);
 			errno = EINVAL;
@@ -1472,7 +1485,7 @@ extern "C" off_t my_lseek(int fd, off_t offset, int whence)
 	return real_lseek(fd, offset, whence);
 }
 
-int dup2(int oldfd, int newfd)
+extern "C" int dup2(int oldfd, int newfd)
 {
 	int i, fd_Directed, idx_io_redirect, pid;
 	unsigned long long fn_hash;
@@ -1544,7 +1557,7 @@ int dup2(int oldfd, int newfd)
 	}
 	else	return real_dup2(oldfd, newfd);
 }
-extern int __dup2(int oldfd, int newfd) __attribute__ ( (alias ("dup2")) );
+extern "C" int __dup2(int oldfd, int newfd) __attribute__ ( (alias ("dup2")) );
 
 extern "C" int my_unlink(const char *pathname)
 {
@@ -1793,7 +1806,7 @@ extern "C" int __fxstatat(int ver, int dirfd, const char *filename, struct stat 
 	else	return real_fxstatat(ver, dirfd, filename, stat_buf, flags);
 }
 extern "C" int __fxstaTat64(int ver, int dirfd, const char *filename, struct stat *stat_buf, int flags) __attribute__ ( (alias ("__fxstatat")) );
-
+/*
 int rename(const char *OldName, const char *NewName)
 {
 	IO_CMD_MSG *pIO_Cmd;
@@ -1810,7 +1823,7 @@ int rename(const char *OldName, const char *NewName)
 
 	Standardlize_Path(OldName, szFullPathOld);
 	Standardlize_Path(NewName, szFullPathNew);
-/*	
+	
 	if(strncmp(szFullPath, MYFS_ROOT_DIR, 5) == 0)	{
 		if(loc_buff == NULL)	Allocate_loc_rem_buff();
 
@@ -1841,9 +1854,175 @@ int rename(const char *OldName, const char *NewName)
 
 		return (DIR*)pDir;
 	}
-*/
+
 	return real_rename(OldName, NewName);
 }
+*/
+
+#define OUT_OF_SPACE	(-111)
+
+ssize_t read_all(int fd, void *buf, size_t count);
+ssize_t write_all(int fd, const void *buf, size_t count);
+
+ssize_t read_all(int fd, void *buf, size_t count)
+{
+	ssize_t ret, nBytes=0;
+	char *p_buf=(char*)buf;
+
+	if(fd >= FD_FILE_BASE)	return my_read(fd, buf, count);	// file on /myfs
+
+	while (count != 0 && (ret = read(fd, p_buf, count)) != 0) {
+		if (ret == -1) {
+			if (errno == EINTR)
+				continue;
+			perror ("read");
+			break;
+		}
+		nBytes += ret;
+		count -= ret;
+		p_buf += ret;
+	}
+	return nBytes;
+}
+
+ssize_t write_all(int fd, const void *buf, size_t count)
+{
+	ssize_t ret, nBytes=0;
+	char *p_buf=(char*)buf;
+
+	if(fd >= FD_FILE_BASE)	return my_write(fd, buf, count);	// file on /myfs
+
+	while (count != 0 && (ret = write(fd, p_buf, count)) != 0) {
+		if (ret == -1) {
+			if (errno == EINTR)	{
+				continue;
+			}
+			else if (errno == ENOSPC)	{	// out of space. Quit immediately!!!
+				return OUT_OF_SPACE;
+			}
+
+			perror ("write");
+			break;
+		}
+		nBytes += ret;
+		count -= ret;
+		p_buf += ret;
+	}
+	return nBytes;
+}
+
+#undef OUT_OF_SPACE
+
+
+extern "C" int rename(const char *OldName, const char *NewName)
+{
+	IO_CMD_MSG *pIO_Cmd;
+	RW_FUNC_RETURN *pResult;
+	int ret, idx_fs=0, i, ret_stat_old, ret_stat_new;
+	char szFullPathOld[MAX_FILE_NAME_LEN], szFullPathNew[MAX_FILE_NAME_LEN];
+	struct stat fstat_old, fstat_new;
+	int Is_Dir_OldFile, Is_Dir_NewFile;
+	int Is_OldFile_on_Myfs, Is_NewFile_on_Myfs;
+	size_t nChunk, nBytesLeft;
+	unsigned char *szFileBuff=NULL;
+//	unsigned char szFileBuff[FILE_STRIPE_SIZE];
+	int fd_Old, fd_New, nBytesRead, nByteWritten;
+
+	if(real_rename==NULL)	{
+		real_rename = (org_rename)dlsym(RTLD_NEXT, "rename");
+	}
+	if(Inited == 0) {       // init() not finished yet
+		return real_rename(OldName, NewName);
+	}
+
+	Standardlize_Path(OldName, szFullPathOld);
+	Standardlize_Path(NewName, szFullPathNew);
+
+	Is_OldFile_on_Myfs = (strncmp(szFullPathOld, MYFS_ROOT_DIR, 5) == 0) ? (1) : (0);
+	Is_NewFile_on_Myfs = (strncmp(szFullPathNew, MYFS_ROOT_DIR, 5) == 0) ? (1) : (0);
+	
+	if( (Is_OldFile_on_Myfs == 0) && (Is_NewFile_on_Myfs == 0) )	{
+		return real_rename(szFullPathOld, szFullPathNew);
+	}
+
+	ret_stat_old = stat(szFullPathOld, &fstat_old);
+	if(ret_stat_old != 0)	{	// does not exist
+		return -1;	// error to get the src file
+	}
+	Is_Dir_OldFile = ( ( fstat_old.st_mode & S_IFMT) == S_IFDIR ) ? (1) : (0);
+
+	if(Is_Dir_OldFile & Is_OldFile_on_Myfs)	{
+		printf("Error> rename dir on /myfs is not implemented yet.\n");
+		return (-1);
+	}
+
+	ret_stat_new = stat(szFullPathNew, &fstat_new);
+
+	if(ret_stat_new == 0)	{	// destination file exists.
+		Is_Dir_NewFile = ( (fstat_new.st_mode & S_IFMT) == S_IFDIR ) ? (1) : (0);
+		if(Is_Dir_NewFile)	{
+			errno = EISDIR;
+			return (-1);
+		}
+		else	{
+			unlink(szFullPathNew);	// remove the destination file if it exists.
+		}
+	}
+
+	fd_Old = my_open(szFullPathOld, O_RDONLY);
+	if(fd_Old < 0)	{
+		printf("Error> Fail to open source file %s\n", szFullPathOld);
+		return (-1);
+	}
+
+	fd_New = my_open(szFullPathNew, O_WRONLY | O_CREAT | O_TRUNC, fstat_old.st_mode);
+	if(fd_New < 0)	{
+		close(fd_Old);
+		printf("Error> Fail to open destination file %s\n", szFullPathNew);
+		return (-1);
+	}
+
+	szFileBuff = (unsigned char*)malloc(FILE_STRIPE_SIZE);
+	assert(szFileBuff != NULL);
+
+	if(fstat_old.st_size > FILE_STRIPE_SIZE)	{
+		nChunk = fstat_old.st_size / FILE_STRIPE_SIZE;
+		nBytesLeft = fstat_old.st_size % FILE_STRIPE_SIZE;
+
+		for(i=0; i<nChunk; i++)	{
+			nBytesRead = read_all(fd_Old, szFileBuff, FILE_STRIPE_SIZE);
+			if(nBytesRead != FILE_STRIPE_SIZE)	{
+				printf("Error> nBytesRead(%d) != CHUNK_SIZE(%d) during reading file %s\n", nBytesRead, FILE_STRIPE_SIZE, szFullPathOld);
+			}
+			nByteWritten = write_all(fd_New, szFileBuff, nBytesRead);
+			if(nByteWritten != nBytesRead)	{
+				printf("Error> nByteWritten(%d) != nBytesRead(%d) during reading file %s\n", nByteWritten, nBytesRead, szFullPathOld);
+			}
+		}
+	}
+	else	{
+		nBytesLeft = fstat_old.st_size;
+	}
+
+	nBytesRead = read_all(fd_Old, szFileBuff, nBytesLeft);
+	if(nBytesRead != nBytesLeft)	{
+		printf("Error> nBytesRead(%d) != nBytesLeft(%d) during reading file %s\n", nBytesRead, nBytesLeft, szFullPathOld);
+	}
+	nByteWritten = write_all(fd_New, szFileBuff, nBytesRead);
+	if(nByteWritten != nBytesRead)	{
+		printf("Error> nByteWritten(%d) != nBytesRead(%d) during reading file %s\n", nByteWritten, nBytesRead, szFullPathOld);
+	}
+
+	free(szFileBuff);
+
+	close(fd_Old);
+	close(fd_New);
+
+	unlink(szFullPathOld);	// Remove the old file after finish writing the new file. 
+
+	return 0;
+}
+
 //int renameat(int olddirfd, const char *oldpath,int newdirfd, const char *newpath);
 
 extern "C" DIR *opendir(const char *szDirName)
@@ -2731,7 +2910,7 @@ extern "C" int futimens(int fd, const struct timespec times[2])
 	}
 }
 
-int utimensat(int dirfd, const char *pathname, const struct timespec times[2], int flag)	// NOT finished !!!!!!
+extern "C" int utimensat(int dirfd, const char *pathname, const struct timespec times[2], int flag)	// NOT finished !!!!!!
 {
 	IO_CMD_MSG *pIO_Cmd;
 	RW_FUNC_RETURN *pResult;
@@ -2810,7 +2989,7 @@ int utimensat(int dirfd, const char *pathname, const struct timespec times[2], i
 	return ret;
 }
 
-int utimes(const char *pathname, const struct timeval times[2])
+extern "C" int utimes(const char *pathname, const struct timeval times[2])
 {
 	IO_CMD_MSG *pIO_Cmd;
 	RW_FUNC_RETURN *pResult;
@@ -2882,7 +3061,7 @@ int utimes(const char *pathname, const struct timeval times[2])
 	return real_utimes(pathname, times);
 }
 
-int utime(const char *pathname, const struct utimbuf *times)
+extern "C" int utime(const char *pathname, const struct utimbuf *times)
 {
 	IO_CMD_MSG *pIO_Cmd;
 	RW_FUNC_RETURN *pResult;
@@ -3043,7 +3222,7 @@ extern "C" int isatty(int fd)
 extern "C" int __isatty(int fd) __attribute__ ( (alias ("isatty")) );
 
 
-int mkdir(const char *pathname, mode_t mode)
+extern "C" int mkdir(const char *pathname, mode_t mode)
 {
 	char szFullPath[MAX_FILE_NAME_LEN];
 	IO_CMD_MSG *pIO_Cmd;
@@ -3103,7 +3282,7 @@ int mkdir(const char *pathname, mode_t mode)
 	return real_mkdir(pathname, mode);
 }
 
-int mkdirat(int dirfd, const char *pathname, mode_t mode)
+extern "C" int mkdirat(int dirfd, const char *pathname, mode_t mode)
 {
 	char szFullPath[MAX_FILE_NAME_LEN];
 
@@ -3622,6 +3801,20 @@ extern "C" char * realpath(const char *pathname, char *resolved_path)
 	return real_realpath(pathname, resolved_path);
 
 }
+/*
+extern "C" int MPI_Init(int *argc, char ***argv)
+{
+        if(real_MPI_Init==NULL)     {
+                real_MPI_Init = (org_MPI_Init)dlsym(RTLD_NEXT, "MPI_Init");
+                assert(real_MPI_Init != NULL);
+        }
+
+	int ret;
+	ret = real_MPI_Init(argc, argv);
+	struct timeval t;
+	gettimeofday(&t, 0);
+	t_MPI_Init = t.tv_sec + 0.000001 * t.tv_usec;
+}
 
 extern "C" int MPI_Finalize(void)
 {
@@ -3633,9 +3826,18 @@ extern "C" int MPI_Finalize(void)
 //	printf("DBG> In MPI_Finalize().\n");
 	// You can push all cached IO requests to server here!!!
 
+	struct timeval t;
+	gettimeofday(&t, 0);
+	t_MPI_Finalize = t.tv_sec + 0.000001 * t.tv_usec;
+	if(mpi_rank == 0)	{
+		char szMsg[128];
+		sprintf(szMsg, "DBG> Time = %6.2lf\n", t_MPI_Finalize - t_MPI_Init);
+		write(STDERR_FILENO, szMsg, strlen(szMsg));
+		fsync(STDERR_FILENO);
+	}
 	return real_MPI_Finalize();
 }
-
+*/
 extern "C" int flock(int fd, int operation)
 {
 	if(real_flock==NULL)	{
@@ -3920,7 +4122,7 @@ void Update_CWD(void)
 	}
 }
 
-char *getcwd(char *buf, size_t size)
+extern "C" char *getcwd(char *buf, size_t size)
 {
         if(real_getcwd == NULL) {
                 real_getcwd = (org_getcwd)dlsym(RTLD_NEXT, "getcwd");
@@ -4575,6 +4777,10 @@ __attribute__((constructor)) void Init_FS_Client()
 //	fflush(stdout);
 
 	Get_Exe_Name(szExeName);
+	if( (strstr(szExeName, "ssh")) || (strstr(szExeName, "pmi_proxy")) )	{
+		return;
+	}
+
 	Init_Client();
 
 //	if(p_sigaction==NULL)	p_sigaction = (org_sigaction)dlsym(RTLD_NEXT,"sigaction");
