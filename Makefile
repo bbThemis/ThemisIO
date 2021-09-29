@@ -1,10 +1,10 @@
 CXX=g++
-OPT=-O2
+OPT=-O2 -g
 # OPT=
-CXXFLAGS=-march=skylake-avx512 -g -I/opt/intel/compilers_and_libraries_2018.6.288/linux/mpi/intel64/include -DNCX_PTR_SIZE=8 -pipe -DLOG_LEVEL=4  -DPAGE_MERGE
-OBJS=put_get_server.o qp.o dict.o xxhash.o io_queue.o myfs.o io_ops.o buddy.o ncx_slab.o corebinding.o unique_thread.o queue_free_mem.o fair_queue.o
+CXXFLAGS=-Iinclude/ -march=skylake-avx512 -g -I/opt/intel/compilers_and_libraries_2018.6.288/linux/mpi/intel64/include -DNCX_PTR_SIZE=8 -pipe -DLOG_LEVEL=4  -DPAGE_MERGE
+OBJS=obj/put_get_server.o obj/qp.o obj/dict.o obj/xxhash.o obj/io_queue.o obj/myfs.o obj/io_ops.o obj/buddy.o obj/ncx_slab.o obj/corebinding.o obj/unique_thread.o obj/queue_free_mem.o obj/fair_queue.o
 #HEADERS=dict.h qp_common.h qp.h io_queue.h utility.h xxhash.h list.h buddy.h myfs_common.h myfs.h io_ops_common.h io_ops.h ncx_slab.h ncx_core.h ncx_log.h client/qp_client.h
-HEADERS=dict.h qp_common.h qp.h io_queue.h utility.h xxhash.h list.h buddy.h  myfs.h io_ops_common.h io_ops.h corebinding.h unique_thread.h ncx_slab.h ncx_core.h ncx_log.h queue_free_mem.h fixed_mem_allocator.h fair_queue.h
+HEADERS=include/dict.h include/qp_common.h include/qp.h include/io_queue.h include/utility.h include/xxhash.h include/list.h include/buddy.h include/myfs.h include/io_ops_common.h include/io_ops.h include/corebinding.h include/unique_thread.h include/ncx_slab.h include/ncx_core.h include/ncx_log.h include/queue_free_mem.h include/fixed_mem_allocator.h include/fair_queue.h
 RM=rm -rf
 
 # in cmd of windows
@@ -13,53 +13,53 @@ ifeq ($(SHELL),sh.exe)
 endif
 
 #all: server fsclient
-all: server iops_stat_mpi
+all: server
 
-iops_stat_mpi:
-	mpicc -g -O0 -o tests/iops_stat_mpi tests/iops_stat_mpi.c
+#iops_stat_mpi:
+#	mpicc -g -O0 -o tests/iops_stat_mpi tests/iops_stat_mpi.c
 
 server: $(OBJS)
-	$(CXX) -O2 $(CXXFLAGS) -g -o $@ put_get_server.o qp.o io_queue.o fair_queue.o buddy.o myfs.o io_ops.o corebinding.o unique_thread.o dict.o xxhash.o ncx_slab.o queue_free_mem.o -libverbs -lpthread -lrt -Wunused-variable -L/opt/intel/compilers_and_libraries_2018.6.288/linux/mpi/intel64/lib/release_mt -L/opt/intel/compilers_and_libraries_2018.6.288/linux/mpi/intel64/lib -lmpicxx -lmpifort -lmpi -ldl
+	$(CXX) -O2 $(CXXFLAGS) -g -o $@ obj/put_get_server.o obj/qp.o obj/io_queue.o obj/fair_queue.o obj/buddy.o obj/myfs.o obj/io_ops.o obj/corebinding.o obj/unique_thread.o obj/dict.o obj/xxhash.o obj/ncx_slab.o obj/queue_free_mem.o -libverbs -lpthread -lrt -Wunused-variable -L/opt/intel/compilers_and_libraries_2018.6.288/linux/mpi/intel64/lib/release_mt -L/opt/intel/compilers_and_libraries_2018.6.288/linux/mpi/intel64/lib -lmpicxx -lmpifort -lmpi -ldl
 #	$(CXX) $(CXXFLAGS) -o $@ put_get_server.o io_queue.o dict.o xxhash.o -libverbs -lpthread -lrt -Wunused-variable -L/opt/intel/compilers_and_libraries_2020.4.304/linux/mpi/intel64/lib/release -L/opt/intel/compilers_and_libraries_2020.4.304/linux/mpi/intel64/lib -lmpicxx -lmpifort -lmpi -ldl
 
 #fsclient: $(OBJS)
 #	$(CXX) $(CXXFLAGS) -o $@ put_get_client.o dict.o xxhash.o -libverbs -lpthread -lrt
 
-put_get_server.o: put_get_server.cpp $(HEADERS)
-	$(CXX) -O0 $(CXXFLAGS) -c $<
+obj/put_get_server.o: src/put_get_server.cpp $(HEADERS)
+	$(CXX) -O0 $(CXXFLAGS) -c -o obj/put_get_server.o $<
 
-qp.o: qp.cpp $(HEADERS)
-	$(CXX) $(OPT) $(CXXFLAGS) -c $<
+obj/qp.o: src/qp.cpp $(HEADERS)
+	$(CXX) $(OPT) $(CXXFLAGS) -c -o obj/qp.o $<
 
-dict.o: dict.cpp $(HEADERS)
-	$(CXX) $(OPT) $(CXXFLAGS) -c $<
+obj/dict.o: src/dict.cpp $(HEADERS)
+	$(CXX) $(OPT) $(CXXFLAGS) -c -o obj/dict.o $<
 
-xxhash.o: xxhash.cpp $(HEADERS)
-	$(CXX) $(OPT) $(CXXFLAGS) -c $<
+obj/xxhash.o: src/xxhash.cpp $(HEADERS)
+	$(CXX) $(OPT) $(CXXFLAGS) -c -o obj/xxhash.o $<
 
-io_queue.o: io_queue.cpp $(HEADERS)
-	$(CXX) -g -O0 -c $<
+obj/io_queue.o: src/io_queue.cpp $(HEADERS)
+	$(CXX) -Iinclude/ -g -O0 -c -o obj/io_queue.o $<
 
-fair_queue.o: fair_queue.cpp $(HEADERS)
-	$(CXX) $(OPT) $(CXXFLAGS) -c $<
+obj/fair_queue.o: src/fair_queue.cpp $(HEADERS)
+	$(CXX) $(OPT) $(CXXFLAGS) -c -o obj/fair_queue.o  $<
 
-corebinding.o: corebinding.cpp $(HEADERS)
-	$(CXX) $(OPT) $(CXXFLAGS) -c $<
-unique_thread.o: unique_thread.cpp $(HEADERS)
-	$(CXX) $(OPT) $(CXXFLAGS) -c $<
+obj/corebinding.o: src/corebinding.cpp $(HEADERS)
+	$(CXX) $(OPT) $(CXXFLAGS) -c -o obj/corebinding.o $<
+obj/unique_thread.o: src/unique_thread.cpp $(HEADERS)
+	$(CXX) $(OPT) $(CXXFLAGS) -c -o obj/unique_thread.o $<
 
-buddy.o: buddy.cpp $(HEADERS)
-	$(CXX) $(OPT) $(CXXFLAGS) -c $<
-myfs.o: myfs.cpp $(HEADERS)
-	$(CXX) $(OPT) $(CXXFLAGS) -c $<
+obj/buddy.o: src/buddy.cpp $(HEADERS)
+	$(CXX) $(OPT) $(CXXFLAGS) -c -o obj/buddy.o $<
+obj/myfs.o: src/myfs.cpp $(HEADERS)
+	$(CXX) $(OPT) $(CXXFLAGS) -c -o obj/myfs.o $<
 
-io_ops.o: io_ops.cpp $(HEADERS)
-	$(CXX) -O0 $(CXXFLAGS) -c $<
+obj/io_ops.o: src/io_ops.cpp $(HEADERS)
+	$(CXX) -O0 $(CXXFLAGS) -c -o obj/io_ops.o $<
 
-ncx_slab.o: ncx_slab.cpp $(HEADERS)
-	$(CXX) $(OPT) $(CXXFLAGS) -c $<
-queue_free_mem.o: queue_free_mem.cpp $(HEADERS)
-	$(CXX) $(OPT) $(CXXFLAGS) -c $<
+obj/ncx_slab.o: src/ncx_slab.cpp $(HEADERS)
+	$(CXX) $(OPT) $(CXXFLAGS) -c -o obj/ncx_slab.o $<
+obj/queue_free_mem.o: src/queue_free_mem.cpp $(HEADERS)
+	$(CXX) $(OPT) $(CXXFLAGS) -c -o obj/queue_free_mem.o $<
 
 #put_get_client.o: client/put_get_client.cpp $(HEADERS)
 #	$(CXX) $(CXXFLAGS) -c $<
@@ -69,5 +69,5 @@ queue_free_mem.o: queue_free_mem.cpp $(HEADERS)
 #	dot bdgraph.dot -Tpng > bd.png
 
 clean:
-	$(RM) *.o server
+	$(RM) obj/*.o server
 #	$(RM) *.o server fsclient
