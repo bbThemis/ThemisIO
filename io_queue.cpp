@@ -724,15 +724,12 @@ void fairQueueWorker(int thread_id) {
 			continue;
 		}
 
-		// long now = getTimeMicros();
-
 		// move all incoming messages into fair queue object
 		for (CIO_QUEUE *queue = IO_Queue_List + IdxMin;
 				 queue <= IO_Queue_List + IdxMax;
 				 queue++) {
 			// Move all queued msg to fair queue!!! Fast response to the new incoming requests from new jobs!
 			while(!queue->isEmptyUnsafe())	{
-//			if (!queue->isEmptyUnsafe()) {
 				if (queue->Dequeue(&msg) == 0) {
 					msg.tid = thread_id;
 					// printMessage(&msg, "incomingMsg");
@@ -778,6 +775,95 @@ void fairQueueWorker(int thread_id) {
 	}
 }
 
+void fairQueueWorker_TimeSharing(int thread_id) {
+	int IdxMin, IdxMax, range;
+	long int nOp_Done=0;
+
+	// Each thread handles a subrange of input queues.
+	// Distribute those queues across threads as equally as possible.
+	{
+		int n_threads = NUM_THREAD_IO_WORKER - NUM_THREAD_IO_WORKER_INTER_SERVER;
+		int n_queues = MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER;
+		int offset = NUM_THREAD_IO_WORKER_INTER_SERVER;
+		int worker_id = thread_id - NUM_THREAD_IO_WORKER_INTER_SERVER;
+		IdxMin = offset + worker_id * n_queues / n_threads;
+		IdxMax = offset + (worker_id+1) * n_queues / n_threads - 1;
+	}
+
+	printf("DBG> FairQueue rank %d thread_id %d queues %d..%d (count=%d)\n", mpi_rank, thread_id, IdxMin, IdxMax, IdxMax-IdxMin+1);
+	
+	IO_CMD_MSG msg;
+	JobInfoLookup job_info_lookup(ActiveJobList, &nActiveJob);
+	FairQueue fair_queue(Server_qp.fairness_mode, mpi_rank, thread_id, job_info_lookup, MAX_JOB_IDLE_SEC);
+	int pending_count = 0;
+
+	// Call FairQueue::housekeeping() at regular intervals.
+	long next_housekeeping_time = getTimeMicros() + FAIRQUEUE_HOUSEKEEPING_FREQ_MICROS;
+
+	while(1)	{	// loop forever
+		long now = getTimeMicros();
+		if (now > next_housekeeping_time) {
+			fair_queue.housekeeping();
+			next_housekeeping_time = now + FAIRQUEUE_HOUSEKEEPING_FREQ_MICROS;
+		}
+
+		// ERR busy loop on unsynchronized variable
+		if (nActiveJob == 0){
+			_mm_pause();
+			continue;
+		}
+
+		// move all incoming messages into fair queue object
+		for (CIO_QUEUE *queue = IO_Queue_List + IdxMin;
+				 queue <= IO_Queue_List + IdxMax;
+				 queue++) {
+			// Move all queued msg to fair queue!!! Fast response to the new incoming requests from new jobs!
+			while(!queue->isEmptyUnsafe())	{
+//			if (!queue->isEmptyUnsafe()) {
+				if (queue->Dequeue(&msg) == 0) {
+					msg.tid = thread_id;
+					// printMessage(&msg, "incomingMsg");
+					fair_queue.putMessage_TimeSharing(&msg);
+					pending_count++;
+				}
+			}
+		}
+
+		// If there is nothing to do, pause and try again
+		if (pending_count == 0) {
+			_mm_pause();
+			continue;
+		}
+
+		// select one message
+		if (!fair_queue.getMessage_FromActiveJob(&msg)) continue;
+
+		// printMessage(&msg, "msgSelected");
+
+		// function-local counter
+		nOp_Done++;
+
+		// per-job counter
+		fetch_and_add((int*)&(ActiveJobList[msg.idx_JobRec].nOps_Done), 1);
+		
+		pthread_mutex_t *qp_lock = &Server_qp.pQP_Data[msg.idx_qp].qp_lock;
+		if (pthread_mutex_lock(qp_lock)) {
+			perror("pthread_mutex_lock");
+			exit(2);
+		}
+		
+		Process_One_IO_OP(&msg);// Do the real IO work!
+		pending_count--;
+
+		// per-thread counter
+		nOPs_Done[thread_id]++;
+
+		if (pthread_mutex_unlock(qp_lock)) {
+			perror("pthread_mutex_unlock");
+			exit(2);
+		}
+	}
+}
 
 // IO worker thread implementing fair queue
 
@@ -797,7 +883,8 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 		printf("DBG> FairQueue thread_id %d inter-server-queue %d\n", thread_id, thread_id);
 		Inter_server_communication_loop(thread_id, &(IO_Queue_List[thread_id]));
 	} else {
-		fairQueueWorker(thread_id);
+//		fairQueueWorker(thread_id);
+		fairQueueWorker_TimeSharing(thread_id);
 	}
 
 	return NULL;

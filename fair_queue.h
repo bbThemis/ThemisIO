@@ -13,6 +13,10 @@
 #include "qp.h"
 #include "io_queue.h"
 
+#define TIME_PER_CYCLE_MICROSEC       (30)
+//#define TIME_PER_CYCLE_MICROSEC	(40)	// the length of one time slice. The time spended on each job is t*w. 
+//#define TIME_PER_CYCLE_MICROSEC       (1000)
+
 /* Encapsulate looking up data on a job. The ActiveJobList data
 	 structure is likely to change, so when it does, all that needs to
 	 change is this interface class rather than all the code that uses
@@ -71,13 +75,24 @@ class FairQueue {
 	// Add a message to the queue. The data is copied from 'msg'.
 	void putMessage(const IO_CMD_MSG *msg);
 
+	void putMessage_TimeSharing(const IO_CMD_MSG *msg);
+
 	// Selects a message to process. If there are no messages, this returns false.
 	// Otherwise this copies the message to 'msg' and returns true.
 	bool getMessage(IO_CMD_MSG *msg);
 
+	bool getMessage_FromActiveJob(IO_CMD_MSG *msg);
+
+	// recharge all jobs with designed time length
+	void reload();
+
 	// This will be called occasionally.
 	// It provides a way to print status output or perform garbage collection.
 	void housekeeping();
+
+	void SetFirstJobActive(void);
+
+	void SetNextJobActive(void);
 
 	// Returns the current time in microseconds since epoch.
 	static long unsigned getTime();
@@ -86,6 +101,15 @@ class FairQueue {
 	double getElapsed();
 	
 private:
+	// the sum of weight of all jobs
+	int weight_sum;
+	int nJob;
+	int IdxActiveJob;
+	int pad;
+//	MessageQueue *q_ActiveJob;
+
+	double T_ThisCycle;
+
 	struct MessageContainer {
 		IO_CMD_MSG msg;
 
@@ -99,12 +123,15 @@ private:
 	
 	struct MessageQueue {
 		MessageQueue(int id_, int job_id_, int user_id_, long now, int weight_)
-			: id(id_), job_id(job_id_), user_id(user_id_), idle_timestamp(now), weight(weight_) {}
+			: id(id_), job_id(job_id_), user_id(user_id_), idle_timestamp(now), weight(weight_) {
+				T_Create = now * 1.0;
+			}
 								 
 		std::queue<MessageContainer> messages;
 
 		// id, either job id or user id, depending on fairness mode
 		int id;
+		const int weight;	 // size-fair: node count. Otherwise 1.
 
 		int job_id, user_id;
 
@@ -114,7 +141,23 @@ private:
 		// timestamp of the first item in the queue
 		long unsigned front_timestamp;
 
-		const int weight;	 // size-fair: node count. Otherwise 1.
+		// The time when current queue was create for current job
+		long int T_Create;
+
+		// the time balance current queue has. It could be negative since one long OP could take long time. 
+		long int T_Balance;
+
+		// the length of time slice reloading for current job. Proportional to weight. TIME_PER_CYCLE_MICROSEC * weight
+		long int dT_Reload;
+
+		// the time current job was schduled in current cycle
+		long int T_Cycle_Start;
+
+		// accumulated time for operation
+		long int T_Accum_Op;
+
+		// accumulated time for idling
+		long int T_Accum_Idle;
 
 		void add(const IO_CMD_MSG *msg) {
 			if (messages.empty())
@@ -261,6 +304,9 @@ private:
 	// all current message queues
 	// key is job_id or user_id
 	std::unordered_map<int, MessageQueue*> indexed_queues;
+
+	// all nonempty message queues
+	std::vector<MessageQueue*> all_queues;
 
 	// all nonempty message queues
 	std::vector<MessageQueue*> nonempty_queues;
