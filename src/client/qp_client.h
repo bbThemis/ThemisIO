@@ -33,10 +33,10 @@
 #include <malloc.h>
 #include <netinet/tcp.h>
 
-#include "../utility.h"
-#include "../dict.h"
-#include "../qp_common.h"
-#include "../io_ops_common.h"
+#include "utility.h"
+#include "dict.h"
+#include "qp_common.h"
+#include "io_ops_common.h"
 
 
 #define PORT 8888

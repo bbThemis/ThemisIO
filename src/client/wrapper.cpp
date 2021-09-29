@@ -41,8 +41,8 @@ All rights are reserved.
 #include <stddef.h>
 
 #include "qp_client.h"
-#include "../io_ops_common.h"
-#include "../xxhash.h"
+#include "io_ops_common.h"
+#include "xxhash.h"
 
 #define min(a,b)        ( ((a)<(b)) ? (a) : (b) )
 #define max(a,b)        ( ((a)>(b)) ? (a) : (b) )
