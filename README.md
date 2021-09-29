@@ -7,9 +7,13 @@ ThemisIO can precisely balance the I/O cycles between applications via time slic
 ThemisIO can precisely allocate I/O resources to jobs so that every job gets at least its fair share of the I/O capacity as defined by the sharing policy.
 ThemisIO can decrease the slowdown of real applications due to I/O interference by two to three orders of magnitude when using fair sharing polices compared to the first-in-first-out (FIFO) baseline.
 
-
+<p align = "center">
 <img src="https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/test.size-fair.4v1.png" width="320">
 <!--- ![alt text](https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/test.size-fair.4v1.png =320x240 " Size-fair, 4-node job competing with 1-node job") --->
+</p>
+<p align = "center">
+Fig.1 - Size-fair, 4-node job competing with 1-node job
+</p>
 
 <img src="https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/test.job-fair.4v1.png" width="320">
 <!--- ![alt text](https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/test.size-fair.4v1.png =320x240 " Job-fair, 4-node job competing with 1-node job") --->
