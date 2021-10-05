@@ -1030,7 +1030,7 @@ done:   /* we get here if we got a signal like Ctrl-C */
 
 void SERVER_QUEUEPAIR::Init_Server_IB_Env(int remote_buff_size)
 {
-	int i, ret;
+	int i, ret, Found_IB=0;
 	int devices;
 	
 	dev_list_ = ibv_get_device_list(&devices);
