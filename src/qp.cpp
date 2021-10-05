@@ -1063,10 +1063,10 @@ void SERVER_QUEUEPAIR::Init_Server_IB_Env(int remote_buff_size)
 	
 //	struct ibv_device_attr device_attr;
 	
-//	if (!context_) {
-//		fprintf(stderr, "Error occured at %s:L%d. Failure: No HCA can use.\n", __FILE__, __LINE__);
-//		exit(1);
-//	}
+	if (!Found_IB) {
+		fprintf(stderr, "Error occured at %s:L%d. Failure: No HCA can use.\n", __FILE__, __LINE__);
+		exit(1);
+	}
 	
 //	ret = ibv_query_device(context_, &device_attr);
 //	printf("max_qp = %d max_qp_wr = %d\n", device_attr.max_qp, device_attr.max_qp_wr);
