@@ -1071,13 +1071,13 @@ void SERVER_QUEUEPAIR::Init_Server_IB_Env(int remote_buff_size)
 //	ret = ibv_query_device(context_, &device_attr);
 //	printf("max_qp = %d max_qp_wr = %d\n", device_attr.max_qp, device_attr.max_qp_wr);
 	
-	ret = ibv_query_port(context_, 1, &port_attr_);
+	// ret = ibv_query_port(context_, 1, &port_attr_);
 	
-	if (ret != 0 || port_attr_.lid == 0) {
-		// error handling
-		fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_query_port.\n", __FILE__, __LINE__);
-		exit(1);
-	}
+	// if (ret != 0 || port_attr_.lid == 0) {
+	// 	// error handling
+	// 	fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_query_port.\n", __FILE__, __LINE__);
+	// 	exit(1);
+	// }
 	
 	pd_ = ibv_alloc_pd(context_);
 	assert(pd_ != NULL);
