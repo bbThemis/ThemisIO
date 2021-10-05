@@ -1043,18 +1043,21 @@ void SERVER_QUEUEPAIR::Init_Server_IB_Env(int remote_buff_size)
 	assert(dev_list_ != NULL);
 	
 	for (int i = 0; i < devices; i++) {
-		ibv_device* device = dev_list_[i];
-		
-		if (!device) {
-			continue;
-		}
-		
-		context_ = ibv_open_device(device);
-		
-		if (!context_) {
-			continue;
-		}
-	}
+        if (!dev_list_[i]) {
+            continue;
+        }
+        context_ = ibv_open_device(dev_list_[i]);
+        if (!context_)	continue;
+        
+        ret = ibv_query_port(context_, 1, &port_attr_);
+        if (ret != 0 || port_attr_.lid == 0) {
+            ibv_close_device(context_);
+            continue;
+        }
+
+        Found_IB = 1;
+        break;
+    }
 
 	assert(context_ != NULL);
 	
