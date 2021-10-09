@@ -1030,7 +1030,7 @@ done:   /* we get here if we got a signal like Ctrl-C */
 
 void SERVER_QUEUEPAIR::Init_Server_IB_Env(int remote_buff_size)
 {
-	int i, ret;
+	int i, ret, Found_IB=0;
 	int devices;
 	
 	dev_list_ = ibv_get_device_list(&devices);
@@ -1043,38 +1043,41 @@ void SERVER_QUEUEPAIR::Init_Server_IB_Env(int remote_buff_size)
 	assert(dev_list_ != NULL);
 	
 	for (int i = 0; i < devices; i++) {
-		ibv_device* device = dev_list_[i];
-		
-		if (!device) {
-			continue;
-		}
-		
-		context_ = ibv_open_device(device);
-		
-		if (!context_) {
-			continue;
-		}
-	}
+        if (!dev_list_[i]) {
+            continue;
+        }
+        context_ = ibv_open_device(dev_list_[i]);
+        if (!context_)	continue;
+        
+        ret = ibv_query_port(context_, 1, &port_attr_);
+        if (ret != 0 || port_attr_.lid == 0) {
+            ibv_close_device(context_);
+            continue;
+        }
+
+        Found_IB = 1;
+        break;
+    }
 
 	assert(context_ != NULL);
 	
 //	struct ibv_device_attr device_attr;
 	
-//	if (!context_) {
-//		fprintf(stderr, "Error occured at %s:L%d. Failure: No HCA can use.\n", __FILE__, __LINE__);
-//		exit(1);
-//	}
+	if (!Found_IB) {
+		fprintf(stderr, "Error occured at %s:L%d. Failure: No HCA can use.\n", __FILE__, __LINE__);
+		exit(1);
+	}
 	
 //	ret = ibv_query_device(context_, &device_attr);
 //	printf("max_qp = %d max_qp_wr = %d\n", device_attr.max_qp, device_attr.max_qp_wr);
 	
-	ret = ibv_query_port(context_, 1, &port_attr_);
+	// ret = ibv_query_port(context_, 1, &port_attr_);
 	
-	if (ret != 0 || port_attr_.lid == 0) {
-		// error handling
-		fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_query_port.\n", __FILE__, __LINE__);
-		exit(1);
-	}
+	// if (ret != 0 || port_attr_.lid == 0) {
+	// 	// error handling
+	// 	fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_query_port.\n", __FILE__, __LINE__);
+	// 	exit(1);
+	// }
 	
 	pd_ = ibv_alloc_pd(context_);
 	assert(pd_ != NULL);
