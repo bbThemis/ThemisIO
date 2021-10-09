@@ -36,10 +36,19 @@ Fig.3 - User-fair, Two 2-node jobs competing with a 1-node job
 <!--- ![alt text](https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/write_read_single_server.PNG =320x240 " IOR benchmark for one server") --->
 </p>
 <p align = "center">
-Fig.4 - IOR benchmark for one server.
+Fig.4 - IOR benchmark for one server
 </p>
 
-## Build Instruction
+<p align = "center">
+<img src="https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/write_read_scaling_server_number.PNG" width="320">
+<!--- ![alt text](https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/write_read_scaling_server_number.PNG =320x240 " IOR benchmark for multiple servers") --->
+</p>
+<p align = "center">
+Fig.5 - IOR benchmark for multiple servers
+</p>
+
+
+### Build Instruction
 Compile server and wrapper.so, <br>
 `git clone https://github.com/bbThemis/ThemisIO`<br>
 `cd ThemisIO`<br>
