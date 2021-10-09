@@ -30,6 +30,14 @@ Fig.2 - Job-fair, 4-node job competing with 1-node job
 <p align = "center">
 Fig.3 - User-fair, Two 2-node jobs competing with a 1-node job
 </p>
+## Benchmark
+<p align = "center">
+<img src="https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/write_read_single_server.PNG" width="320">
+<!--- ![alt text](https://github.com/bbThemis/ThemisIO/blob/main/docs/figures/write_read_single_server.PNG =320x240 " IOR benchmark for one server") --->
+</p>
+<p align = "center">
+Fig.4 - IOR benchmark for one server.
+</p>
 
 ## Build Instruction
 Compile server and wrapper.so, <br>
