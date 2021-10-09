@@ -1,7 +1,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/tcp.h>
-
+#include <string.h>
+#include <errno.h>
 
 #include "qp.h"
 #include "myfs.h"
@@ -1030,62 +1031,49 @@ done:   /* we get here if we got a signal like Ctrl-C */
 
 void SERVER_QUEUEPAIR::Init_Server_IB_Env(int remote_buff_size)
 {
-	int i, ret, Found_IB=0;
-	int devices;
+	int i, ret;
+	int nDevices;
 	
-	dev_list_ = ibv_get_device_list(&devices);
-	
-//	if (!dev_list_) {
-//		int errno_backup = errno;
-//		fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_get_device_list (errno=%d).\n", __FILE__, __LINE__, errno_backup);
-//		exit(1);
-//	}
+	context_ = NULL;
+	dev_list_ = ibv_get_device_list(&nDevices);
 	assert(dev_list_ != NULL);
 	
-	for (int i = 0; i < devices; i++) {
+	for (int i = 0; i < nDevices; i++) {
         if (!dev_list_[i]) {
             continue;
         }
         context_ = ibv_open_device(dev_list_[i]);
-        if (!context_)	continue;
-        
+        if (!context_)	{
+			fprintf(stderr, "SERVER_QUEUEPAIR::Init_Server_IB_Env error: failed to open device %s\n",
+						ibv_get_device_name(dev_list_[i]));
+			continue;
+		}
         ret = ibv_query_port(context_, 1, &port_attr_);
-        if (ret != 0 || port_attr_.lid == 0) {
+		if (ret) {
+			fprintf(stderr, "SERVER_QUEUEPAIR::Init_Server_IB_Env error: ibv_query_port(device %s) failed with error %s\n",
+							ibv_get_device_name(dev_list_[i]), strerror(errno));
+			context_ = NULL;
+			continue;
+		}
+
+        if (port_attr_.lid == 0) {
             ibv_close_device(context_);
+			context_ = NULL;
             continue;
         }
 
-        Found_IB = 1;
         break;
     }
 
-	assert(context_ != NULL);
-	
-//	struct ibv_device_attr device_attr;
-	
-	if (!Found_IB) {
-		fprintf(stderr, "Error occured at %s:L%d. Failure: No HCA can use.\n", __FILE__, __LINE__);
+	if (! context_) {
+		fprintf(stderr, "Failure: No HCA can use.\n");
 		exit(1);
 	}
-	
-//	ret = ibv_query_device(context_, &device_attr);
-//	printf("max_qp = %d max_qp_wr = %d\n", device_attr.max_qp, device_attr.max_qp_wr);
-	
-	// ret = ibv_query_port(context_, 1, &port_attr_);
-	
-	// if (ret != 0 || port_attr_.lid == 0) {
-	// 	// error handling
-	// 	fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_query_port.\n", __FILE__, __LINE__);
-	// 	exit(1);
-	// }
+//	assert(context_ != NULL);
 	
 	pd_ = ibv_alloc_pd(context_);
 	assert(pd_ != NULL);
 	
-//	if (!pd_) {
-//		fprintf(stderr, "Error occured at %s:L%d. Failure: ibv_alloc_pd.\n", __FILE__, __LINE__);
-//		exit(1);
-//	}
 
 	pIO_Cmd_ToSend_Other_Server = (IO_CMD_MSG *)memalign(64, DATA_COPY_THRESHOLD_SIZE + 4096);
 	assert(pIO_Cmd_ToSend_Other_Server != NULL);
@@ -1097,12 +1085,6 @@ void SERVER_QUEUEPAIR::Init_Server_IB_Env(int remote_buff_size)
 		assert(send_complete_queue[i] != NULL);
 	}
 
-//	rem_buff_size = remote_buff_size;
-//	rem_buff = (unsigned char *)malloc(rem_buff_size);
-//	if(rem_buff == NULL)	{
-//		fprintf(stderr, "ERROR> Error to allocate %d bytes for rem_buff.\n");
-//		exit(1);
-//	}
 }
 
 void SERVER_QUEUEPAIR::Clean_IB_Env(void)
