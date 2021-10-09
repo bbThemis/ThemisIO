@@ -35,6 +35,7 @@ Fig.3 - User-fair, Two 2-node jobs competing with a 1-node job
 Compile server and wrapper.so, <br>
 `git clone https://github.com/bbThemis/ThemisIO`<br>
 `cd ThemisIO`<br>
+`mkdir obj` <br>
 `make`<br>
 `cd src/client`<br>
 `./compile.sh`<br>
