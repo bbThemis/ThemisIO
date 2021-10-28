@@ -76,6 +76,7 @@ class FairQueue {
 	void putMessage(const IO_CMD_MSG *msg);
 
 	void putMessage_TimeSharing(const IO_CMD_MSG *msg);
+    void Update_Job_Weight(void);
 
 	// Selects a message to process. If there are no messages, this returns false.
 	// Otherwise this copies the message to 'msg' and returns true.
@@ -102,7 +103,7 @@ class FairQueue {
 	
 private:
 	// the sum of weight of all jobs
-	int weight_sum;
+	float weight_sum;
 	int nJob;
 	int IdxActiveJob;
 	int pad;
@@ -131,7 +132,7 @@ private:
 
 		// id, either job id or user id, depending on fairness mode
 		int id;
-		const int weight;	 // size-fair: node count. Otherwise 1.
+		float weight;	 // size-fair: node count. Otherwise 1.
 
 		int job_id, user_id;
 

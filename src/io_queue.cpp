@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <pwd.h>
+#include <unordered_map>
 
 #include "qp.h"
 #include "dict.h"
@@ -33,6 +35,9 @@ int active_prob=0;	// the index of active probability set. Only can be 0 or 1. ^
 // XXX each counter in this array is updated by a different thread (via nOPs_Done[thread_id]++)
 // so the performance of those updates will suffer from false sharing
 long int nOPs_Done[NUM_THREAD_IO_WORKER];
+
+// Hash table to query gid from uid
+unordered_map<int, int> uid_gid;
 
 // Current number of valid entries is nActiveJob (defined below).
 // Writes to ActiveJobList[] and nActiveJob are synchronized with lock_Modify_ActiveJob_List in qp.cpp, reads are not synchronized
@@ -351,6 +356,15 @@ void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id)
 	}
 	if(mpi_rank == 0)	{
 		Server_qp.pJobScale_Remote->nActiveJob = 0;
+	}
+
+	// Query gid for this user
+	struct passwd *pwd=getpwuid(user_id);
+	if (pwd != NULL)    {
+		if (uid_gid.find(user_id) == uid_gid.end())	{	// Not found in hash table. 
+			uid_gid[user_id] = pwd->pw_gid;
+		}
+		free(pwd);
 	}
 }
 
@@ -986,11 +1000,12 @@ void* Func_thread_IO_Worker_FIFO(void *pParam)	// process all IO wrok
 // IO worker thread, either fair or FIFO
 void* Func_thread_IO_Worker(void *pParam)
 {
+	if(Server_qp.fairness_mode == FIFO)	{
+		return Func_thread_IO_Worker_FIFO(pParam);
+	}
 
 	// return Func_thread_IO_Worker_LeiSizeFair(pParam);
 	return Func_thread_IO_Worker_FairQueue(pParam);
-//	return Func_thread_IO_Worker_FIFO(pParam);
-
 }
 
 

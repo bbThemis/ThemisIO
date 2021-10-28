@@ -2,6 +2,7 @@
 #include <sys/time.h>
 #include <random>
 #include <iomanip>
+#include <unordered_map>
 
 /* Set this to a nonzero value to enable a debug output message each time a
 	 new job is encountered, and a message when that job is considered idle
@@ -104,7 +105,7 @@ void FairQueue::SetNextJobActive(void)
 //	MessageQueue *q = all_queues[IdxActiveJob];
 //	if(q->T_Balance > 0)	q->T_Cycle_Start = (long int)getTime();
 }
-
+/*
 void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg) {
 	int key = getKey(msg);
 	MessageQueue *q;
@@ -143,6 +144,141 @@ void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg) {
 
 	} else {
 		q = iqt->second;
+	}
+
+	q->add(msg);
+
+	if( (msg->op & 0xFFFFFF00) != IO_OP_MAGIC)	{
+		printf("Stop here. Wrong msg!!!\n");
+	}
+
+//	printf("DBG> Put jobid %d OP %x\n", q->job_id, msg->op & 0xFF);
+}
+*/
+
+void FairQueue::Update_Job_Weight(void) {
+	MessageQueue *q_loc;
+	std::unordered_map<int, float> uid_count;
+	int i;
+
+	switch (fairness_mode)	{
+		case SIZE_FAIR:
+			weight_sum = 0.0;
+			for(i=0; i<nJob; i++)	{
+				q_loc = all_queues[i];
+				weight_sum += q_loc->weight;
+			}
+
+			for(i=0; i<nJob; i++)	{
+				q_loc = all_queues[i];
+				q_loc->dT_Reload = TIME_PER_CYCLE_MICROSEC * (q_loc->weight) / weight_sum;
+				q_loc->T_Balance = q_loc->dT_Reload;	// charge the time balance for a new job
+			}
+			break;
+		case JOB_FAIR:	// each slurm job has weight 1.  
+		case USER_FAIR:
+			weight_sum = 1.0*nJob;
+			for(i=0; i<nJob; i++)	{
+				q_loc->weight = 1.0;
+				q_loc = all_queues[i];
+				q_loc->dT_Reload = TIME_PER_CYCLE_MICROSEC * (q_loc->weight) / weight_sum;
+				q_loc->T_Balance = q_loc->dT_Reload;	// charge the time balance for a new job
+			}
+			break;
+		case USER_SIZE_FAIR:
+			for(i=0; i<nJob; i++)	{
+				q_loc = all_queues[i];
+				if (uid_count.find(q_loc->user_id) == uid_count.end())	{
+					uid_count[q_loc->user_id] = q_loc->weight;	// number of jobs from current user
+				}
+				else	{
+					uid_count[q_loc->user_id] = uid_count[q_loc->user_id] + q_loc->weight;
+				}
+			}
+
+			weight_sum = 0.0;
+			for(i=0; i<nJob; i++)	{
+				q_loc = all_queues[i];
+				weight_sum += (q_loc->weight / uid_count[q_loc->user_id]);
+			}
+
+			for(i=0; i<nJob; i++)	{
+				q_loc = all_queues[i];
+				q_loc->dT_Reload = TIME_PER_CYCLE_MICROSEC * (q_loc->weight) / weight_sum;
+				q_loc->T_Balance = q_loc->dT_Reload;	// charge the time balance for a new job
+			}
+			break;
+		case USER_JOB_FAIR:
+			for(i=0; i<nJob; i++)	{
+				q_loc = all_queues[i];
+				q_loc->weight = 1.0;	// All jobs of one individual user have the same weight.  
+				if (uid_count.find(q_loc->user_id) == uid_count.end())	{
+					uid_count[q_loc->user_id] = q_loc->weight;	// number of jobs from current user
+				}
+				else	{
+					uid_count[q_loc->user_id] = uid_count[q_loc->user_id] + q_loc->weight;
+				}
+			}
+
+			weight_sum = 0.0;
+			for(i=0; i<nJob; i++)	{
+				q_loc = all_queues[i];
+				weight_sum += (q_loc->weight / uid_count[q_loc->user_id]);
+			}
+
+			for(i=0; i<nJob; i++)	{
+				q_loc = all_queues[i];
+				q_loc->dT_Reload = TIME_PER_CYCLE_MICROSEC * (q_loc->weight) / weight_sum;
+				q_loc->T_Balance = q_loc->dT_Reload;	// charge the time balance for a new job
+			}
+			break;
+		case GROUP_USER_SIZE_FAIR:
+			break;
+		default:
+			break;
+	}
+}
+
+void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg) {
+	MessageQueue *q;
+	static bool first_output = true;
+	int job_id = job_info_lookup.getSlurmJobId(msg);
+	int user_id = job_info_lookup.getUserId(msg);
+	std::unordered_map<int, MessageQueue*>::const_iterator result_query;
+
+	message_count++;
+	if(fairness_mode == USER_FAIR)	{
+		result_query = indexed_queues.find(user_id);
+	}
+	else	{
+		result_query = indexed_queues.find(job_id);
+	}
+
+	if (result_query == indexed_queues.end()) {
+		// create new message queue
+		int weight = job_info_lookup.getNodeCount(msg);
+		q = new MessageQueue(job_id, job_id, user_id, getTime(), weight);
+		if(fairness_mode != USER_FAIR)	indexed_queues[job_id] = q;
+		else	indexed_queues[user_id] = q;
+		all_queues.push_back(q);
+
+		nJob++;
+		// Start the first job, set it as the active job. 
+		if(nJob == 1)	{
+			SetFirstJobActive();
+		}
+
+		Update_Job_Weight();
+
+		// Need to update the reload time length for all jobs
+
+#if REPORT_JOB_START_AND_END
+		printf("FairQueue::putMessage_TimeSharing.newqueue time=%.2f threadid=%d jobid=%d userid=%d nodecount=%d weight=%d\n", 
+					 getTime()/1000000., thread_id, job_id, user_id, job_info_lookup.getNodeCount(msg), weight);
+#endif
+
+	} else {
+		q = result_query->second;
 	}
 
 	q->add(msg);
