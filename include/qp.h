@@ -46,6 +46,8 @@
 
 
 enum FairnessMode {
+	// tradition first in first out
+	FIFO, 
 	// Priority based on jobs such that the throughput of each job is proportional
 	// to the number of nodes in the job.
 	SIZE_FAIR,
@@ -54,7 +56,16 @@ enum FairnessMode {
 	JOB_FAIR,
 
 	// Priority based on users such that each user gets equal throughput.
-	USER_FAIR
+	USER_FAIR, 
+
+	// user-then-size-fair
+	USER_SIZE_FAIR, 
+
+	// user-then-job-fair
+	USER_JOB_FAIR,
+
+	// group-user-size
+	GROUP_USER_SIZE_FAIR
 };
 
 
@@ -197,6 +208,8 @@ typedef struct	{
 /* Handle options that can be set on the command line.
    Currently that's just the fairness mode.
 */
+
+
 class ServerOptions {
 public:
 	ServerOptions() : fairness_mode(getDefaultFairnessMode()) {}
@@ -213,12 +226,15 @@ public:
 	FairnessMode getFairnessMode() {return fairness_mode;}
 
 	// use this to change the default fairness mode
-	static FairnessMode getDefaultFairnessMode() {return SIZE_FAIR;};
+	static FairnessMode getDefaultFairnessMode() {return FIFO;};
 
 	static const char *fairnessModeToString(FairnessMode fairness_mode) {
-		return fairness_mode == SIZE_FAIR ? "size-fair"
-			: fairness_mode == JOB_FAIR ? "job-fair"
-			: "user-fair";
+		static char szFairnessModeString[16][64]={"fifo", "size-fair", "job-fair", "user-fair", "user-size-fair", "user-job-fair", "group-user-size-fair"};
+
+		return szFairnessModeString[(int)fairness_mode];
+//		return fairness_mode == SIZE_FAIR ? "size-fair"
+//			: fairness_mode == JOB_FAIR ? "job-fair"
+//			: "user-fair";
 	}
 
 private:

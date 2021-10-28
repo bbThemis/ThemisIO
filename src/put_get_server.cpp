@@ -550,12 +550,20 @@ bool ServerOptions::parseCommandLineArgs(int argc, char **argv) {
 		else if (!strcmp(arg, "--policy")) {
 			if (argno+1 >= argc) return false;
 			arg = argv[++argno];
-			if (!strcmp(arg, "user-fair")) {
+			if (!strcmp(arg, "fifo")) {
+				fairness_mode = FIFO;
+			} else if (!strcmp(arg, "user-fair")) {
 				fairness_mode = USER_FAIR;
 			} else if (!strcmp(arg, "job-fair")) {
 				fairness_mode = JOB_FAIR;
 			} else if (!strcmp(arg, "size-fair")) {
 				fairness_mode = SIZE_FAIR;
+			} else if (!strcmp(arg, "user-size-fair")) {
+				fairness_mode = USER_SIZE_FAIR;
+			} else if (!strcmp(arg, "user-job-fair")) {
+				fairness_mode = USER_JOB_FAIR;
+			} else if (!strcmp(arg, "group-user-size-fair")) {
+				fairness_mode = GROUP_USER_SIZE_FAIR;
 			} else {
 				return false;
 			}
