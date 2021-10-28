@@ -9,6 +9,7 @@
 	 and is purged. */
 #define REPORT_JOB_START_AND_END 0
 
+extern std::unordered_map<int, int> uid_gid;
 
 pthread_mutex_t FairQueue::shared_decision_log_lock = PTHREAD_MUTEX_INITIALIZER;
 FairQueue::DecisionLog FairQueue::shared_decision_log;
