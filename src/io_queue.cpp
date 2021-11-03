@@ -37,7 +37,7 @@ int active_prob=0;	// the index of active probability set. Only can be 0 or 1. ^
 long int nOPs_Done[NUM_THREAD_IO_WORKER];
 
 // Hash table to query gid from uid
-unordered_map<int, int> uid_gid;
+std::unordered_map<int, int> uid_gid;
 
 // Current number of valid entries is nActiveJob (defined below).
 // Writes to ActiveJobList[] and nActiveJob are synchronized with lock_Modify_ActiveJob_List in qp.cpp, reads are not synchronized
@@ -364,7 +364,7 @@ void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id)
 		if (uid_gid.find(user_id) == uid_gid.end())	{	// Not found in hash table. 
 			uid_gid[user_id] = pwd->pw_gid;
 		}
-		free(pwd);
+//		free(pwd);
 	}
 }
 
