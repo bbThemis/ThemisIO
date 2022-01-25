@@ -31,7 +31,7 @@
 #include "io_queue.h"
 
 #define T_FREQ_REPORT_RESULT (1)
-#define PORT 8888
+#define PORT 58888
 
 CORE_BINDING CoreBinding;
 
