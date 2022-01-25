@@ -1,6 +1,6 @@
 #ifndef _LNET_H_
 #define _LNET_H_
-
+// soft link ../src/mds/lnet.h
 #include <vector>
 #include <tuple>
 #include <map>
@@ -15,7 +15,6 @@
 #include "lsocket.h"
 
 const int MAX_EVENTS = 10000;
-
 enum FsRequestType
 {
   Getattr,

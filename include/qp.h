@@ -127,6 +127,7 @@ typedef	struct	{
 
 
 class SERVER_QUEUEPAIR {
+// for mds only
 public:
 	in_addr_t sock_addr;    // local IP or INADDR_ANY
 	int sock_port;          // local port to listen on
