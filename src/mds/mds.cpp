@@ -50,6 +50,10 @@ void MDS::startTimer()
   }
 }
 
+void MDS::printMDSInfo() {
+  printf("Print MDS Server Info\n");
+  this->_mdsNet->printServerInfo();
+}
 ssize_t MDS::sendDataToOst(int idx, const void *buf, size_t len)
 {
   // TODO

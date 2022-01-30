@@ -1,6 +1,11 @@
-#include <cassert>
-
 #include "lnet.h"
+#include <net/if.h>
+#include <sys/ioctl.h>
+#include <cassert>
+#include <stdio.h>
+
+#include <arpa/inet.h>
+
 
 Epoll::Epoll()
 {
@@ -55,7 +60,9 @@ void Epoll::removeClient(const LnetEntity *remote)
 LnetServer::LnetServer(int port)
 {
   this->_sock = new LServerSocket(LSockAddr::ANY, port);
+  _port = port;
   assert(this->_sock->isValid());
+  
 }
 
 LnetServer::~LnetServer()
@@ -64,6 +71,26 @@ LnetServer::~LnetServer()
   delete this->_sock;
 }
 
+void LnetServer::printServerInfo() {
+  struct ifreq ifr;
+  ifr.ifr_addr.sa_family = AF_INET;
+  char ifname[10] = "ib0";
+  strncpy(ifr.ifr_name , ifname , 30);
+  if (ioctl(_sock->sockfd(), SIOCGIFADDR, &ifr) == -1) {
+    perror("ioctl");
+    exit(1);
+  }
+  char serverIp[256];
+  sprintf(serverIp, "%s", inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
+  FILE* fOut = fopen(MDS_PARAM_FILE, "w");
+  if(fOut == NULL)	{
+		printf("ERROR> Fail to open file: %s\nQuit.\n", MDS_PARAM_FILE);
+		exit(1);
+	}
+  printf("Server IP is %s, listening on port %d\n", serverIp, _port);
+  fprintf(fOut, "%s %d\n", serverIp, _port);
+	fclose(fOut);
+}
 void LnetServer::eventLoop()
 {
   struct epoll_event ev;

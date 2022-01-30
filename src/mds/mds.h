@@ -95,6 +95,7 @@ class MDS
     void startTimer();
     ssize_t sendDataToOst(int idx, const void *buf, size_t len);
     ssize_t recvDataFromOst(int idx, void *buf, size_t len);
+    void printMDSInfo();
 };
 
 

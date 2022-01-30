@@ -5,7 +5,7 @@
 
 #include "mds.h"
 
-const int DEFAULT_PORT = 58889;
+const int DEFAULT_PORT = 68888;
 static MDS *mds;
 
 static void
@@ -20,6 +20,7 @@ int
 main(int argc, char *argv[])
 {
   mds = new MDS(argc > 1 ? atoi(argv[1]) : DEFAULT_PORT);
+  mds->printMDSInfo();
   signal(SIGINT, signal_handler);
   mds->eventLoop();
   delete mds;

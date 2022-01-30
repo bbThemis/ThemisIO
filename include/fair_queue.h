@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <vector>
 #include <queue>
+#include <mutex>
 #include <unordered_map>
 #include <set>
 #include <algorithm>
@@ -74,8 +75,8 @@ class FairQueue {
 
 	// Add a message to the queue. The data is copied from 'msg'.
 	void putMessage(const IO_CMD_MSG *msg);
-
 	void putMessage_TimeSharing(const IO_CMD_MSG *msg);
+	void putMessage_TimeSharing(const IO_CMD_MSG *msg, std::vector<ActiveRequest>& activeReqs, std::mutex& reqLock);
     void Update_Job_Weight(void);
 
 	// Selects a message to process. If there are no messages, this returns false.
@@ -83,7 +84,7 @@ class FairQueue {
 	bool getMessage(IO_CMD_MSG *msg);
 
 	bool getMessage_FromActiveJob(IO_CMD_MSG *msg);
-
+	bool getMessage_FromActiveJob(IO_CMD_MSG *msg, std::vector<ActiveRequest>& activeReqs, std::mutex& reqLock);
 	// recharge all jobs with designed time length
 	void reload();
 

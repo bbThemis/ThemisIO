@@ -291,6 +291,65 @@ void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg) {
 //	printf("DBG> Put jobid %d OP %x\n", q->job_id, msg->op & 0xFF);
 }
 
+void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg, std::vector<ActiveRequest>& activeReqs, std::mutex& reqLock) {
+	MessageQueue *q;
+	static bool first_output = true;
+	int job_id = job_info_lookup.getSlurmJobId(msg);
+	int user_id = job_info_lookup.getUserId(msg);
+	std::unordered_map<int, MessageQueue*>::const_iterator result_query;
+
+	message_count++;
+	if(fairness_mode == USER_FAIR)	{
+		result_query = indexed_queues.find(user_id);
+	}
+	else	{
+		result_query = indexed_queues.find(job_id);
+	}
+	{
+		std::lock_guard<std::mutex> lock(reqLock);
+		AppInfo inf;
+		inf.id = job_id;
+		sprintf(inf.name, "%d", job_id);
+		ActiveRequest rq = {._info = inf, ._t = Write};
+		activeReqs.push_back(rq);
+		printf("ActiveRequest %d\n", job_id);
+	}
+	if (result_query == indexed_queues.end()) {
+		// create new message queue
+		int weight = job_info_lookup.getNodeCount(msg);
+		q = new MessageQueue(job_id, job_id, user_id, getTime(), weight);
+		if(fairness_mode != USER_FAIR)	indexed_queues[job_id] = q;
+		else	indexed_queues[user_id] = q;
+		all_queues.push_back(q);
+
+		nJob++;
+		// Start the first job, set it as the active job. 
+		if(nJob == 1)	{
+			SetFirstJobActive();
+		}
+
+		Update_Job_Weight();
+
+		// Need to update the reload time length for all jobs
+
+#if REPORT_JOB_START_AND_END
+		printf("FairQueue::putMessage_TimeSharing.newqueue time=%.2f threadid=%d jobid=%d userid=%d nodecount=%d weight=%d\n", 
+					 getTime()/1000000., thread_id, job_id, user_id, job_info_lookup.getNodeCount(msg), weight);
+#endif
+
+	} else {
+		q = result_query->second;
+	}
+
+	q->add(msg);
+
+	if( (msg->op & 0xFFFFFF00) != IO_OP_MAGIC)	{
+		printf("Stop here. Wrong msg!!!\n");
+	}
+
+//	printf("DBG> Put jobid %d OP %x\n", q->job_id, msg->op & 0xFF);
+}
+
 void FairQueue::reload(void) {
 	if(indexed_queues.empty())	{
 		IdxActiveJob = -1;
@@ -374,7 +433,62 @@ bool FairQueue::getMessage(IO_CMD_MSG *msg) {
 
 	return true;
 }
+bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg, std::vector<ActiveRequest>& activeReqs, std::mutex& reqLock) {
+	long int t_Now;
 
+	if (nJob == 0) return false;
+
+//	assert( (IdxActiveJob>=0) && (IdxActiveJob <nJob) );
+	MessageQueue *q = all_queues[IdxActiveJob];
+
+	t_Now = (long int)getTime();
+	q->T_Balance -= (t_Now - q->T_Cycle_Start);
+
+	if(q->T_Balance <= 0)	{
+		int nDone = 1;
+
+		while(1)	{
+			// Make the next job active
+			SetNextJobActive();
+			q = all_queues[IdxActiveJob];
+
+			if(q->T_Balance <= 0)	nDone++;
+			else	{
+				q->T_Cycle_Start = t_Now;
+				break;
+			}
+
+			if(nDone >= nJob)	{	// All jobs are done. Need to restart a new cycle. 
+				IdxActiveJob = -1;
+				while( IdxActiveJob == (-1) )	{	// Might need to recharge multiple times
+					reload();
+				}
+				break;
+			}
+		}
+//		assert( (IdxActiveJob>=0) && (IdxActiveJob <nJob) );
+		q = all_queues[IdxActiveJob];
+	}
+	if (q->messages.empty()) {
+//		q->idle_timestamp = t_Now;
+		return false;
+	}
+
+	q->remove(msg);
+	if( (msg->op & 0xFFFFFF00) != IO_OP_MAGIC)	{
+		printf("Stop here.\n");
+	}
+//	printf("DBG> %d %x\n", q->job_id, msg->op & 0xFF);
+
+	message_count--;
+	
+	if (q->messages.empty()) {
+		// mark this queue idle and move it off the nonempty list
+		q->idle_timestamp = t_Now;
+	}
+
+	return true;
+}
 bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg) {
 	long int t_Now;
 

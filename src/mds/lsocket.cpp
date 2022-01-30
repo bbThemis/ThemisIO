@@ -88,6 +88,7 @@ LSockAddr::LSockAddr(const char *hostname /* == NULL*/,
 LSocket::LSocket()
 {
   _sockfd = ::socket(AF_INET, SOCK_STREAM, 0);
+  // _sockfd = ::socket(AF_INET, SOCK_DGRAM, 0);
 }
 
 

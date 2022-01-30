@@ -4,8 +4,8 @@ CC=gcc
 CLP_INCLUDE_DIR ?= /home1/08571/yhkan/dist/include/coin-or/
 CLP_LIB_DIR ?= /home1/08571/yhkan/dist/lib/
 
-MDS_SRCS=util.cpp lnet.cpp mds.cpp lsocket.cpp epoll.cpp lnet_mds.cpp schemes.cpp mds_main.cpp
-MDS_OBJS=util.o lnet.o mds.o lsocket.o epoll.o lnet_mds.o schemes.o mds_main.o
+MDS_SRCS=src/mds/util.cpp src/mds/lnet.cpp src/mds/mds.cpp src/mds/lsocket.cpp src/mds/epoll.cpp src/mds/lnet_mds.cpp src/mds/schemes.cpp src/mds/mds_main.cpp
+MDS_OBJS=src/mds/util.o src/mds/lnet.o src/mds/mds.o src/mds/lsocket.o src/mds/epoll.o src/mds/lnet_mds.o src/mds/schemes.o src/mds/mds_main.o
 
 CFLAGS=-Wall -Werror -I. -I${CLP_INCLUDE_DIR} -g3 -O0 -c -D_FILE_OFFSET_BITS=64
 LDFLAGS=-lfuse -lpthread

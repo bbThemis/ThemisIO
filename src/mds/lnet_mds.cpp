@@ -12,6 +12,8 @@ static std::vector<AppCoup_t> coupDatabase;
 static std::vector<AppData_t> rdmpDatabase;
 static std::vector<double> effectiveSysBw;
 
+
+
 LnetMds::LnetMds(int port, std::mutex *m, std::condition_variable *cv, bool *b)
   : LnetServer(port),
     _m(m),
@@ -198,6 +200,7 @@ void LnetMds::addToTimerResponse(const LnetEntity *remote, const LnetMsg *msg)
       }
       out.push_back(apps);
     }
+    // std::cerr << "out size:" << out.size() << std::endl;
     this->computeBwAllocations(GIFT, out, allocs);
     this->bcastAllocsToOsts(allocs);
     this->_ostReqs.clear();

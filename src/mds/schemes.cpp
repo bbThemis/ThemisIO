@@ -47,7 +47,14 @@ void LnetMds::computeBwAllocationsGIFT(const size_t NUM_OSTS,
         flat.push_back(req);
         }
     }
-
+    // prevent segment fault
+    if(flat.empty()) {
+        for (size_t i = 0; i < NUM_OSTS; i++) {
+            AppAllocs_t alloc;
+            allocs.push_back(alloc);
+        }
+        return;
+    }
     // Determine the number of applications doing I/O
     set<int> s = set<int>(flat.begin(), flat.end());
     vector<int> apps(s.begin(), s.end());

@@ -26,6 +26,19 @@
 #include "qp_common.h"
 #include "io_queue.h"
 
+#include "ost/ost.h"
+#include "ost/lnet.h"
+
+// For GIFT Usage
+#include <vector>
+#include <mutex>
+struct IOThreadParams {
+    int* workerId;
+    std::vector<ActiveRequest>& activeReqs;
+    std::mutex& reqLock;
+};
+
+
 //#define N_THREAD_PREALLOCATE_QP	(1)
 #define N_THREAD_PREALLOCATE_QP	(16)
 #define N_THREAD_ADD_PREALLOCATE_QP	(4)
@@ -65,7 +78,9 @@ enum FairnessMode {
 	USER_JOB_FAIR,
 
 	// group-user-size
-	GROUP_USER_SIZE_FAIR
+	GROUP_USER_SIZE_FAIR,
+
+	GIFT
 };
 
 
@@ -197,6 +212,8 @@ pthread_mutex_t process_lock;	// for this process
 	void Destroy_A_QueuePair(int idx);
 	void Refill_PreAllocated_QP_Pool(void);
 	int Get_IO_Worker_Index_from_QP_Index(int idx_qp);
+public:
+	OST* ost;
 };
 
 typedef struct	{

@@ -789,7 +789,7 @@ void fairQueueWorker(int thread_id) {
 	}
 }
 
-void fairQueueWorker_TimeSharing(int thread_id) {
+void fairQueueWorker_TimeSharing(int thread_id, std::vector<ActiveRequest>& activeReqs, std::mutex& reqLock) {
 	int IdxMin, IdxMax, range;
 	long int nOp_Done=0;
 
@@ -837,7 +837,12 @@ void fairQueueWorker_TimeSharing(int thread_id) {
 				if (queue->Dequeue(&msg) == 0) {
 					msg.tid = thread_id;
 					// printMessage(&msg, "incomingMsg");
-					fair_queue.putMessage_TimeSharing(&msg);
+					if(Server_qp.fairness_mode == GIFT) {
+						fair_queue.putMessage_TimeSharing(&msg, activeReqs, reqLock);
+					} else {
+						fair_queue.putMessage_TimeSharing(&msg);
+					}
+					
 					pending_count++;
 				}
 			}
@@ -850,7 +855,12 @@ void fairQueueWorker_TimeSharing(int thread_id) {
 		}
 
 		// select one message
-		if (!fair_queue.getMessage_FromActiveJob(&msg)) continue;
+		if(Server_qp.fairness_mode == GIFT) {
+			if (!fair_queue.getMessage_FromActiveJob(&msg, activeReqs, reqLock)) continue;
+		} else {
+			if (!fair_queue.getMessage_FromActiveJob(&msg)) continue;
+		}
+		
 
 		// printMessage(&msg, "msgSelected");
 
@@ -883,7 +893,10 @@ void fairQueueWorker_TimeSharing(int thread_id) {
 
 void* Func_thread_IO_Worker_FairQueue(void *pParam)
 {
-	const int thread_id = *((int*)pParam);
+	struct IOThreadParams *readParams = (struct IOThreadParams *)pParam;
+	const int thread_id = *(readParams->workerId);
+	std::vector<ActiveRequest>& activeReqs = (readParams->activeReqs);
+	std::mutex& reqLock = (readParams->reqLock);
 
 	CoreBinding.Bind_This_Thread();
 	idx_qp_server = thread_id % NUM_THREAD_IO_WORKER_INTER_SERVER;
@@ -898,7 +911,7 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 		Inter_server_communication_loop(thread_id, &(IO_Queue_List[thread_id]));
 	} else {
 //		fairQueueWorker(thread_id);
-		fairQueueWorker_TimeSharing(thread_id);
+		fairQueueWorker_TimeSharing(thread_id, activeReqs, reqLock);
 	}
 
 	return NULL;

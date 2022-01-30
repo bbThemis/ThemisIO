@@ -13,7 +13,7 @@
 #include <string>
 
 #include "lsocket.h"
-
+#define MDS_PARAM_FILE	"mds.param"
 const int MAX_EVENTS = 10000;
 enum FsRequestType
 {
@@ -377,7 +377,7 @@ class LnetServer: public Epoll
 {
   protected:
     LSocket *_sock;
-
+    int _port;
     virtual void onConnect() = 0;
     virtual void onDisconnect(const LnetEntity *) = 0;
     virtual void onClientRequest(const LnetEntity *) = 0;
@@ -387,6 +387,7 @@ class LnetServer: public Epoll
     LnetServer(int port);
     virtual ~LnetServer();
     virtual void eventLoop();
+    void printServerInfo();
 };
 
 class LnetClient
