@@ -895,8 +895,8 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 {
 	struct IOThreadParams *readParams = (struct IOThreadParams *)pParam;
 	const int thread_id = *(readParams->workerId);
-	std::vector<ActiveRequest>& activeReqs = (readParams->activeReqs);
-	std::mutex& reqLock = (readParams->reqLock);
+	std::vector<ActiveRequest>& activeReqs = *(readParams->activeReqs);
+	std::mutex& reqLock = *(readParams->reqLock);
 
 	CoreBinding.Bind_This_Thread();
 	idx_qp_server = thread_id % NUM_THREAD_IO_WORKER_INTER_SERVER;
@@ -927,7 +927,8 @@ void* Func_thread_IO_Worker_FIFO(void *pParam)	// process all IO wrok
 	CIO_QUEUE *pIO_Queue=NULL;
 	struct timeval tm;
 	
-	thread_id = *((int*)pParam);
+	struct IOThreadParams *readParams = (struct IOThreadParams *)pParam;
+	thread_id = *(readParams->workerId);
 	printf("DBG> Func_thread_IO_Worker_FIFO(): thread_id = %d\n", thread_id);
 	CoreBinding.Bind_This_Thread();
 	idx_qp_server = thread_id % NUM_THREAD_IO_WORKER_INTER_SERVER;
@@ -1124,7 +1125,7 @@ void Process_One_IO_OP(IO_CMD_MSG *pOP_Msg)
 
 	Op_Tag = pOP_Msg->op & 0xFF;
 
-	// printf("  Process_One_IO_OP tag=%d name=%s tid=%d jobrec=%d time=%.6f offset=%ld nLen=%lu\n", Op_Tag, opCodeName(Op_Tag), pOP_Msg->tid, pOP_Msg->idx_JobRec, pOP_Msg->T_Queued/1000000., pOP_Msg->offset, pOP_Msg->nLen);
+	printf("  Process_One_IO_OP tag=%d name=%s tid=%d jobrec=%d time=%.6f offset=%ld nLen=%lu\n", Op_Tag, opCodeName(Op_Tag), pOP_Msg->tid, pOP_Msg->idx_JobRec, pOP_Msg->T_Queued/1000000., pOP_Msg->offset, pOP_Msg->nLen);
 	// printMessage(pOP_Msg, "Process_One_IO_OP");
 
 	switch(Op_Tag)	{

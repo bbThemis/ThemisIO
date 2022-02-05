@@ -241,6 +241,7 @@ static void* Func_thread_Polling_New_Msg(void *pParam)
 	sleep(1);
 
 	while(1)	{
+		// printf("Scan New Msg\n");
 		pServer_qp->ScanNewMsg();
 	}
 
@@ -280,10 +281,13 @@ static void* Func_thread_qp_server(void *pParam)
 		}
 	}
 */
-	for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
+    IOThreadParams params[NUM_THREAD_IO_WORKER];
+    for(i=0; i<NUM_THREAD_IO_WORKER; i++) {
 		IO_Worker_tid_List[i] = i;
-		IOThreadParams params = {.workerId = &(IO_Worker_tid_List[i]), .activeReqs = activeReqs, .reqLock = reqLock};
-		if(pthread_create(&(pthread_IO_Worker[i]), NULL, Func_thread_IO_Worker, (void*)&params/*&(IO_Worker_tid_List[i])*/)) {
+		params[i] = {.workerId = &(IO_Worker_tid_List[i]), .activeReqs = &activeReqs, .reqLock = &reqLock};
+	}
+	for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
+		if(pthread_create(&(pthread_IO_Worker[i]), NULL, Func_thread_IO_Worker, (void*)&(params[i])/*&(IO_Worker_tid_List[i])*/)) {
 			fprintf(stderr, "Error creating thread\n");
 			return 0;
 		}

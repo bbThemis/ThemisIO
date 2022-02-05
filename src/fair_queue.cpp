@@ -299,6 +299,7 @@ void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg, std::vector<Active
 	std::unordered_map<int, MessageQueue*>::const_iterator result_query;
 
 	message_count++;
+	// printf("putMessage_TimeSharing\n");
 	if(fairness_mode == USER_FAIR)	{
 		result_query = indexed_queues.find(user_id);
 	}

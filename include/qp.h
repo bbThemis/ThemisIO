@@ -34,8 +34,8 @@
 #include <mutex>
 struct IOThreadParams {
     int* workerId;
-    std::vector<ActiveRequest>& activeReqs;
-    std::mutex& reqLock;
+    std::vector<ActiveRequest>* activeReqs;
+    std::mutex* reqLock;
 };
 
 
