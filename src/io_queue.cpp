@@ -1125,7 +1125,7 @@ void Process_One_IO_OP(IO_CMD_MSG *pOP_Msg)
 
 	Op_Tag = pOP_Msg->op & 0xFF;
 
-	printf("  Process_One_IO_OP tag=%d name=%s tid=%d jobrec=%d time=%.6f offset=%ld nLen=%lu\n", Op_Tag, opCodeName(Op_Tag), pOP_Msg->tid, pOP_Msg->idx_JobRec, pOP_Msg->T_Queued/1000000., pOP_Msg->offset, pOP_Msg->nLen);
+	// printf("  Process_One_IO_OP tag=%d name=%s tid=%d jobrec=%d time=%.6f offset=%ld nLen=%lu\n", Op_Tag, opCodeName(Op_Tag), pOP_Msg->tid, pOP_Msg->idx_JobRec, pOP_Msg->T_Queued/1000000., pOP_Msg->offset, pOP_Msg->nLen);
 	// printMessage(pOP_Msg, "Process_One_IO_OP");
 
 	switch(Op_Tag)	{
