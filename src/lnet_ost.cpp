@@ -6,9 +6,15 @@
 #include "ost.h"
 // #include "ost_ops.h"
 
-LnetOst::LnetOst(const LSockAddr &addr, int port, const OstInfo *info/*, DatanetOst *dnet*/)
+LnetOst::LnetOst(const LSockAddr &addr, int port, const OstInfo *info/*, DatanetOst *dnet*/,
+    std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
+    std::unordered_map<int, double>& appAlloc, std::mutex& allocLock)
   : LnetServer(info->listenport),
-    _info(info)
+    _info(info),
+    activeReqs(activeReqs),
+    reqLock(reqLock),
+    appAlloc(appAlloc),
+    allocLock(allocLock)
 {
   this->_toMds = new LnetClient(addr, port);
   this->_mdsInfo = new MdsInfo();
@@ -96,7 +102,28 @@ void LnetOst::onClientRequest(const LnetEntity *remote)
       break;
   }
 }
-
+void LnetOst::setAllocations(const LnetEntity *remote, const LnetMsg *msg) {
+  size_t count = 0;
+  size_t offset = 0;
+  msg->extractData(&count, offset);
+  assert(count >= 0);
+  if (count == 0) return;
+  AppAllocs_t bws;
+  for (size_t i = 0; i < count; i++) {
+    int id;
+    double r;
+    msg->extractData(&id, offset);
+    msg->extractData(&r, offset);
+    bws.push_back(std::make_tuple(id, r));
+  }
+  std::lock_guard<std::mutex> lock(allocLock);
+  // double sum = 0;
+  for (auto a : bws) {
+    // appAlloc[std::get<0>(a)] = sum + std::get<1>(a);
+    // sum += std::get<1>(a);
+    appAlloc[std::get<0>(a)] = std::get<1>(a);
+  }
+}
 void LnetOst::onRemoteServerRequest(const LnetEntity *remote)
 {
   if (!remote || !remote->sock || !remote->sock->isValid()) return;
@@ -108,7 +135,7 @@ void LnetOst::onRemoteServerRequest(const LnetEntity *remote)
       this->respondToMdsTimer(remote);
       break;
     case Allocs:
-      // this->_dnet->setAllocations(remote, &msg);
+      this->setAllocations(remote, &msg);
       break;
     case FsRequest:
       this->handleFsRequest(remote, &msg);
@@ -128,12 +155,20 @@ void LnetOst::onRemoteServerRequest(const LnetEntity *remote)
 //   std::cerr << *i << " connected" << std::endl;
 //   this->addClient(i);
 // }
-
+void LnetOst::getActiveRequests(std::vector<ActiveRequest>& reqs) {
+  std::lock_guard<std::mutex> lock(reqLock);
+  for(auto& v: activeReqs) {
+    for(int i = 0; i < v.second; i++) {
+      reqs.push_back(v.first);
+    }
+  }
+}
 void LnetOst::respondToMdsTimer(const LnetEntity *remote)
 {
   if (!remote || !remote->sock || !remote->sock->isValid()) return;
 
   std::vector<ActiveRequest> reqs;
+  getActiveRequests(reqs);
   // this->_dnet->getActiveRequests(reqs);
   auto sz = reqs.size();
   std::cerr << "OST: Responding to MDS timer request with " << sz << " pending reqs." << std::endl;

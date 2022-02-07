@@ -788,8 +788,16 @@ void fairQueueWorker(int thread_id) {
 		}
 	}
 }
-
-void fairQueueWorker_TimeSharing(int thread_id, std::vector<ActiveRequest>& activeReqs, std::mutex& reqLock) {
+void print_activeReqs(std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock) {
+	std::lock_guard<std::mutex> lock(reqLock);
+	printf("////////////////////\n");
+	for(auto& v: activeReqs) {
+		printf("jobid[%d]: %d\n", v.first._info.id, v.second);
+	}
+	printf("////////////////////\n");
+}
+void fairQueueWorker_TimeSharing(int thread_id, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
+ 								 std::unordered_map<int, double>& appAlloc, std::mutex& allocLock) {
 	int IdxMin, IdxMax, range;
 	long int nOp_Done=0;
 
@@ -838,30 +846,33 @@ void fairQueueWorker_TimeSharing(int thread_id, std::vector<ActiveRequest>& acti
 					msg.tid = thread_id;
 					// printMessage(&msg, "incomingMsg");
 					if(Server_qp.fairness_mode == GIFT) {
-						fair_queue.putMessage_TimeSharing(&msg, activeReqs, reqLock);
+						fair_queue.putMessage_TimeSharing(&msg, activeReqs, reqLock, appAlloc, allocLock);
+						// fair_queue.putMessage_TimeSharing(&msg);
 					} else {
 						fair_queue.putMessage_TimeSharing(&msg);
 					}
-					
+					// fair_queue.putMessage_TimeSharing(&msg);
 					pending_count++;
 				}
 			}
 		}
-
+		// print_activeReqs(activeReqs, reqLock);
 		// If there is nothing to do, pause and try again
 		if (pending_count == 0) {
 			_mm_pause();
 			continue;
 		}
-
+    
 		// select one message
 		if(Server_qp.fairness_mode == GIFT) {
+			// printf("Call fair_queue.getMessage_FromActiveJob\n");
 			if (!fair_queue.getMessage_FromActiveJob(&msg, activeReqs, reqLock)) continue;
+			// if (!fair_queue.getMessage_FromActiveJob(&msg)) continue;
 		} else {
 			if (!fair_queue.getMessage_FromActiveJob(&msg)) continue;
 		}
-		
-
+		// if (!fair_queue.getMessage_FromActiveJob(&msg)) continue;
+		// print_activeReqs(activeReqs, reqLock);
 		// printMessage(&msg, "msgSelected");
 
 		// function-local counter
@@ -895,9 +906,11 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 {
 	struct IOThreadParams *readParams = (struct IOThreadParams *)pParam;
 	const int thread_id = *(readParams->workerId);
-	std::vector<ActiveRequest>& activeReqs = *(readParams->activeReqs);
+	std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs = *(readParams->activeReqs);
 	std::mutex& reqLock = *(readParams->reqLock);
-
+    std::unordered_map<int, double>& appAlloc = *(readParams->appAlloc);
+	std::mutex& allocLock = *(readParams->allocLock);
+	
 	CoreBinding.Bind_This_Thread();
 	idx_qp_server = thread_id % NUM_THREAD_IO_WORKER_INTER_SERVER;
 
@@ -911,7 +924,7 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 		Inter_server_communication_loop(thread_id, &(IO_Queue_List[thread_id]));
 	} else {
 //		fairQueueWorker(thread_id);
-		fairQueueWorker_TimeSharing(thread_id, activeReqs, reqLock);
+		fairQueueWorker_TimeSharing(thread_id, activeReqs, reqLock, appAlloc, allocLock);
 	}
 
 	return NULL;

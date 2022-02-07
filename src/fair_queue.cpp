@@ -35,7 +35,11 @@ FairQueue::FairQueue(FairnessMode mode_, int mpi_rank_, int thread_id_,
 	nJob = 0;
 	IdxActiveJob = -1;
 //	it_ActiveJob = NULL;
+	struct timeval tm;
+	gettimeofday(&tm, NULL);
 	
+	rseed[0] = tm.tv_sec;
+	rseed[1] = tm.tv_usec;	
 	decision_log.changeThreadCount(1);
 }
 
@@ -156,7 +160,112 @@ void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg) {
 //	printf("DBG> Put jobid %d OP %x\n", q->job_id, msg->op & 0xFF);
 }
 */
+void FairQueue::Update_Job_Weight(std::unordered_map<int, double>& appAlloc, std::mutex& allocLock) {
+	MessageQueue *q_loc;
+	std::unordered_map<int, float> uid_count;
+	int i;
 
+	switch (fairness_mode)	{
+		case SIZE_FAIR:
+			weight_sum = 0.0;
+			for(i=0; i<nJob; i++)	{
+				q_loc = all_queues[i];
+				weight_sum += q_loc->weight;
+			}
+
+			for(i=0; i<nJob; i++)	{
+				q_loc = all_queues[i];
+				q_loc->dT_Reload = TIME_PER_CYCLE_MICROSEC * (q_loc->weight) / weight_sum;
+				q_loc->T_Balance = q_loc->dT_Reload;	// charge the time balance for a new job
+			}
+			break;
+		case GIFT:
+			weight_sum = 0.1;
+			if(nJob != appAlloc.size()) {
+				for(i=0; i<nJob; i++)	{
+					// q_loc->weight = 1.0;
+					q_loc = all_queues[i];
+					q_loc->weight = weight_sum / (nJob - appAlloc.size());
+					q_loc->dT_Reload = TIME_PER_CYCLE_MICROSEC * (q_loc->weight) / weight_sum;
+					q_loc->T_Balance = q_loc->dT_Reload;	// charge the time balance for a new job
+				}
+			}
+			weight_sum = 1 - weight_sum;
+			for(auto& a: appAlloc) {
+				int jobId = a.first;
+				double job_w = a.second;
+				if(indexed_queues.end() != indexed_queues.find(jobId)) {
+					q_loc = indexed_queues[jobId];
+					q_loc->weight = weight_sum * job_w;
+					q_loc->dT_Reload = TIME_PER_CYCLE_MICROSEC * (q_loc->weight) / weight_sum;
+					q_loc->T_Balance = q_loc->dT_Reload;
+				}
+			}
+			break;
+		case JOB_FAIR:	// each slurm job has weight 1.  
+		case USER_FAIR:
+			weight_sum = 1.0*nJob;
+			for(i=0; i<nJob; i++)	{
+				// q_loc->weight = 1.0;
+				q_loc = all_queues[i];
+				q_loc->weight = 1.0;
+				q_loc->dT_Reload = TIME_PER_CYCLE_MICROSEC * (q_loc->weight) / weight_sum;
+				q_loc->T_Balance = q_loc->dT_Reload;	// charge the time balance for a new job
+			}
+			break;
+		case USER_SIZE_FAIR:
+			for(i=0; i<nJob; i++)	{
+				q_loc = all_queues[i];
+				if (uid_count.find(q_loc->user_id) == uid_count.end())	{
+					uid_count[q_loc->user_id] = q_loc->weight;	// number of jobs from current user
+				}
+				else	{
+					uid_count[q_loc->user_id] = uid_count[q_loc->user_id] + q_loc->weight;
+				}
+			}
+
+			weight_sum = 0.0;
+			for(i=0; i<nJob; i++)	{
+				q_loc = all_queues[i];
+				weight_sum += (q_loc->weight / uid_count[q_loc->user_id]);
+			}
+
+			for(i=0; i<nJob; i++)	{
+				q_loc = all_queues[i];
+				q_loc->dT_Reload = TIME_PER_CYCLE_MICROSEC * (q_loc->weight) / weight_sum;
+				q_loc->T_Balance = q_loc->dT_Reload;	// charge the time balance for a new job
+			}
+			break;
+		case USER_JOB_FAIR:
+			for(i=0; i<nJob; i++)	{
+				q_loc = all_queues[i];
+				q_loc->weight = 1.0;	// All jobs of one individual user have the same weight.  
+				if (uid_count.find(q_loc->user_id) == uid_count.end())	{
+					uid_count[q_loc->user_id] = q_loc->weight;	// number of jobs from current user
+				}
+				else	{
+					uid_count[q_loc->user_id] = uid_count[q_loc->user_id] + q_loc->weight;
+				}
+			}
+
+			weight_sum = 0.0;
+			for(i=0; i<nJob; i++)	{
+				q_loc = all_queues[i];
+				weight_sum += (q_loc->weight / uid_count[q_loc->user_id]);
+			}
+
+			for(i=0; i<nJob; i++)	{
+				q_loc = all_queues[i];
+				q_loc->dT_Reload = TIME_PER_CYCLE_MICROSEC * (q_loc->weight) / weight_sum;
+				q_loc->T_Balance = q_loc->dT_Reload;	// charge the time balance for a new job
+			}
+			break;
+		case GROUP_USER_SIZE_FAIR:
+			break;
+		default:
+			break;
+	}
+}
 void FairQueue::Update_Job_Weight(void) {
 	MessageQueue *q_loc;
 	std::unordered_map<int, float> uid_count;
@@ -176,12 +285,15 @@ void FairQueue::Update_Job_Weight(void) {
 				q_loc->T_Balance = q_loc->dT_Reload;	// charge the time balance for a new job
 			}
 			break;
+		case GIFT:
+			weight_sum = 0.0;
 		case JOB_FAIR:	// each slurm job has weight 1.  
 		case USER_FAIR:
 			weight_sum = 1.0*nJob;
 			for(i=0; i<nJob; i++)	{
-				q_loc->weight = 1.0;
+				// q_loc->weight = 1.0;
 				q_loc = all_queues[i];
+				q_loc->weight = 1.0;
 				q_loc->dT_Reload = TIME_PER_CYCLE_MICROSEC * (q_loc->weight) / weight_sum;
 				q_loc->T_Balance = q_loc->dT_Reload;	// charge the time balance for a new job
 			}
@@ -291,7 +403,8 @@ void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg) {
 //	printf("DBG> Put jobid %d OP %x\n", q->job_id, msg->op & 0xFF);
 }
 
-void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg, std::vector<ActiveRequest>& activeReqs, std::mutex& reqLock) {
+void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
+                                       std::unordered_map<int, double>& appAlloc, std::mutex& allocLock) {
 	MessageQueue *q;
 	static bool first_output = true;
 	int job_id = job_info_lookup.getSlurmJobId(msg);
@@ -306,15 +419,7 @@ void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg, std::vector<Active
 	else	{
 		result_query = indexed_queues.find(job_id);
 	}
-	{
-		std::lock_guard<std::mutex> lock(reqLock);
-		AppInfo inf;
-		inf.id = job_id;
-		sprintf(inf.name, "%d", job_id);
-		ActiveRequest rq = {._info = inf, ._t = Write};
-		activeReqs.push_back(rq);
-		printf("ActiveRequest %d\n", job_id);
-	}
+	
 	if (result_query == indexed_queues.end()) {
 		// create new message queue
 		int weight = job_info_lookup.getNodeCount(msg);
@@ -329,7 +434,7 @@ void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg, std::vector<Active
 			SetFirstJobActive();
 		}
 
-		Update_Job_Weight();
+		Update_Job_Weight(appAlloc, allocLock);
 
 		// Need to update the reload time length for all jobs
 
@@ -343,9 +448,18 @@ void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg, std::vector<Active
 	}
 
 	q->add(msg);
-
+    
 	if( (msg->op & 0xFFFFFF00) != IO_OP_MAGIC)	{
 		printf("Stop here. Wrong msg!!!\n");
+	}
+	{
+		std::lock_guard<std::mutex> lock(reqLock);
+		AppInfo inf;
+		inf.id = job_id;
+		sprintf(inf.name, "%d", job_id);
+		ActiveRequest rq = {._info = inf, ._t = Write};
+		activeReqs[rq]++;
+		// printf("put ActiveRequest %d\n", job_id);
 	}
 
 //	printf("DBG> Put jobid %d OP %x\n", q->job_id, msg->op & 0xFF);
@@ -434,10 +548,11 @@ bool FairQueue::getMessage(IO_CMD_MSG *msg) {
 
 	return true;
 }
-bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg, std::vector<ActiveRequest>& activeReqs, std::mutex& reqLock) {
+bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock) {
 	long int t_Now;
 
 	if (nJob == 0) return false;
+	
 
 //	assert( (IdxActiveJob>=0) && (IdxActiveJob <nJob) );
 	MessageQueue *q = all_queues[IdxActiveJob];
@@ -480,7 +595,20 @@ bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg, std::vector<ActiveRequ
 		printf("Stop here.\n");
 	}
 //	printf("DBG> %d %x\n", q->job_id, msg->op & 0xFF);
-
+    int job_id = job_info_lookup.getSlurmJobId(msg);
+//	printf("DBG> %d %x\n", q->job_id, msg->op & 0xFF);
+    {
+		std::lock_guard<std::mutex> lock(reqLock);
+		AppInfo inf;
+		inf.id = job_id;
+		sprintf(inf.name, "%d", job_id);
+		ActiveRequest rq = {._info = inf, ._t = Write};
+		activeReqs[rq]--;
+		if(activeReqs[rq] == 0) {
+			activeReqs.erase(activeReqs.find(rq), activeReqs.end());
+		}
+		printf("get ActiveRequest %d\n", job_id);
+	}
 	message_count--;
 	
 	if (q->messages.empty()) {

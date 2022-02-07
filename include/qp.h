@@ -31,11 +31,15 @@
 
 // For GIFT Usage
 #include <vector>
+#include <unordered_map>
 #include <mutex>
+
 struct IOThreadParams {
     int* workerId;
-    std::vector<ActiveRequest>* activeReqs;
+    std::unordered_map<ActiveRequest, int, hash_activeReq>* activeReqs;
     std::mutex* reqLock;
+	std::unordered_map<int, double>* appAlloc;
+	std::mutex* allocLock;
 };
 
 
@@ -247,7 +251,7 @@ public:
 	static FairnessMode getDefaultFairnessMode() {return FIFO;};
 
 	static const char *fairnessModeToString(FairnessMode fairness_mode) {
-		static char szFairnessModeString[16][64]={"fifo", "size-fair", "job-fair", "user-fair", "user-size-fair", "user-job-fair", "group-user-size-fair"};
+		static char szFairnessModeString[16][64]={"fifo", "size-fair", "job-fair", "user-fair", "user-size-fair", "user-job-fair", "group-user-size-fair", "gift"};
 
 		return szFairnessModeString[(int)fairness_mode];
 //		return fairness_mode == SIZE_FAIR ? "size-fair"

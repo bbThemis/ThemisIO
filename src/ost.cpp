@@ -8,7 +8,22 @@ using namespace std;
 
 const int DEFAULT_GC_TIMER = 15;
 
-OST::OST(const LSockAddr &addr, int port, int id, const char *name, int lnetport/*, int dataport*/)
+// OST::OST(const LSockAddr &addr, int port, int id, const char *name, int lnetport/*, int dataport*/)
+// {
+//   this->_info = new OstInfo();
+//   this->_info->id = id;
+//   strncpy(this->_info->name, name, sizeof(this->_info->name));
+//   ::gethostname(this->_info->hostname, sizeof(this->_info->hostname));
+//   this->_info->listenport = lnetport;
+//   // this->_info->dataport = dataport;
+//   // this->_dataNet = new DatanetOst(this->_info);
+//   this->_ostNet = new LnetOst(addr, port, this->_info/*, this->_dataNet*/);
+//   this->_mdsConnected = this->_ostNet->pubOstInfoToMds();
+// }
+
+OST::OST(const LSockAddr &addr, int port, int id, const char *name, int lnetport/*, int dataport*/,
+        std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
+        std::unordered_map<int, double>& appAlloc, std::mutex& allocLock):activeReqs(activeReqs), reqLock(reqLock), appAlloc(appAlloc), allocLock(allocLock)
 {
   this->_info = new OstInfo();
   this->_info->id = id;
@@ -17,7 +32,7 @@ OST::OST(const LSockAddr &addr, int port, int id, const char *name, int lnetport
   this->_info->listenport = lnetport;
   // this->_info->dataport = dataport;
   // this->_dataNet = new DatanetOst(this->_info);
-  this->_ostNet = new LnetOst(addr, port, this->_info/*, this->_dataNet*/);
+  this->_ostNet = new LnetOst(addr, port, this->_info, activeReqs, reqLock, /*, this->_dataNet*/appAlloc, allocLock);
   this->_mdsConnected = this->_ostNet->pubOstInfoToMds();
 }
 

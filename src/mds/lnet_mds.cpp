@@ -137,7 +137,7 @@ void LnetMds::onClientRequest(const LnetEntity *remote)
 }
 
 void LnetMds::computeBwAllocations(Policy_t policy,
-                                   const std::vector<std::vector<int>> &reqs,
+                                   std::vector<std::vector<int>> &reqs,
                                    MapOstToAppAllocs_t &allocs)
 {
   // Assert that all the OSTs are covered

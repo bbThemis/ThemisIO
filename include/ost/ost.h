@@ -2,7 +2,8 @@
 #define _OST_H_
 
 #include <vector>
-
+#include <unordered_map>
+#include <mutex>
 #include "lnet.h"
 // #include "dnet_ost.h"
 
@@ -14,11 +15,15 @@ class LnetOst: public LnetServer
     LnetClient *_toMds;
     // std::vector<OscInfo*> _oscs;
     // DatanetOst *_dnet;
-  
+    std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs;
+    std::mutex& reqLock;
+    std::unordered_map<int, double>& appAlloc; 
+    std::mutex& allocLock;
     // void addOsc(const LSocket &, const OscInfo *);
     void respondToMdsTimer(const LnetEntity *);
     void handleFsRequest(const LnetEntity *, const LnetMsg *);
-
+    void getActiveRequests(std::vector<ActiveRequest>& reqs);
+    void setAllocations(const LnetEntity *remote, const LnetMsg *msg);
   protected:
     virtual void onConnect();
     virtual void onDisconnect(const LnetEntity *);
@@ -26,7 +31,9 @@ class LnetOst: public LnetServer
     virtual void onRemoteServerRequest(const LnetEntity *);
 
   public:
-    LnetOst(const LSockAddr &, int , const OstInfo */*, DatanetOst * */);
+    LnetOst(const LSockAddr &, int , const OstInfo */*, DatanetOst * */,
+    std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
+    std::unordered_map<int, double>& appAlloc, std::mutex& allocLock);
     ~LnetOst();
     bool pubOstInfoToMds();
     ssize_t sendMsgToMds(const LnetMsg *);
@@ -44,10 +51,16 @@ class OST
     // DatanetOst *_dataNet;
     // std::vector<OscInfo*> _oscs;
     bool _mdsConnected;
-
+    std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs;
+    std::mutex& reqLock;
+    std::unordered_map<int, double>& appAlloc; 
+    std::mutex& allocLock;
   public:
     // constructor(s)
-    OST(const LSockAddr &addr, int port, int id, const char *name, int lnetport/*, int dataport*/);
+    // OST(const LSockAddr &addr, int port, int id, const char *name, int lnetport/*, int dataport*/);
+    OST(const LSockAddr &addr, int port, int id, const char *name, int lnetport/*, int dataport*/,
+        std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
+        std::unordered_map<int, double>& appAlloc, std::mutex& allocLock);
     ~OST();
 
     // methods

@@ -838,7 +838,7 @@ static void Take_a_Short_Nap(int nsec)
 
 static void Read_FS_Param(void)
 {
-	printf("READ FS PARAM\n");
+	// printf("READ FS PARAM\n");
 	char szFileName[128], *szServerConf=NULL;
 	FILE *fIn;
 	int i, j, nItems;
@@ -869,7 +869,7 @@ static void Read_FS_Param(void)
 	
 	for(i=0; i<pFileServerList->nFSServer; i++)	{
 		nItems = fscanf(fIn, "%s%d", pFileServerList->FS_List[i].szIP, &(pFileServerList->FS_List[i].port));
-		printf("%s %d\n", pFileServerList->FS_List[i].szIP, pFileServerList->FS_List[i].port);
+		// printf("%s %d\n", pFileServerList->FS_List[i].szIP, pFileServerList->FS_List[i].port);
 		if(nItems != 2)	{
 			printf("ERROR> Failed to read ip port information of file server.\nQuit\n");
 			fclose(fIn);

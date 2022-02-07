@@ -30,36 +30,41 @@ double sys_coup_rdmp = 0.0;
 
 vector<AppData_t> appDatabase;
 
-vector<int>    numCouponsIssued;
-vector<double> valCouponsIssued;
+std::vector<int>    numCouponsIssued;
+std::vector<double> valCouponsIssued;
 
 // Track the effective storage system utilization for all policies
-vector<double> runEffStorageSysUtil;
+std::vector<double> runEffStorageSysUtil;
 
-
+// #define MAGIC_APP_ID 347483647 // Use when some OST is empty
 void LnetMds::computeBwAllocationsGIFT(const size_t NUM_OSTS,
-                                       const std::vector<std::vector<int>> &reqs,
+                                       std::vector<std::vector<int>> &reqs,
                                        MapOstToAppAllocs_t &allocs) {
     // Create a flat vector
     vector<int> flat;
     for (size_t i = 0; i < NUM_OSTS; i++) {
+        // if(reqs[i].empty()) {
+        //   reqs[i].push_back( MAGIC_APP_ID + i);   
+        // }
         for (auto req : reqs[i]) {
-        flat.push_back(req);
+            flat.push_back(req);
         }
+        
     }
+    // printf("reqs.size: %lu\n", reqs.size());
     // prevent segment fault
-    if(flat.empty()) {
-        for (size_t i = 0; i < NUM_OSTS; i++) {
-            AppAllocs_t alloc;
-            allocs.push_back(alloc);
-        }
-        return;
-    }
+    // if(flat.empty()) {
+    //     for (size_t i = 0; i < NUM_OSTS; i++) {
+    //         AppAllocs_t alloc;
+    //         allocs.push_back(alloc);
+    //     }
+    //     return;
+    // }
     // Determine the number of applications doing I/O
     set<int> s = set<int>(flat.begin(), flat.end());
     vector<int> apps(s.begin(), s.end());
     const int numApps = (int)apps.size();
-
+    // printf("numApps: %d\n", numApps);
     // Row Order matrix
     const bool cOrd = false;
 
@@ -132,9 +137,9 @@ void LnetMds::computeBwAllocationsGIFT(const size_t NUM_OSTS,
     for (size_t i = 0; i < NUM_OSTS; i++) {
         double alc = 1.0 / (double)reqs[i].size();
         for (auto req : reqs[i]) {
-        int app = (int)(find(apps.begin(), apps.end(), req) - apps.begin());
-        alcs[app] = min(alcs[app], alc);
-        osts[app] += 1;
+            int app = (int)(find(apps.begin(), apps.end(), req) - apps.begin());
+            alcs[app] = min(alcs[app], alc);
+            osts[app] += 1;
         }
     }
     double efbw[NUM_OSTS];
@@ -228,7 +233,7 @@ void LnetMds::computeBwAllocationsGIFT(const size_t NUM_OSTS,
     fsbw = new double[numApps];
     fill_n(collb, numApps, numeric_limits<double>::infinity());
     fill_n(fsbw, numApps, numeric_limits<double>::infinity());
-
+    
     for (int app = 0; app < numApps; app++) {
         if (((sys_coup_issu == 0.0) or ((sys_coup_issu != 0.0) && ((sys_coup_rdmp/sys_coup_issu) > GIFT_SYS_RDMP_T))) && (apTh[app] > 0.0)) {
         if (apTh[app] > ((alcs[app] * GIFT_B_THRESOLD) * osts[app])) {
@@ -274,12 +279,11 @@ void LnetMds::computeBwAllocationsGIFT(const size_t NUM_OSTS,
     double rowlb[NUM_OSTS], rowub[NUM_OSTS];
     memset(rowlb, 0, NUM_OSTS * sizeof(double));
     fill_n(rowub, NUM_OSTS, 1);
-
+   
     ClpSimplex model;
     model.loadProblem(matrix, collb, colub, obj, rowlb, rowub, NULL);
     model.primal();
     double* cVal = model.primalColumnSolution();
-
     bool* done = NULL;
     done = new bool[numApps];
     fill_n(done, numApps, false);
@@ -305,7 +309,7 @@ void LnetMds::computeBwAllocationsGIFT(const size_t NUM_OSTS,
             xtraBw = (1.0 - usedBw) * (cVal[ind] / usedBw);
         }
         alloc.push_back(make_tuple(req, cVal[ind] + xtraBw));
-
+        
         if ((!done[ind]) && (cVal[ind] < fsbw[ind])) {
             done[ind] = true;
             for (auto& base : appDatabase) {
@@ -323,17 +327,29 @@ void LnetMds::computeBwAllocationsGIFT(const size_t NUM_OSTS,
             }
         }
         }
+        // std::cout << i << std::endl;
+        // for(auto& d: alloc) {
+        //     std::cout << std::get<0>(d) << " -> " << std::get<1>(d) << ";\n";
+        // }
         allocs.push_back(alloc);
+        
     }
-
+    // for(size_t i = 0; i < numCouponsIssued.size(); i++) {
+    //     printf("\t%d", numCouponsIssued[i]);
+    // }
+    if(numCouponsIssued.size() == 0) {
+        numCouponsIssued.push_back(0);
+    }
+    if(valCouponsIssued.size() == 0) {
+        valCouponsIssued.push_back(0.0);
+    }
+    
     numCouponsIssued.push_back(numCouponsIssued.back() + numCoups);
     valCouponsIssued.push_back(valCouponsIssued.back() + valCoups);
-
     // Determine effective storage system utilization	
     if (model.getObjValue() < 0) {
         runEffStorageSysUtil.push_back(-1 * model.getObjValue());
     }
-
     delete [] rInd;
     delete [] cInd;
     delete [] ele;
@@ -345,7 +361,7 @@ void LnetMds::computeBwAllocationsGIFT(const size_t NUM_OSTS,
     delete [] obj;
     delete [] done;
 
-
+   
 }
 
 void LnetMds::printStats()

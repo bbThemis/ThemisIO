@@ -51,12 +51,12 @@ class LnetMds: public LnetServer
     void handleFsRequest(const LnetEntity *remote, const LnetMsg *msg);
     const OstInfo *getOstFromPath(const std::string *path) const;
     void addToTimerResponse(const LnetEntity *remote, const LnetMsg *msg);
-    void computeBwAllocations(Policy_t , const std::vector<std::vector<int>> &,
+    void computeBwAllocations(Policy_t , std::vector<std::vector<int>> &,
                               MapOstToAppAllocs_t &);
     void bcastAllocsToOsts(const MapOstToAppAllocs_t &);
 
     void computeBwAllocationsGIFT(const size_t ,
-                                  const std::vector<std::vector<int>> &,
+                                  std::vector<std::vector<int>> &,
                                   MapOstToAppAllocs_t &);
     double getEffectiveSysBw();
 

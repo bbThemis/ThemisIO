@@ -78,6 +78,31 @@ struct AppInfo
 {
   int id;
   char name[60];
+  bool operator==(const AppInfo &a) const {
+    return id == a.id;
+  }
+};
+struct ActiveRequest
+{
+  struct AppInfo _info;
+  FsRequestType _t;
+  // `operator==` is required to compare keys in case of a hash collision
+  bool operator==(const ActiveRequest &r) const {
+    return _info == r._info && _t == r._t;
+  }
+};
+
+// The specialized hash function for `unordered_map` keys
+struct hash_activeReq
+{
+    std::size_t operator() (const ActiveRequest &r) const
+    {
+        std::size_t h1 = std::hash<int>()(r._info.id);
+        std::size_t h2 = std::hash<const char*>()(r._info.name);
+        std::size_t h3 = std::hash<FsRequestType>()(r._t);
+ 
+        return h1 ^ h2 ^ h3;
+    }
 };
 
 using AppAlloc_t = std::tuple<int , double >;
@@ -337,11 +362,8 @@ struct OstInfo: public MdsClient
   }
 };
 
-struct ActiveRequest
-{
-  struct AppInfo _info;
-  FsRequestType _t;
-};
+
+
 std::ostream& operator<<(std::ostream &os, const ActiveRequest &r);
 
 
