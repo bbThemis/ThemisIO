@@ -85,7 +85,8 @@ class FairQueue {
 	bool getMessage(IO_CMD_MSG *msg);
 
 	bool getMessage_FromActiveJob(IO_CMD_MSG *msg);
-	bool getMessage_FromActiveJob(IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock);
+	bool getMessage_FromActiveJob(IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
+	                              std::unordered_map<int, double>& appAlloc, std::mutex& allocLock);
 	// recharge all jobs with designed time length
 	void reload();
 

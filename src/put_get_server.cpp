@@ -317,6 +317,7 @@ static void* Func_Setup_Connection_To_Mds(void* pParam) {
 	std::mutex* reqLock = ((OSTThreadParams*)pParam)->reqLock;
 	std::unordered_map<int, double>* appAlloc = ((OSTThreadParams*)pParam)->appAlloc;
 	std::mutex* allocLock = ((OSTThreadParams*)pParam)->allocLock;
+	
 	char mds_host[256];
 	int mds_port;
 	char name[256];

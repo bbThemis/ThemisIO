@@ -5,7 +5,7 @@
 #include "lnet.h"
 #include "ost.h"
 // #include "ost_ops.h"
-
+extern int mpi_rank;
 LnetOst::LnetOst(const LSockAddr &addr, int port, const OstInfo *info/*, DatanetOst *dnet*/,
     std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
     std::unordered_map<int, double>& appAlloc, std::mutex& allocLock)
@@ -18,7 +18,7 @@ LnetOst::LnetOst(const LSockAddr &addr, int port, const OstInfo *info/*, Datanet
 {
   this->_toMds = new LnetClient(addr, port);
   this->_mdsInfo = new MdsInfo();
-  this->_mdsInfo->id = 0;
+  this->_mdsInfo->id = mpi_rank;
   this->_mdsInfo->listenport = port;
   this->_mdsInfo->sock = this->_toMds->getSocket();
   // this->_dnet = dnet;
@@ -117,13 +117,18 @@ void LnetOst::setAllocations(const LnetEntity *remote, const LnetMsg *msg) {
     bws.push_back(std::make_tuple(id, r));
   }
   std::lock_guard<std::mutex> lock(allocLock);
-  // double sum = 0;
+  double sum = 0;
+  printf("Rank %d setAllocations:\n", mpi_rank);
+  // printf("setAllocations: appAlloc addr:%u\n", &appAlloc);
   for (auto a : bws) {
-    // appAlloc[std::get<0>(a)] = sum + std::get<1>(a);
-    // sum += std::get<1>(a);
-    appAlloc[std::get<0>(a)] = std::get<1>(a);
+    appAlloc[std::get<0>(a)] = sum + std::get<1>(a);
+    sum += std::get<1>(a);
+    // appAlloc[std::get<0>(a)] = std::get<1>(a);
+    printf("appAlloc[%d]:%f\n",std::get<0>(a), appAlloc[std::get<0>(a)]);
   }
+  //printf("appAlloc: %u in setAllocations\n", &allocLock);
 }
+
 void LnetOst::onRemoteServerRequest(const LnetEntity *remote)
 {
   if (!remote || !remote->sock || !remote->sock->isValid()) return;
@@ -163,6 +168,7 @@ void LnetOst::getActiveRequests(std::vector<ActiveRequest>& reqs) {
     }
   }
 }
+
 void LnetOst::respondToMdsTimer(const LnetEntity *remote)
 {
   if (!remote || !remote->sock || !remote->sock->isValid()) return;
@@ -171,7 +177,7 @@ void LnetOst::respondToMdsTimer(const LnetEntity *remote)
   getActiveRequests(reqs);
   // this->_dnet->getActiveRequests(reqs);
   auto sz = reqs.size();
-  std::cerr << "OST: Responding to MDS timer request with " << sz << " pending reqs." << std::endl;
+  std::cerr << "MPI rank " << mpi_rank << " OST: Responding to MDS timer request with " << sz << " pending reqs." << std::endl;
 
   LnetMsg msg(TimerResp, sizeof(sz) + sz * sizeof(ActiveRequest));
   msg.marshall(&sz); // First, send the length of vector

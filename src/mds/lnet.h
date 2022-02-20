@@ -88,7 +88,7 @@ struct ActiveRequest
   FsRequestType _t;
   // `operator==` is required to compare keys in case of a hash collision
   bool operator==(const ActiveRequest &r) const {
-    return _info == r._info && _t == r._t;
+    return _info.id == r._info.id && _t == r._t;
   }
 };
 
@@ -98,10 +98,10 @@ struct hash_activeReq
     std::size_t operator() (const ActiveRequest &r) const
     {
         std::size_t h1 = std::hash<int>()(r._info.id);
-        std::size_t h2 = std::hash<const char*>()(r._info.name);
+        // std::size_t h2 = std::hash<const char*>()(r._info.name);
         std::size_t h3 = std::hash<FsRequestType>()(r._t);
  
-        return h1 ^ h2 ^ h3;
+        return h1 ^ h3;
     }
 };
 

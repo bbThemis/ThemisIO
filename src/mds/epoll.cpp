@@ -6,7 +6,6 @@
 
 #include <arpa/inet.h>
 
-
 Epoll::Epoll()
 {
   this->_epollFd = epoll_create(MAX_EVENTS);
@@ -93,6 +92,7 @@ void LnetServer::printServerInfo() {
 }
 void LnetServer::eventLoop()
 {
+  // CoreBinding.Bind_This_Thread();
   struct epoll_event ev;
 
   ev.events = EPOLLIN;

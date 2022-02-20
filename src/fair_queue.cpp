@@ -3,6 +3,9 @@
 #include <random>
 #include <iomanip>
 #include <unordered_map>
+#include <cstdlib>
+#include <random>
+#include <iostream>
 
 /* Set this to a nonzero value to enable a debug output message each time a
 	 new job is encountered, and a message when that job is considered idle
@@ -10,7 +13,7 @@
 #define REPORT_JOB_START_AND_END 0
 
 extern std::unordered_map<int, int> uid_gid;
-
+extern int mpi_rank;
 pthread_mutex_t FairQueue::shared_decision_log_lock = PTHREAD_MUTEX_INITIALIZER;
 FairQueue::DecisionLog FairQueue::shared_decision_log;
 int FairQueue::thread_count = 0;
@@ -180,17 +183,25 @@ void FairQueue::Update_Job_Weight(std::unordered_map<int, double>& appAlloc, std
 			}
 			break;
 		case GIFT:
-			weight_sum = 0.1;
-			if(nJob != appAlloc.size()) {
-				for(i=0; i<nJob; i++)	{
-					// q_loc->weight = 1.0;
-					q_loc = all_queues[i];
-					q_loc->weight = weight_sum / (nJob - appAlloc.size());
-					q_loc->dT_Reload = TIME_PER_CYCLE_MICROSEC * (q_loc->weight) / weight_sum;
-					q_loc->T_Balance = q_loc->dT_Reload;	// charge the time balance for a new job
-				}
+			// weight_sum = 0.1;
+			// printf("Update Job Weight -Gift\n");
+			for(i=0; i<nJob; i++)	{
+				// q_loc->weight = 1.0;
+				q_loc = all_queues[i];
+				// q_loc->weight = weight_sum / (nJob - appAlloc.size());
+				// q_loc->dT_Reload = TIME_PER_CYCLE_MICROSEC * (q_loc->weight) / weight_sum;
+				// q_loc->T_Balance = q_loc->dT_Reload;	// charge the time balance for a new job
+				q_loc->weight = 0.0;
+				q_loc->dT_Reload = 0.0;
+				q_loc->T_Balance = 0.0;	// charge the time balance for a new job
 			}
-			weight_sum = 1 - weight_sum;
+			// weight_sum = 1 - weight_sum;
+			weight_sum = 1;
+			// if(appAlloc.size() != 0) {
+			// 	printf("appAlloc no longer empty\n");
+			// } else {
+			// 	printf("appAlloc still empty\n");
+			// }
 			for(auto& a: appAlloc) {
 				int jobId = a.first;
 				double job_w = a.second;
@@ -402,7 +413,7 @@ void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg) {
 
 //	printf("DBG> Put jobid %d OP %x\n", q->job_id, msg->op & 0xFF);
 }
-
+// For Gift Only
 void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
                                        std::unordered_map<int, double>& appAlloc, std::mutex& allocLock) {
 	MessageQueue *q;
@@ -422,7 +433,8 @@ void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg, std::unordered_map
 	
 	if (result_query == indexed_queues.end()) {
 		// create new message queue
-		int weight = job_info_lookup.getNodeCount(msg);
+		// int weight = job_info_lookup.getNodeCount(msg);
+		int weight = 1; // no longer useful in GIFT
 		q = new MessageQueue(job_id, job_id, user_id, getTime(), weight);
 		if(fairness_mode != USER_FAIR)	indexed_queues[job_id] = q;
 		else	indexed_queues[user_id] = q;
@@ -430,11 +442,11 @@ void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg, std::unordered_map
 
 		nJob++;
 		// Start the first job, set it as the active job. 
-		if(nJob == 1)	{
-			SetFirstJobActive();
-		}
+		// if(nJob == 1)	{
+		// 	SetFirstJobActive();
+		// }
 
-		Update_Job_Weight(appAlloc, allocLock);
+		// Update_Job_Weight(appAlloc, allocLock);
 
 		// Need to update the reload time length for all jobs
 
@@ -459,7 +471,8 @@ void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg, std::unordered_map
 		sprintf(inf.name, "%d", job_id);
 		ActiveRequest rq = {._info = inf, ._t = Write};
 		activeReqs[rq]++;
-		// printf("put ActiveRequest %d\n", job_id);
+		// printf("put ActiveRequest %d mpi_rank %d\n", job_id, mpi_rank);
+		// printf("activeReqs[%d]:%d\n", job_id, activeReqs[rq]);
 	}
 
 //	printf("DBG> Put jobid %d OP %x\n", q->job_id, msg->op & 0xFF);
@@ -548,43 +561,87 @@ bool FairQueue::getMessage(IO_CMD_MSG *msg) {
 
 	return true;
 }
-bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock) {
+//Only for GIFT
+
+bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
+                                         std::unordered_map<int, double>& appAlloc, std::mutex& allocLock) {
 	long int t_Now;
 
 	if (nJob == 0) return false;
-	
-
-//	assert( (IdxActiveJob>=0) && (IdxActiveJob <nJob) );
-	MessageQueue *q = all_queues[IdxActiveJob];
-
+	MessageQueue *q = NULL;
 	t_Now = (long int)getTime();
-	q->T_Balance -= (t_Now - q->T_Cycle_Start);
-
-	if(q->T_Balance <= 0)	{
-		int nDone = 1;
-
-		while(1)	{
-			// Make the next job active
-			SetNextJobActive();
-			q = all_queues[IdxActiveJob];
-
-			if(q->T_Balance <= 0)	nDone++;
-			else	{
-				q->T_Cycle_Start = t_Now;
+	double random_value;
+	std::random_device rd;  // Will be used to obtain a seed for the random number engine
+    std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
+    std::uniform_real_distribution<> dis(0.0, 1.0);
+	random_value = dis(gen);
+	double prev = 0.0;
+	int jobId = -1;
+	// printf("random_value %f\t",random_value);
+	
+	{
+		std::lock_guard<std::mutex> lock(allocLock);
+		// printf("appAlloc: %u in getMessage_FromActiveJob\n", &allocLock);
+		// if(!appAlloc.empty()) {
+		// 	printf("appAlloc not empty\n");
+		// }
+		for(auto& a: appAlloc) {
+			if(prev <= random_value && random_value < a.second) {
+				// printf("random %f;a.second %f\t", random_value, a.second);
+				jobId = a.first;
 				break;
-			}
-
-			if(nDone >= nJob)	{	// All jobs are done. Need to restart a new cycle. 
-				IdxActiveJob = -1;
-				while( IdxActiveJob == (-1) )	{	// Might need to recharge multiple times
-					reload();
-				}
-				break;
+			} else {
+				prev = a.second;
 			}
 		}
-//		assert( (IdxActiveJob>=0) && (IdxActiveJob <nJob) );
-		q = all_queues[IdxActiveJob];
+
 	}
+	std::unordered_map<int, MessageQueue*>::const_iterator result_query;
+	result_query = indexed_queues.find(jobId);
+	if (result_query == indexed_queues.end()) {
+		return false;
+	}
+	q = result_query->second;
+//	assert( (IdxActiveJob>=0) && (IdxActiveJob <nJob) );
+// 	MessageQueue *q = all_queues[IdxActiveJob];
+
+// 	t_Now = (long int)getTime();
+// 	q->T_Balance -= (t_Now - q->T_Cycle_Start);
+
+// 	if(q->T_Balance <= 0)	{
+// 		int nDone = 1;
+
+// 		while(1)	{
+// 			// Make the next job active
+// 			SetNextJobActive();
+// 			q = all_queues[IdxActiveJob];
+
+// 			if(q->T_Balance <= 0)	nDone++;
+// 			else	{
+// 				q->T_Cycle_Start = t_Now;
+// 				break;
+// 			}
+
+// 			if(nDone >= nJob)	{	// All jobs are done. Need to restart a new cycle. 
+// 				IdxActiveJob = -1;
+// 				while( IdxActiveJob == (-1) )	{	// Might need to recharge multiple times
+// 					if(indexed_queues.empty())	{
+// 						IdxActiveJob = -1;
+// 						break;
+// 					} else {
+// 						if(appAlloc.empty()) {
+// 							IdxActiveJob = 0;
+// 						} else {
+// 							reload();
+// 						}
+// 					}
+// 				}
+// 				break;
+// 			}
+// 		}
+// //		assert( (IdxActiveJob>=0) && (IdxActiveJob <nJob) );
+// 		q = all_queues[IdxActiveJob];
+// 	}
 	if (q->messages.empty()) {
 //		q->idle_timestamp = t_Now;
 		return false;
@@ -607,7 +664,8 @@ bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg, std::unordered_map<Act
 		if(activeReqs[rq] == 0) {
 			activeReqs.erase(activeReqs.find(rq), activeReqs.end());
 		}
-		printf("get ActiveRequest %d\n", job_id);
+		// printf("get ActiveRequest %d\n", job_id);
+		// printf("activeReqs[%d]:%d\n", job_id, activeReqs[rq]);
 	}
 	message_count--;
 	

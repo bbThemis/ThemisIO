@@ -10,8 +10,8 @@
 
 //#define QP_PUT_TIMEOUT_MS	(1000)	// one second timeout
 #define QP_PUT_TIMEOUT_MS	(3000)	// two seconds timeout
-#define QP_WAIT_RESULT_TIMEOUT_MS	(3500)	// one second timeout
-
+// #define QP_WAIT_RESULT_TIMEOUT_MS	(3500)	// one second timeout
+#define QP_WAIT_RESULT_TIMEOUT_MS	(43500)	// one second timeout
 #define MAX_FS_SERVER	(128)
 #define MAX_QP_PER_PROCESS	(512)	// 256. Assume half of 512 is used. 
 #define MAX_QP_PER_NODE		(256)	// hard limit per node. Maybe not large enough. QP is needed for every file server!!!

@@ -431,7 +431,7 @@ void CLIENT_QUEUEPAIR::Setup_Socket(char szServerIP[])
         printf("\nInvalid address/ Address not supported \n"); 
         return; 
     }
-	printf("\n%s \n", szServerIP); 
+	// printf("\n%s \n", szServerIP); 
 //	gettimeofday(&tm1, NULL);
     if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) { 
         printf("\nConnection Failed \n"); 

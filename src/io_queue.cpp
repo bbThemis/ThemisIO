@@ -796,11 +796,25 @@ void print_activeReqs(std::unordered_map<ActiveRequest, int, hash_activeReq>& ac
 	}
 	printf("////////////////////\n");
 }
+struct UpdateWeightThreadParams {
+    FairQueue* pFairQueue;
+	std::unordered_map<int, double>* appAlloc;
+	std::mutex* allocLock;
+};
+static void* Func_Update_Job_Weight(void* pParam) {
+	FairQueue* pFairQueue = ((UpdateWeightThreadParams*)pParam)->pFairQueue;
+	std::unordered_map<int, double>* appAlloc = ((UpdateWeightThreadParams*)pParam)->appAlloc;
+	std::mutex* allocLock = ((UpdateWeightThreadParams*)pParam)->allocLock;
+	while(1) {
+		pFairQueue->Update_Job_Weight(*appAlloc, *allocLock);
+	}
+}
+
 void fairQueueWorker_TimeSharing(int thread_id, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
  								 std::unordered_map<int, double>& appAlloc, std::mutex& allocLock) {
 	int IdxMin, IdxMax, range;
 	long int nOp_Done=0;
-
+	pthread_t thread_update_job_weight;
 	// Each thread handles a subrange of input queues.
 	// Distribute those queues across threads as equally as possible.
 	{
@@ -817,6 +831,17 @@ void fairQueueWorker_TimeSharing(int thread_id, std::unordered_map<ActiveRequest
 	IO_CMD_MSG msg;
 	JobInfoLookup job_info_lookup(ActiveJobList, &nActiveJob);
 	FairQueue fair_queue(Server_qp.fairness_mode, mpi_rank, thread_id, job_info_lookup, MAX_JOB_IDLE_SEC);
+	// if(Server_qp.fairness_mode == GIFT) {
+	// 	UpdateWeightThreadParams updateParams;
+	// 	updateParams.pFairQueue = &fair_queue;
+	// 	updateParams.appAlloc = &appAlloc;
+	// 	updateParams.allocLock = &allocLock;
+	// 	if(pthread_create(&(thread_update_job_weight), NULL, Func_Update_Job_Weight, &updateParams)) {
+	// 		fprintf(stderr, "Error creating thread\n");
+	// 		return;
+	// 	}
+	// }
+	
 	int pending_count = 0;
 
 	// Call FairQueue::housekeeping() at regular intervals.
@@ -828,7 +853,7 @@ void fairQueueWorker_TimeSharing(int thread_id, std::unordered_map<ActiveRequest
 			fair_queue.housekeeping();
 			next_housekeeping_time = now + FAIRQUEUE_HOUSEKEEPING_FREQ_MICROS;
 		}
-
+		
 		// ERR busy loop on unsynchronized variable
 		if (nActiveJob == 0){
 			_mm_pause();
@@ -856,21 +881,41 @@ void fairQueueWorker_TimeSharing(int thread_id, std::unordered_map<ActiveRequest
 				}
 			}
 		}
+		// if(mpi_rank == 0 && thread_id == 8) {
+		// 	printf("after put:");
+		// 	print_activeReqs(activeReqs, reqLock);
+		// }
 		// print_activeReqs(activeReqs, reqLock);
 		// If there is nothing to do, pause and try again
 		if (pending_count == 0) {
 			_mm_pause();
 			continue;
 		}
-    
+		
+		// if(pending_count !=0 ) {
+		// 	printf("DBG>  FairQueue rank %d thread_id %d\n", mpi_rank, thread_id);
+		// }
+		// if(Server_qp.fairness_mode == GIFT) {
+		// 	fair_queue.Update_Job_Weight(appAlloc, allocLock);
+		// }
 		// select one message
+		// if(pending_count !=0 ) {
+		// 	printf("DBG> before get FairQueue rank %d thread_id %d\n", mpi_rank, thread_id);
+		// }
 		if(Server_qp.fairness_mode == GIFT) {
 			// printf("Call fair_queue.getMessage_FromActiveJob\n");
-			if (!fair_queue.getMessage_FromActiveJob(&msg, activeReqs, reqLock)) continue;
+			if (!fair_queue.getMessage_FromActiveJob(&msg, activeReqs, reqLock, appAlloc, allocLock)) continue;
 			// if (!fair_queue.getMessage_FromActiveJob(&msg)) continue;
 		} else {
 			if (!fair_queue.getMessage_FromActiveJob(&msg)) continue;
 		}
+		// if(pending_count !=0 ) {
+		// 	printf("DBG> after get FairQueue rank %d thread_id %d\n", mpi_rank, thread_id);
+		// }
+		// if(mpi_rank == 0 && thread_id == 8) {
+		// 	printf("after get:");
+		// 	print_activeReqs(activeReqs, reqLock);
+		// }
 		// if (!fair_queue.getMessage_FromActiveJob(&msg)) continue;
 		// print_activeReqs(activeReqs, reqLock);
 		// printMessage(&msg, "msgSelected");
@@ -886,8 +931,9 @@ void fairQueueWorker_TimeSharing(int thread_id, std::unordered_map<ActiveRequest
 			perror("pthread_mutex_lock");
 			exit(2);
 		}
-		
+		// printf("Process_One_IO_OP\n");
 		Process_One_IO_OP(&msg);// Do the real IO work!
+		// printf("DBG> Process_One_IO_OP: FairQueue rank %d thread_id %d\n", mpi_rank, thread_id);
 		pending_count--;
 
 		// per-thread counter
