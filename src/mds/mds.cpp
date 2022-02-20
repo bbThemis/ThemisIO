@@ -5,7 +5,7 @@
 #include "mds.h"
 
 // const int DEFAULT_PORT = 58889;
-const int DEFAULT_TIMER = 10;
+const int DEFAULT_TIMER = 6;
 
 MDS::MDS(int port)
 {

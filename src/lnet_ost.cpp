@@ -117,12 +117,22 @@ void LnetOst::setAllocations(const LnetEntity *remote, const LnetMsg *msg) {
     bws.push_back(std::make_tuple(id, r));
   }
   std::lock_guard<std::mutex> lock(allocLock);
+  appAlloc.clear();
   double sum = 0;
   printf("Rank %d setAllocations:\n", mpi_rank);
   // printf("setAllocations: appAlloc addr:%u\n", &appAlloc);
   for (auto a : bws) {
     appAlloc[std::get<0>(a)] = sum + std::get<1>(a);
     sum += std::get<1>(a);
+    // appAlloc[std::get<0>(a)] = std::get<1>(a);
+    // printf("appAlloc[%d]:%f\n",std::get<0>(a), appAlloc[std::get<0>(a)]);
+  }
+  double factor = 1.0;
+  if(sum < 1) {
+    factor = 1/sum;
+  }
+  for (auto a : bws) {
+    appAlloc[std::get<0>(a)] *= factor;
     // appAlloc[std::get<0>(a)] = std::get<1>(a);
     printf("appAlloc[%d]:%f\n",std::get<0>(a), appAlloc[std::get<0>(a)]);
   }

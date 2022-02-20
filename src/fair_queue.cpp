@@ -471,8 +471,13 @@ void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg, std::unordered_map
 		sprintf(inf.name, "%d", job_id);
 		ActiveRequest rq = {._info = inf, ._t = Write};
 		activeReqs[rq]++;
-		// printf("put ActiveRequest %d mpi_rank %d\n", job_id, mpi_rank);
-		// printf("activeReqs[%d]:%d\n", job_id, activeReqs[rq]);
+		// if(job_id == 1002) {
+		// 	printf("ohhhhhhhhhhhhhhhhh\n");
+		// }
+		// if(job_id == 1001) {
+		// 	printf("put ActiveRequest %d mpi_rank %d\n", job_id, mpi_rank);
+		// 	printf("activeReqs[%d]:%d\n", job_id, activeReqs[rq]);
+		// }
 	}
 
 //	printf("DBG> Put jobid %d OP %x\n", q->job_id, msg->op & 0xFF);
@@ -583,8 +588,9 @@ bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg, std::unordered_map<Act
 		std::lock_guard<std::mutex> lock(allocLock);
 		// printf("appAlloc: %u in getMessage_FromActiveJob\n", &allocLock);
 		// if(!appAlloc.empty()) {
-		// 	printf("appAlloc not empty\n");
+		// 	printf("appAlloc size:%d");
 		// }
+		
 		for(auto& a: appAlloc) {
 			if(prev <= random_value && random_value < a.second) {
 				// printf("random %f;a.second %f\t", random_value, a.second);
@@ -596,9 +602,11 @@ bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg, std::unordered_map<Act
 		}
 
 	}
+	// printf("\nChoose job_id %d\n", jobId);
 	std::unordered_map<int, MessageQueue*>::const_iterator result_query;
 	result_query = indexed_queues.find(jobId);
 	if (result_query == indexed_queues.end()) {
+		// printf("Cannot find queue %d\n", jobId);
 		return false;
 	}
 	q = result_query->second;
@@ -661,11 +669,14 @@ bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg, std::unordered_map<Act
 		sprintf(inf.name, "%d", job_id);
 		ActiveRequest rq = {._info = inf, ._t = Write};
 		activeReqs[rq]--;
-		if(activeReqs[rq] == 0) {
-			activeReqs.erase(activeReqs.find(rq), activeReqs.end());
-		}
-		// printf("get ActiveRequest %d\n", job_id);
-		// printf("activeReqs[%d]:%d\n", job_id, activeReqs[rq]);
+		// if(activeReqs[rq] == 0) {
+		// 	activeReqs.erase(activeReqs.find(rq), activeReqs.end());
+		// }
+		// if(job_id == 1001) {
+		// 	printf("get ActiveRequest %d mpi_rank %d\n", job_id, mpi_rank);
+		// 	printf("activeReqs[%d]:%d\n", job_id, activeReqs[rq]);
+		// }
+		
 	}
 	message_count--;
 	
