@@ -602,6 +602,9 @@ bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg, std::unordered_map<Act
 		}
 
 	}
+	if(jobId == -1) {
+		return false;
+	}
 	// printf("\nChoose job_id %d\n", jobId);
 	std::unordered_map<int, MessageQueue*>::const_iterator result_query;
 	result_query = indexed_queues.find(jobId);

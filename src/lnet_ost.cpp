@@ -144,7 +144,7 @@ void LnetOst::onRemoteServerRequest(const LnetEntity *remote)
   if (!remote || !remote->sock || !remote->sock->isValid()) return;
   LnetMsg msg(Unknown);
   remote->recvMsgFromRemote(&msg);
-  std::cerr << "received msg " << msg << " from mds " << *remote << std::endl;
+  // std::cerr << "received msg " << msg << " from mds " << *remote << std::endl;
   switch (msg.t) {
     case Timer:
       this->respondToMdsTimer(remote);

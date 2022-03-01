@@ -198,7 +198,7 @@ void LnetMds::addToTimerResponse(const LnetEntity *remote, const LnetMsg *msg)
       std::cerr << "OST: " << s.first->name << std::endl;
       std::vector<int> apps;
       for (auto r : s.second) {
-        std::cerr << "\t" << r << std::endl;
+        // std::cerr << "\t" << r << std::endl;
         apps.push_back(r._info.id);
       }
       // out.push_back(apps);
