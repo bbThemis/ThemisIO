@@ -1,18 +1,62 @@
 TACC:  Starting up job 4128662 
 TACC:  Starting parallel tasks... 
-rw_speed time=2022-03-07:10:50:27 np=56 nn=1 sim_nn=1 rank0host=c100-009.frontera.tacc.utexas.edu -prefix=/myfs/rw_speed -iosize=1048576 -filesize=104857600 -time=60.0 -tag=job1
-DBG> Timeout. pid = 241042 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 241171 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 241057 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 241049 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 241056 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 241177 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 241037 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 241082 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 241165 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 241182 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 241090 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 241168 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 241174 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 241180 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 241134 on c100-009.frontera.tacc.utexas.edu
+rw_speed time=2022-03-07:10:55:06 np=56 nn=1 sim_nn=1 rank0host=c100-009.frontera.tacc.utexas.edu -prefix=/myfs/rw_speed -iosize=1048576 -filesize=104857600 -time=60.0 -tag=job1
+[mpiexec@c100-008.frontera.tacc.utexas.edu] Sending Ctrl-C to processes as requested
+[mpiexec@c100-008.frontera.tacc.utexas.edu] Press Ctrl-C again to force abort
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+Got signal 2 (SIGINT)
+TACC:  Shutdown complete. Exiting. 
