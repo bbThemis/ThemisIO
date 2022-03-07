@@ -1,30 +1,18 @@
 TACC:  Starting up job 4128662 
 TACC:  Starting parallel tasks... 
-rw_speed time=2022-03-07:10:36:12 np=56 nn=1 sim_nn=1 rank0host=c100-009.frontera.tacc.utexas.edu -prefix=/myfs/rw_speed -iosize=1048576 -filesize=104857600 -time=60.0 -tag=job1
-DBG> Timeout. pid = 238985 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 239093 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 239020 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 239131 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 239100 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 239104 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 239057 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 238991 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 239126 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 238988 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 239121 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 239113 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 239003 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 239065 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 239135 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 239008 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 239122 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 239067 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 239053 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 239028 on c100-009.frontera.tacc.utexas.edu
-INT)
-Got signal 2 (SIGINT)
-Got signal 2 (SIGINT)
-Got signal 2 (SIGINT)
-Got signal 2 (SIGINT)
-Got signal 2 (SIGINT)
-TACC:  Shutdown complete. Exiting. 
+rw_speed time=2022-03-07:10:50:27 np=56 nn=1 sim_nn=1 rank0host=c100-009.frontera.tacc.utexas.edu -prefix=/myfs/rw_speed -iosize=1048576 -filesize=104857600 -time=60.0 -tag=job1
+DBG> Timeout. pid = 241042 on c100-009.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 241171 on c100-009.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 241057 on c100-009.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 241049 on c100-009.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 241056 on c100-009.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 241177 on c100-009.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 241037 on c100-009.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 241082 on c100-009.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 241165 on c100-009.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 241182 on c100-009.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 241090 on c100-009.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 241168 on c100-009.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 241174 on c100-009.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 241180 on c100-009.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 241134 on c100-009.frontera.tacc.utexas.edu

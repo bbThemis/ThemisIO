@@ -814,7 +814,7 @@ void fairQueueWorker_TimeSharing(int thread_id, std::unordered_map<ActiveRequest
  								 std::unordered_map<int, std::pair<double,double>>& appAlloc, std::mutex& allocLock) {
 	int IdxMin, IdxMax, range;
 	long int nOp_Done=0;
-	pthread_t thread_update_job_weight;
+	// pthread_t thread_update_job_weight;
 	// Each thread handles a subrange of input queues.
 	// Distribute those queues across threads as equally as possible.
 	{
