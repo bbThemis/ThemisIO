@@ -11,6 +11,7 @@
 #include <random>
 #include <sstream>
 #include <iomanip>
+#include <utility>
 #include "qp.h"
 #include "io_queue.h"
 
@@ -77,16 +78,16 @@ class FairQueue {
 	void putMessage(const IO_CMD_MSG *msg);
 	void putMessage_TimeSharing(const IO_CMD_MSG *msg);
 	void putMessage_TimeSharing(const IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
-	                            std::unordered_map<int, double>& appAlloc, std::mutex& allocLock);
+	                            std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock);
     void Update_Job_Weight(void);
-	void Update_Job_Weight(std::unordered_map<int, double>& appAlloc, std::mutex& allocLock);
+	void Update_Job_Weight(std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock);
 	// Selects a message to process. If there are no messages, this returns false.
 	// Otherwise this copies the message to 'msg' and returns true.
 	bool getMessage(IO_CMD_MSG *msg);
 
 	bool getMessage_FromActiveJob(IO_CMD_MSG *msg);
 	bool getMessage_FromActiveJob(IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
-	                              std::unordered_map<int, double>& appAlloc, std::mutex& allocLock);
+	                              std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock);
 	// recharge all jobs with designed time length
 	void reload();
 

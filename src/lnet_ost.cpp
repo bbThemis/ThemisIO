@@ -8,7 +8,7 @@
 extern int mpi_rank;
 LnetOst::LnetOst(const LSockAddr &addr, int port, const OstInfo *info/*, DatanetOst *dnet*/,
     std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
-    std::unordered_map<int, double>& appAlloc, std::mutex& allocLock)
+    std::unordered_map<int, std::pair<double,double>>& appAlloc, std::mutex& allocLock)
   : LnetServer(info->listenport),
     _info(info),
     activeReqs(activeReqs),
@@ -122,20 +122,21 @@ void LnetOst::setAllocations(const LnetEntity *remote, const LnetMsg *msg) {
   printf("Rank %d setAllocations:\n", mpi_rank);
   // printf("setAllocations: appAlloc addr:%u\n", &appAlloc);
   for (auto a : bws) {
-    appAlloc[std::get<0>(a)] = sum + std::get<1>(a);
+    appAlloc[std::get<0>(a)].first = sum;
+    appAlloc[std::get<0>(a)].second = sum + std::get<1>(a);
     sum += std::get<1>(a);
     // appAlloc[std::get<0>(a)] = std::get<1>(a);
-    // printf("appAlloc[%d]:%f\n",std::get<0>(a), appAlloc[std::get<0>(a)]);
+    printf("appAlloc[%d]:[%f,%f]\n",std::get<0>(a), appAlloc[std::get<0>(a)].first, appAlloc[std::get<0>(a)].second);
   }
-  double factor = 1.0;
-  if(sum < 1) {
-    factor = 1/sum;
-  }
-  for (auto a : bws) {
-    appAlloc[std::get<0>(a)] *= factor;
-    // appAlloc[std::get<0>(a)] = std::get<1>(a);
-    printf("appAlloc[%d]:%f\n",std::get<0>(a), appAlloc[std::get<0>(a)]);
-  }
+  // double factor = 1.0;
+  // if(sum < 1) {
+  //   factor = 1/sum;
+  // }
+  // for (auto a : bws) {
+  //   appAlloc[std::get<0>(a)] *= factor;
+  //   // appAlloc[std::get<0>(a)] = std::get<1>(a);
+  //   printf("appAlloc[%d]:%f\n",std::get<0>(a), appAlloc[std::get<0>(a)]);
+  // }
   //printf("appAlloc: %u in setAllocations\n", &allocLock);
 }
 

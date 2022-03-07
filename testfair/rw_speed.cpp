@@ -555,7 +555,7 @@ int main(int argc, char **argv) {
 	if (opt.cleanup)
 		remove(filename);
 
-  MPI_Finalize();
+    MPI_Finalize();
 
 	return 0;
 }

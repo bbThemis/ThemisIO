@@ -6,7 +6,7 @@
 #include <mutex>
 #include "lnet.h"
 // #include "dnet_ost.h"
-
+#include <utility>
 class LnetOst: public LnetServer
 {
   private:
@@ -17,7 +17,7 @@ class LnetOst: public LnetServer
     // DatanetOst *_dnet;
     std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs;
     std::mutex& reqLock;
-    std::unordered_map<int, double>& appAlloc; 
+    std::unordered_map<int, std::pair<double, double>>& appAlloc; 
     std::mutex& allocLock;
     // void addOsc(const LSocket &, const OscInfo *);
     void respondToMdsTimer(const LnetEntity *);
@@ -33,7 +33,7 @@ class LnetOst: public LnetServer
   public:
     LnetOst(const LSockAddr &, int , const OstInfo */*, DatanetOst * */,
     std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
-    std::unordered_map<int, double>& appAlloc, std::mutex& allocLock);
+    std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock);
     ~LnetOst();
     bool pubOstInfoToMds();
     ssize_t sendMsgToMds(const LnetMsg *);
@@ -53,14 +53,14 @@ class OST
     bool _mdsConnected;
     std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs;
     std::mutex& reqLock;
-    std::unordered_map<int, double>& appAlloc; 
+    std::unordered_map<int, std::pair<double, double>>& appAlloc; 
     std::mutex& allocLock;
   public:
     // constructor(s)
     // OST(const LSockAddr &addr, int port, int id, const char *name, int lnetport/*, int dataport*/);
     OST(const LSockAddr &addr, int port, int id, const char *name, int lnetport/*, int dataport*/,
         std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
-        std::unordered_map<int, double>& appAlloc, std::mutex& allocLock);
+        std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock);
     ~OST();
 
     // methods

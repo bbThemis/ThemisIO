@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <random>
 #include <iostream>
-
+#include <utility>
 /* Set this to a nonzero value to enable a debug output message each time a
 	 new job is encountered, and a message when that job is considered idle
 	 and is purged. */
@@ -163,7 +163,7 @@ void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg) {
 //	printf("DBG> Put jobid %d OP %x\n", q->job_id, msg->op & 0xFF);
 }
 */
-void FairQueue::Update_Job_Weight(std::unordered_map<int, double>& appAlloc, std::mutex& allocLock) {
+void FairQueue::Update_Job_Weight(std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock) {
 	MessageQueue *q_loc;
 	std::unordered_map<int, float> uid_count;
 	int i;
@@ -204,7 +204,7 @@ void FairQueue::Update_Job_Weight(std::unordered_map<int, double>& appAlloc, std
 			// }
 			for(auto& a: appAlloc) {
 				int jobId = a.first;
-				double job_w = a.second;
+				double job_w = a.second.second - a.second.first;
 				if(indexed_queues.end() != indexed_queues.find(jobId)) {
 					q_loc = indexed_queues[jobId];
 					q_loc->weight = weight_sum * job_w;
@@ -415,7 +415,7 @@ void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg) {
 }
 // For Gift Only
 void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
-                                       std::unordered_map<int, double>& appAlloc, std::mutex& allocLock) {
+                                       std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock) {
 	MessageQueue *q;
 	static bool first_output = true;
 	int job_id = job_info_lookup.getSlurmJobId(msg);
@@ -569,7 +569,7 @@ bool FairQueue::getMessage(IO_CMD_MSG *msg) {
 //Only for GIFT
 
 bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
-                                         std::unordered_map<int, double>& appAlloc, std::mutex& allocLock) {
+                                         std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock) {
 	long int t_Now;
 
 	if (nJob == 0) return false;
@@ -592,12 +592,10 @@ bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg, std::unordered_map<Act
 		// }
 		
 		for(auto& a: appAlloc) {
-			if(prev <= random_value && random_value < a.second) {
-				// printf("random %f;a.second %f\t", random_value, a.second);
+			if(a.second.first <= random_value && random_value < a.second.second) {
+				// printf("random %f [%f,%f]\t", random_value, prev, a.second);
 				jobId = a.first;
 				break;
-			} else {
-				prev = a.second;
 			}
 		}
 
@@ -730,7 +728,8 @@ bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg) {
 //		q->idle_timestamp = t_Now;
 		return false;
 	}
-
+	// printf("IdxActiveJob %d\t", IdxActiveJob);
+	// printf("q->messages.empty() %d\n", q->messages.empty());
 	q->remove(msg);
 	if( (msg->op & 0xFFFFFF00) != IO_OP_MAGIC)	{
 		printf("Stop here.\n");

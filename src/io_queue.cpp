@@ -5,7 +5,7 @@
 #include <sys/time.h>
 #include <pwd.h>
 #include <unordered_map>
-
+#include <utility>
 #include "qp.h"
 #include "dict.h"
 #include "io_queue.h"
@@ -798,12 +798,12 @@ void print_activeReqs(std::unordered_map<ActiveRequest, int, hash_activeReq>& ac
 }
 struct UpdateWeightThreadParams {
     FairQueue* pFairQueue;
-	std::unordered_map<int, double>* appAlloc;
+	std::unordered_map<int, std::pair<double,double>>* appAlloc;
 	std::mutex* allocLock;
 };
 static void* Func_Update_Job_Weight(void* pParam) {
 	FairQueue* pFairQueue = ((UpdateWeightThreadParams*)pParam)->pFairQueue;
-	std::unordered_map<int, double>* appAlloc = ((UpdateWeightThreadParams*)pParam)->appAlloc;
+	std::unordered_map<int, std::pair<double,double>>* appAlloc = ((UpdateWeightThreadParams*)pParam)->appAlloc;
 	std::mutex* allocLock = ((UpdateWeightThreadParams*)pParam)->allocLock;
 	while(1) {
 		pFairQueue->Update_Job_Weight(*appAlloc, *allocLock);
@@ -811,7 +811,7 @@ static void* Func_Update_Job_Weight(void* pParam) {
 }
 
 void fairQueueWorker_TimeSharing(int thread_id, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
- 								 std::unordered_map<int, double>& appAlloc, std::mutex& allocLock) {
+ 								 std::unordered_map<int, std::pair<double,double>>& appAlloc, std::mutex& allocLock) {
 	int IdxMin, IdxMax, range;
 	long int nOp_Done=0;
 	pthread_t thread_update_job_weight;
@@ -956,7 +956,7 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 	const int thread_id = *(readParams->workerId);
 	std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs = *(readParams->activeReqs);
 	std::mutex& reqLock = *(readParams->reqLock);
-    std::unordered_map<int, double>& appAlloc = *(readParams->appAlloc);
+    std::unordered_map<int, std::pair<double,double>>& appAlloc = *(readParams->appAlloc);
 	std::mutex& allocLock = *(readParams->allocLock);
 	
 	CoreBinding.Bind_This_Thread();

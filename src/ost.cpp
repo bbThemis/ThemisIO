@@ -1,7 +1,7 @@
 #include <iostream>
 #include <unistd.h>
 #include <thread>
-
+#include <utility>
 #include "ost.h"
 
 using namespace std;
@@ -23,7 +23,7 @@ const int DEFAULT_GC_TIMER = 15;
 
 OST::OST(const LSockAddr &addr, int port, int id, const char *name, int lnetport/*, int dataport*/,
         std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
-        std::unordered_map<int, double>& appAlloc, std::mutex& allocLock):activeReqs(activeReqs), reqLock(reqLock), appAlloc(appAlloc), allocLock(allocLock)
+        std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock):activeReqs(activeReqs), reqLock(reqLock), appAlloc(appAlloc), allocLock(allocLock)
 {
   this->_info = new OstInfo();
   this->_info->id = id;

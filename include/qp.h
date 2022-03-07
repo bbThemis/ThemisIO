@@ -33,12 +33,12 @@
 #include <vector>
 #include <unordered_map>
 #include <mutex>
-
+#include <utility>
 struct IOThreadParams {
     int* workerId;
     std::unordered_map<ActiveRequest, int, hash_activeReq>* activeReqs;
     std::mutex* reqLock;
-	std::unordered_map<int, double>* appAlloc;
+	std::unordered_map<int, std::pair<double, double>>* appAlloc;
 	std::mutex* allocLock;
 };
 

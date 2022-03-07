@@ -27,6 +27,7 @@
 #include <vector>
 #include <mutex>
 #include <unordered_map>
+#include <utility>
 #include "qp.h"
 #include "myfs.h"
 #include "corebinding.h"
@@ -38,7 +39,7 @@
 // For GIFT
 std::unordered_map<ActiveRequest, int, hash_activeReq> activeReqs;
 std::mutex reqLock;
-std::unordered_map<int, double> appAlloc;
+std::unordered_map<int, std::pair<double, double>> appAlloc;
 std::mutex allocLock;
 
 
@@ -58,7 +59,7 @@ struct OSTThreadParams {
     SERVER_QUEUEPAIR* pServerQP;
     std::unordered_map<ActiveRequest, int, hash_activeReq>* activeReqs;
     std::mutex* reqLock;
-	std::unordered_map<int, double>* appAlloc;
+	std::unordered_map<int, std::pair<double, double>>* appAlloc;
 	std::mutex* allocLock;
 };
 
@@ -315,7 +316,7 @@ static void* Func_Setup_Connection_To_Mds(void* pParam) {
 	pServer_qp = ((OSTThreadParams*)pParam)->pServerQP;
 	std::unordered_map<ActiveRequest, int, hash_activeReq>* activeReqs = ((OSTThreadParams*)pParam)->activeReqs;
 	std::mutex* reqLock = ((OSTThreadParams*)pParam)->reqLock;
-	std::unordered_map<int, double>* appAlloc = ((OSTThreadParams*)pParam)->appAlloc;
+	std::unordered_map<int, std::pair<double, double>>* appAlloc = ((OSTThreadParams*)pParam)->appAlloc;
 	std::mutex* allocLock = ((OSTThreadParams*)pParam)->allocLock;
 	
 	char mds_host[256];
