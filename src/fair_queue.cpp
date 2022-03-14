@@ -298,6 +298,7 @@ void FairQueue::Update_Job_Weight(void) {
 			break;
 		case GIFT:
 			weight_sum = 0.0;
+			break;
 		case JOB_FAIR:	// each slurm job has weight 1.  
 		case USER_FAIR:
 			weight_sum = 1.0*nJob;
@@ -688,6 +689,7 @@ bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg, std::unordered_map<Act
 
 	return true;
 }
+
 bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg) {
 	long int t_Now;
 
@@ -721,16 +723,18 @@ bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg) {
 				break;
 			}
 		}
-//		assert( (IdxActiveJob>=0) && (IdxActiveJob <nJob) );
+		// if(!((IdxActiveJob>=0) && (IdxActiveJob <nJob))) {
+		// 	printf("IdxActiveJob %d\n", IdxActiveJob);
+		// }
 		q = all_queues[IdxActiveJob];
 	}
 	if (q->messages.empty()) {
 //		q->idle_timestamp = t_Now;
 		return false;
 	}
-	// printf("IdxActiveJob %d\t", IdxActiveJob);
-	// printf("q->messages.empty() %d\n", q->messages.empty());
+	// printf("Idx: %d\n", IdxActiveJob);
 	q->remove(msg);
+	// printf("DBG> %d\n", q->job_id);
 	if( (msg->op & 0xFFFFFF00) != IO_OP_MAGIC)	{
 		printf("Stop here.\n");
 	}
