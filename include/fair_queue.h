@@ -75,41 +75,46 @@ class FairQueue {
 	// Add a message to the queue. The data is copied from 'msg'.
 	void putMessage(const IO_CMD_MSG *msg);
 
-	void putMessage_TimeSharing(const IO_CMD_MSG *msg);
-    void Update_Job_Weight(void);
-
 	// Selects a message to process. If there are no messages, this returns false.
 	// Otherwise this copies the message to 'msg' and returns true.
 	bool getMessage(IO_CMD_MSG *msg);
 
-	bool getMessage_FromActiveJob(IO_CMD_MSG *msg);
-
-	// recharge all jobs with designed time length
-	void reload();
-
 	// This will be called occasionally.
 	// It provides a way to print status output or perform garbage collection.
 	void housekeeping();
-
-	void SetFirstJobActive(void);
-
-	void SetNextJobActive(void);
 
 	// Returns the current time in microseconds since epoch.
 	static long unsigned getTime();
 
 	// Returns the number of seconds since the object was created.
 	double getElapsed();
+
+  // unused remnants of time-sharing version
+  /*
+	// Note: it is bad design to have multiple versions of putMessage and getMessage.
+	// The scheduling algorithm is set when the object is constructed.
+	// Once the algorithm is set, the user of this class shouldn't have to to
+	// anything different to use different scheduling algorithms.
+	void putMessage_TimeSharing(const IO_CMD_MSG *msg);
+	bool getMessage_FromActiveJob(IO_CMD_MSG *msg);
+	void Update_Job_Weight(void);
+	// recharge all jobs with designed time length
+	void reload();
+	void SetFirstJobActive(void);
+	void SetNextJobActive(void);
+  */
 	
 private:
+  // unused remnants of time-sharing version
+	/*
 	// the sum of weight of all jobs
 	float weight_sum;
 	int nJob;
 	int IdxActiveJob;
 	int pad;
-//	MessageQueue *q_ActiveJob;
-
+	// MessageQueue *q_ActiveJob;
 	double T_ThisCycle;
+	*/
 
 	struct MessageContainer {
 		IO_CMD_MSG msg;
@@ -125,7 +130,7 @@ private:
 	struct MessageQueue {
 		MessageQueue(int id_, int job_id_, int user_id_, long now, int weight_)
 			: id(id_), job_id(job_id_), user_id(user_id_), idle_timestamp(now), weight(weight_) {
-				T_Create = now * 1.0;
+				// T_Create = now * 1.0;
 			}
 								 
 		std::queue<MessageContainer> messages;
@@ -139,9 +144,8 @@ private:
 		// timestamp this queue was most recently nonempty
 		long unsigned idle_timestamp;
 		
-		// timestamp of the first item in the queue
-		long unsigned front_timestamp;
-
+		// unused remnants of time-sharing version
+		/*
 		// The time when current queue was create for current job
 		long int T_Create;
 
@@ -159,11 +163,9 @@ private:
 
 		// accumulated time for idling
 		long int T_Accum_Idle;
+		*/
 
 		void add(const IO_CMD_MSG *msg) {
-			if (messages.empty())
-				front_timestamp = msg->T_Queued;
-			
 			MessageContainer *mc = (MessageContainer*) msg;
 			messages.push(*mc);
 		}
@@ -174,9 +176,6 @@ private:
 			memcpy(msg, &msg_c.msg, sizeof *msg);
 			messages.pop();
 
-			if (messages.empty())
-				front_timestamp = 0;
-
 			return true;
 		}
 
@@ -184,16 +183,6 @@ private:
 			 weight of the queue. For job-fair and user-fair queues it's 1,
 			 and for size-fair queues it's the node count of the job. */
 		double getPriority(long unsigned now) {
-			
-			/*
-				Weighting by age of the request ends up performing just like FIFO.
-
-			long usec_waiting = now - front_timestamp;
-			if (usec_waiting <= 0)
-				usec_waiting = 1;
-			return usec_waiting * weight;
-			*/
-
 			return weight;
 		}
 		
@@ -306,8 +295,9 @@ private:
 	// key is job_id or user_id
 	std::unordered_map<int, MessageQueue*> indexed_queues;
 
+	// ??? misleading comment
 	// all nonempty message queues
-	std::vector<MessageQueue*> all_queues;
+	// std::vector<MessageQueue*> all_queues;
 
 	// all nonempty message queues
 	std::vector<MessageQueue*> nonempty_queues;
