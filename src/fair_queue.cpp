@@ -9,6 +9,8 @@
 	 and is purged. */
 #define REPORT_JOB_START_AND_END 0
 
+// Defined in io_queue.cpp, this maps user id to group id, 
+// and is currently unused.
 extern std::unordered_map<int, int> uid_gid;
 
 pthread_mutex_t FairQueue::shared_decision_log_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -31,11 +33,15 @@ FairQueue::FairQueue(FairnessMode mode_, int mpi_rank_, int thread_id_,
 	std::random_device rdev;
 	random_engine.seed(rdev());
 	start_time_usec = getTime();
+
+	// unused
+	/*
 	weight_sum = 0;
 	nJob = 0;
 	IdxActiveJob = -1;
-//	it_ActiveJob = NULL;
-	
+	it_ActiveJob = NULL;
+	*/	
+
 	decision_log.changeThreadCount(1);
 }
 
@@ -83,6 +89,8 @@ void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 	}
 }
 
+// unused remnants of time-sharing version
+#if 0
 void FairQueue::SetFirstJobActive(void)
 {
 	IdxActiveJob = 0;
@@ -310,6 +318,7 @@ void FairQueue::reload(void) {
 	}
 
 }
+#endif  // #if 0
 
 bool FairQueue::isEmpty() {
 	return nonempty_queues.empty();
@@ -375,6 +384,8 @@ bool FairQueue::getMessage(IO_CMD_MSG *msg) {
 	return true;
 }
 
+// unused remnants of time-sharing version
+#if 0
 bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg) {
 	long int t_Now;
 
@@ -431,6 +442,8 @@ bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg) {
 
 	return true;
 }
+#endif  // #if 0
+
 
 void FairQueue::housekeeping() {
 
@@ -497,7 +510,7 @@ void FairQueue::reportDecisionLog() {
 
 }
 
-/*
+
 // Scans all message queues and removes those which have been idle for too long.
 void FairQueue::purgeIdle() {
 	long now = getTime();
@@ -524,8 +537,10 @@ void FairQueue::purgeIdle() {
 	}
 
 }
-*/
 
+
+// unused remnants of time-sharing version
+#if 0
 // Scans all message queues and removes those which have been idle for too long.
 void FairQueue::purgeIdle() {
 	long now = getTime();
@@ -582,6 +597,7 @@ void FairQueue::purgeIdle() {
 	}
 
 }
+#endif // #if 0
 
 
 void FairQueue::DecisionLog::log(const std::vector<MessageQueue*> &nonempty_queues, int choice_id) {
