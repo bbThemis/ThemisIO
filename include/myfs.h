@@ -133,9 +133,9 @@ typedef struct {
 }STRIPE_DATA_INFO, *PSTRIPE_DATA_INFO;
 
 void Init_Memory(void);
-int Query_Parent_Dir(char szDirName[], int *nLenParentDirName, int *nLenFileName);
-int my_mkdir(char szDirName[], int mode, int uid, int gid);
-int my_openfile(size_t DataReturn[], char szFileName[], int oflags, ...);
+int Query_Parent_Dir(const char szDirName[], int *nLenParentDirName, int *nLenFileName);
+int my_mkdir(const char szDirName[], int mode, int uid, int gid);
+int my_openfile(size_t DataReturn[], const char szFileName[], int oflags, ...);
 int openfile_by_index(int idx_file, int bAppend);
 int my_close(int fd, META_DATA_ON_CLOSE *pMetaData_OnClose);
 //size_t my_read(int fd, void *buf, size_t count, off_t offset);
@@ -156,7 +156,7 @@ void Determine_Index_StorageBlock_for_Offset(int fd, off_t offset);
 int Query_Index_StorageBlock_with_Offset(int idx_file, off_t offset);
 int Query_Index_StorageBlock_with_Offset_Stripe(STRIPE_DATA_INFO *pStripeData, off_t offset);
 int my_unlink(char szFileName[], size_t *nFileSize);
-int my_rmdir(char szDirName[]);
+int my_rmdir(const char szDirName[]);
 int my_ls(char szDirName[]);	// list entries under a directory
 int my_AddEntryInfo(int my_file_idx, int dir_idx);
 void my_RemoveEntryInfo(int my_file_idx);
