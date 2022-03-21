@@ -25,6 +25,7 @@ server: $(OBJS)
 #fsclient: $(OBJS)
 #	$(CXX) $(CXXFLAGS) -o $@ put_get_client.o dict.o xxhash.o -libverbs -lpthread -lrt
 
+# disable optimization. Possible threading bugs.
 obj/put_get_server.o: src/put_get_server.cpp $(HEADERS)
 	$(CXX) -O0 $(CXXFLAGS) -c -o obj/put_get_server.o $<
 
@@ -37,6 +38,7 @@ obj/dict.o: src/dict.cpp $(HEADERS)
 obj/xxhash.o: src/xxhash.cpp $(HEADERS)
 	$(CXX) $(OPT) $(CXXFLAGS) -c -o obj/xxhash.o $<
 
+# disable optimization. Possible threading bugs.
 obj/io_queue.o: src/io_queue.cpp $(HEADERS)
 	$(CXX) -Iinclude/ -g -O0 -c -o obj/io_queue.o $<
 
@@ -53,6 +55,7 @@ obj/buddy.o: src/buddy.cpp $(HEADERS)
 obj/myfs.o: src/myfs.cpp $(HEADERS)
 	$(CXX) $(OPT) $(CXXFLAGS) -c -o obj/myfs.o $<
 
+# disable optimization for io_ops.cpp. Possible threading bugs.
 obj/io_ops.o: src/io_ops.cpp $(HEADERS)
 	$(CXX) -O0 $(CXXFLAGS) -c -o obj/io_ops.o $<
 
@@ -69,5 +72,5 @@ obj/queue_free_mem.o: src/queue_free_mem.cpp $(HEADERS)
 #	dot bdgraph.dot -Tpng > bd.png
 
 clean:
-	$(RM) obj/*.o server
+	$(RM) obj/*.o src/client/*.o wrapper.so server
 #	$(RM) *.o server fsclient
