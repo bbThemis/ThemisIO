@@ -41,6 +41,9 @@
 #define IO_QUEUE_SIZE	(1024)
 #define IO_QUEUE_SIZE_M1	(IO_QUEUE_SIZE-1)
 
+// Returns a string description of a message tag, IO_CMD_MSG::op.
+const char *opCodeName(int op_tag);
+
 void Init_ActiveJobList(void);
 void Init_QueueList(void);
 void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id);

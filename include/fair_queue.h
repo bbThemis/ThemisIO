@@ -2,6 +2,7 @@
 // #include <cstdlib>
 #include <cstring>
 #include <pthread.h>
+#include <map>
 #include <vector>
 #include <queue>
 #include <unordered_map>
@@ -13,9 +14,9 @@
 #include "qp.h"
 #include "io_queue.h"
 
-#define TIME_PER_CYCLE_MICROSEC       (30)
-//#define TIME_PER_CYCLE_MICROSEC	(40)	// the length of one time slice. The time spended on each job is t*w. 
-//#define TIME_PER_CYCLE_MICROSEC       (1000)
+// the length of one time slice. The time spended on each job is time*weight. 
+// Currently unused.
+// #define TIME_PER_CYCLE_MICROSEC       (30)
 
 /* Encapsulate looking up data on a job. The ActiveJobList data
 	 structure is likely to change, so when it does, all that needs to
@@ -60,10 +61,17 @@ private:
 class FairQueue {
  public:
 	/* mode: fairness mode (enum defined in qp.h)
+		 queue_order: choose message queue randomly or cycle through in round-robin order
+		 weight_by_node_count: implement size-fair by weighting queues by node count
+		 measure: fairness measure (enum defined in qp.h)
 		 job_info_lookup: a wrapper used to access the active job list
 		 max_idle_sec: deallocate queues that have been empty for at least this many seconds.
 	*/
-	FairQueue(FairnessMode mode, int mpi_rank, int thread_id,
+	FairQueue(FairnessMode mode,
+						FairnessOrder queue_order,
+						bool weight_by_node_count,
+						FairnessMeasure measure,
+						int mpi_rank, int thread_id,
 						JobInfoLookup &job_info_lookup, int max_idle_sec = 10);
 	~FairQueue();
 	
@@ -265,7 +273,10 @@ private:
 	// return index into nonempty_queues
 	int chooseRandomNonemptyQueue();
 
-	
+	// Given a message, return the key used to index into indexed_queues.
+	// In other words, if there is one queue per job this will return the job id,
+	// and if there is one queue per user it will return the user id.
+	// In SIZE_FAIR mode, there is one queue per job, so this will return the job id.
 	int getKey(const IO_CMD_MSG *msg) {
 		if (fairness_mode == USER_FAIR) {
 			return job_info_lookup.getUserId(msg);
@@ -281,6 +292,10 @@ private:
 	void purgeIdle();
 	
 	FairnessMode fairness_mode;
+	FairnessOrder queue_order;
+	bool weight_by_node_count;
+	FairnessMeasure fairness_measure;
+
 	int mpi_rank, thread_id;
 	JobInfoLookup &job_info_lookup;
 	unsigned long start_time_usec;
@@ -293,10 +308,16 @@ private:
 	
 	// all current message queues
 	// key is job_id or user_id
-	std::unordered_map<int, MessageQueue*> indexed_queues;
+	using IndexedQueueType = std::map<int, MessageQueue*>;
+	IndexedQueueType indexed_queues;
 
-	// ??? misleading comment
-	// all nonempty message queues
+	// iterator to the queue from which the most recent message was processed.
+	// Used in round-robin scheduling.
+	// It would be faster to use an index into nonempty_queues, but the round-robin
+	// order would get corrupted when elements were added or removed.
+	IndexedQueueType::const_iterator prev_queue;
+
+	// duplicate data structure created for timesharing code
 	// std::vector<MessageQueue*> all_queues;
 
 	// all nonempty message queues

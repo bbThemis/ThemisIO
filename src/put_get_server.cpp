@@ -425,8 +425,11 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	// Store the fairness_mode in Server_qp.  It will be used in Func_thread_IO_Worker_FairQueue.
+	// Store the fairness optiones in Server_qp.  They will be used in Func_thread_IO_Worker_FairQueue.
 	Server_qp.fairness_mode = server_options.getFairnessMode();
+	Server_qp.queue_order = server_options.getQueueOrder();
+	Server_qp.weight_by_node_count = server_options.getNodeWeighting();
+	Server_qp.fairness_measure = server_options.getFairnessMeasure();
 
 	Init_Memory();
 //	Test_File_System_Local();
@@ -543,7 +546,6 @@ bool ServerOptions::parseCommandLineArgs(int argc, char **argv) {
 		const char *arg = argv[argno];
 
 		if (!strcmp(arg, "-h") || !strcmp(arg, "--help")) {
-			printHelp();
 			return false;
 		}
 
@@ -556,11 +558,11 @@ bool ServerOptions::parseCommandLineArgs(int argc, char **argv) {
 				fairness_mode = USER_FAIR;
 			} else if (!strcmp(arg, "job-fair")) {
 				fairness_mode = JOB_FAIR;
-			} else if (!strcmp(arg, "size-fair")) {
-				fairness_mode = SIZE_FAIR;
 
 			/* disabled */
 			/*
+			} else if (!strcmp(arg, "size-fair")) {
+				fairness_mode = SIZE_FAIR;
 			} else if (!strcmp(arg, "user-size-fair")) {
 				fairness_mode = USER_SIZE_FAIR;
 			} else if (!strcmp(arg, "user-job-fair")) {
@@ -571,6 +573,19 @@ bool ServerOptions::parseCommandLineArgs(int argc, char **argv) {
 
 			} else {
 				printf("Policy mode urecognized: %s\n", arg);
+				return false;
+			}
+		}
+
+		else if (!strcmp(arg, "--unit")) {
+			if (argno+1 >= argc) return false;
+			arg = argv[++argno];
+			if (!strcmp(arg, "count")) {
+				fairness_measure = FAIR_MEASURE_COUNT;
+			} else if (!strcmp(arg, "time")) {
+				fairness_measure = FAIR_MEASURE_TIME;
+			} else {
+				printf("Fairness measure unrecognized: %s\n", arg);
 				return false;
 			}
 		}
@@ -590,10 +605,22 @@ void ServerOptions::printHelp() {
 	printf("\n"
 				 "  server [<opts>]\n"
 				 "  opts:\n"
-				 "    --policy fifo|user-fair|job-fair|size-fair\n"
+				 "    --policy fifo|user-fair|job-fair\n"
 				 "      Sets client throughput fairness policy. default=%s\n"
+				 "    --order random|cycle\n"
+				 "      Sets the scheduling order. random=message queues chosen randomly.\n"
+				 "      cycle=message queues are cycled through in round-robin order.\n"
+				 "      default=%s\n"
+				 "    --scalenodes\n"
+				 "      Scale priority by node count. A job or user with 2x the nodes get 2x the processing.\n"
+				 "    --unit count|time\n"
+				 "      Sets the unit of fairness. count=number of requests, where short requests\n"
+				 "      cost the same as long requests. time=cumulative time, where the cost of\n"
+				 "      a request is proportional to time spent handling it. default=%s\n"
 				 "\n",
-				 fairnessModeToString(getDefaultFairnessMode()));
+				 fairnessModeToString(getDefaultFairnessMode()),
+				 queueOrderToString(getDefaultQueueOrder()),
+				 fairnessMeasureToString(getDefaultFairnessMeasure()));
 }
 
 		

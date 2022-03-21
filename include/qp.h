@@ -45,12 +45,15 @@
 #define CTX_POLL_BATCH		(16)
 
 
+// Keep this in sync with SERVER_QUEUEPAIR::fairnessModeToString()
 enum FairnessMode {
 	// tradition first in first out
 	FIFO, 
+
 	// Priority based on jobs such that the throughput of each job is proportional
 	// to the number of nodes in the job.
-	SIZE_FAIR,
+	// XXX Moved to orthogonal property, weight_by_node_count
+	// SIZE_FAIR,
 
 	// Priority based on jobs such that each job gets equal throughput.
 	JOB_FAIR,
@@ -58,6 +61,8 @@ enum FairnessMode {
 	// Priority based on users such that each user gets equal throughput.
 	USER_FAIR, 
 
+	// unused, disabled
+	/*
 	// user-then-size-fair
 	USER_SIZE_FAIR, 
 
@@ -66,6 +71,26 @@ enum FairnessMode {
 
 	// group-user-size
 	GROUP_USER_SIZE_FAIR
+	*/
+};
+
+
+// Keep this in sync with SERVER_QUEUEPAIR::queueOrderToString()
+enum FairnessOrder {
+	FAIR_ORDER_RANDOM,  // message queue chosen randomly
+	FAIR_ORDER_CYCLE    // message queue chosen in round-robin order
+};
+
+
+// Keep this in sync with SERVER_QUEUEPAIR::fairnessMeasureToString()
+enum FairnessMeasure {
+	// Balance the number of requests served.
+	// Short requests cost the same as long requests.
+  FAIR_MEASURE_COUNT,
+
+	// Balance the cumulative time spent.
+	// The cost of a request is proportional to time spent handling it.
+	FAIR_MEASURE_TIME
 };
 
 
@@ -138,7 +163,11 @@ public:
 	int max_qp, nQP, IdxLastQP, IdxLastQP64, FirstAV_QP;	// IdxLastQP64 is 64 aligned for IdxLastQP
 	int nSizeshm_Global;
 	FairnessMode fairness_mode;
-pthread_mutex_t process_lock;	// for this process
+	FairnessOrder queue_order;
+	bool weight_by_node_count;
+	FairnessMeasure fairness_measure;
+
+	pthread_mutex_t process_lock;	// for this process
 
 	CHASHTABLE_INT *p_Hash_socket_fd = NULL;
 	struct elt_Int *elt_list_socket_fd = NULL;
@@ -212,7 +241,12 @@ typedef struct	{
 
 class ServerOptions {
 public:
-	ServerOptions() : fairness_mode(getDefaultFairnessMode()) {}
+  ServerOptions() :
+	  fairness_mode(getDefaultFairnessMode()),
+		queue_order(getDefaultQueueOrder()),
+		weight_by_node_count(false),
+		fairness_measure(getDefaultFairnessMeasure())
+		{}
 
 	// Returns true iff the command line arguments are successfully parsed.
 	// defined in put_get_server.cpp
@@ -229,16 +263,46 @@ public:
 	static FairnessMode getDefaultFairnessMode() {return FIFO;};
 
 	static const char *fairnessModeToString(FairnessMode fairness_mode) {
-		static char szFairnessModeString[16][64]={"fifo", "size-fair", "job-fair", "user-fair", "user-size-fair", "user-job-fair", "group-user-size-fair"};
+		static const char *szFairnessModeString[] = {
+			"fifo",
+			"job-fair",
+			"user-fair"
+		};
 
-		return szFairnessModeString[(int)fairness_mode];
-//		return fairness_mode == SIZE_FAIR ? "size-fair"
-//			: fairness_mode == JOB_FAIR ? "job-fair"
-//			: "user-fair";
+		// unused
+		// "size-fair", "user-size-fair", "user-job-fair", "group-user-size-fair"
+
+		int idx = (int)fairness_mode;
+		if (idx < 0 || idx > USER_FAIR) return "unknown";
+		return szFairnessModeString[idx];
 	}
+
+	FairnessOrder getQueueOrder() {return queue_order;}
+
+	static FairnessOrder getDefaultQueueOrder() {return FAIR_ORDER_RANDOM;}
+
+	static const char *queueOrderToString(FairnessOrder order) {
+		return order == FAIR_ORDER_RANDOM ? "random" : "cycle";
+	}
+
+	bool getNodeWeighting() {return weight_by_node_count;}
+
+	// FairnessMeasure is defined in qp.h
+	FairnessMeasure getFairnessMeasure() {return fairness_measure;}
+
+	// use this to change the default fairness measure
+	static FairnessMeasure getDefaultFairnessMeasure() {return FAIR_MEASURE_COUNT;}
+
+	static const char *fairnessMeasureToString(FairnessMeasure fairness_measure) {
+		return fairness_measure == FAIR_MEASURE_COUNT ? "count" : "time";
+	}
+	
 
 private:
 	FairnessMode fairness_mode;
+	FairnessOrder queue_order;
+	bool weight_by_node_count;
+	FairnessMeasure fairness_measure;
 };
 
 

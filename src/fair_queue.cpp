@@ -19,9 +19,16 @@ int FairQueue::thread_count = 0;
 int FairQueue::n_threads_reported = 0;
 
 
-FairQueue::FairQueue(FairnessMode mode_, int mpi_rank_, int thread_id_,
+FairQueue::FairQueue(FairnessMode mode_, 
+										 FairnessOrder order_,
+										 bool weight_nodes_,
+										 FairnessMeasure measure_,
+										 int mpi_rank_, int thread_id_,
 										 JobInfoLookup &job_info_lookup_, int max_idle_sec_) :
 	fairness_mode(mode_),
+	queue_order(order_),
+	weight_by_node_count(weight_nodes_),
+	fairness_measure(measure_),
 	mpi_rank(mpi_rank_),
 	thread_id(thread_id_),
 	job_info_lookup(job_info_lookup_),
@@ -65,7 +72,8 @@ void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 	auto iqt = indexed_queues.find(key);
 	if (iqt == indexed_queues.end()) {
 		// create new message queue
-		int weight = fairness_mode == SIZE_FAIR ? job_info_lookup.getNodeCount(msg) : 1;
+		// XXX with user-fair, this will need to be updated when user adds and removes jobs
+		int weight = weight_by_node_count ? job_info_lookup.getNodeCount(msg) : 1;
 		int job_id = job_info_lookup.getSlurmJobId(msg);
 		int user_id = job_info_lookup.getUserId(msg);
 		q = new MessageQueue(key, job_id, user_id, getTime(), weight);

@@ -207,9 +207,6 @@ void Sum_OP_Done_All_Servers(long int T_Download)
 
 }
 
-// return a string description of a message tag, IO_CMD_MSG::op
-const char *opCodeName(int op_tag);
-
 
 void Init_ActiveJobList(void)
 {
@@ -720,7 +717,9 @@ void fairQueueWorker(int thread_id) {
 	
 	IO_CMD_MSG msg;
 	JobInfoLookup job_info_lookup(ActiveJobList, &nActiveJob);
-	FairQueue fair_queue(Server_qp.fairness_mode, mpi_rank, thread_id, job_info_lookup, MAX_JOB_IDLE_SEC);
+	FairQueue fair_queue(Server_qp.fairness_mode, Server_qp.queue_order,
+											 Server_qp.weight_by_node_count, Server_qp.fairness_measure,
+											 mpi_rank, thread_id, job_info_lookup, MAX_JOB_IDLE_SEC);
 	int pending_count = 0;
 
 	// Call FairQueue::housekeeping() at regular intervals.
