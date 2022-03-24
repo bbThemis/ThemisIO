@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <pwd.h>
+#include <memory>
 #include <unordered_map>
 
 #include "qp.h"
@@ -717,9 +718,11 @@ void fairQueueWorker(int thread_id) {
 	
 	IO_CMD_MSG msg;
 	JobInfoLookup job_info_lookup(ActiveJobList, &nActiveJob);
-	FairQueue fair_queue(Server_qp.fairness_mode, Server_qp.queue_order,
-											 Server_qp.weight_by_node_count, Server_qp.fairness_measure,
-											 mpi_rank, thread_id, job_info_lookup, MAX_JOB_IDLE_SEC);
+	std::unique_ptr<FairQueue> fair_queue
+		(createFairQueue(Server_qp.queue_order, Server_qp.fairness_mode,
+										 Server_qp.weight_by_node_count, 
+										 mpi_rank, thread_id, job_info_lookup, MAX_JOB_IDLE_SEC));
+	assert(fair_queue);
 	int pending_count = 0;
 
 	// Call FairQueue::housekeeping() at regular intervals.
@@ -728,7 +731,7 @@ void fairQueueWorker(int thread_id) {
 	while(1)	{	// loop forever
 		long now = getTimeMicros();
 		if (now > next_housekeeping_time) {
-			fair_queue.housekeeping();
+			fair_queue->housekeeping();
 			next_housekeeping_time = now + FAIRQUEUE_HOUSEKEEPING_FREQ_MICROS;
 		}
 
@@ -747,7 +750,7 @@ void fairQueueWorker(int thread_id) {
 				if (queue->Dequeue(&msg) == 0) {
 					msg.tid = thread_id;
 					// printMessage(&msg, "incomingMsg");
-					fair_queue.putMessage(&msg);
+					fair_queue->putMessage(&msg);
 					pending_count++;
 				}
 			}
@@ -760,7 +763,7 @@ void fairQueueWorker(int thread_id) {
 		}
 
 		// select one message
-		if (!fair_queue.getMessage(&msg)) continue;
+		if (!fair_queue->getMessage(&msg)) continue;
 
 		// printMessage(&msg, "msgSelected");
 
@@ -895,7 +898,10 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 	idx_qp_server = thread_id % NUM_THREAD_IO_WORKER_INTER_SERVER;
 
 	if (thread_id == 0) {
-		printf("INFO> fairness policy: %s\n", ServerOptions::fairnessModeToString(Server_qp.fairness_mode));
+		printf("INFO> fairness options: --policy %s --order %s%s\n",
+					 ServerOptions::fairnessModeToString(Server_qp.fairness_mode),
+					 ServerOptions::queueOrderToString(Server_qp.queue_order),
+					 Server_qp.weight_by_node_count ? " --scalenodes" : "");
 	}
 
 	// the first few threads are dedicated for inter-server communication via queue[0]

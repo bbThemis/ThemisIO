@@ -14,7 +14,7 @@
 #include "qp.h"
 #include "io_queue.h"
 
-// the length of one time slice. The time spended on each job is time*weight. 
+// the length of one time slice. The time spent on each job is time*weight. 
 // Currently unused.
 // #define TIME_PER_CYCLE_MICROSEC       (30)
 
@@ -57,35 +57,76 @@ private:
 	 and copied out in getMessage(). A copy could be eliminated by allocating
 	 IO_CMD_MSG structs independently and queuing just the pointers.
 	 For efficiency, it would be good to use a local pool allocator for that.
+
+	 Fairness options:
+	   mode: fifo, job-fair, or user-fair
+		   In fifo mode, all messages are put in the same queue and processes in the order
+			   in which they were received.
+		   job-fair: maintain one message queue per job id. When selecting a
+			   message, choose one of the per-job queues and process the first message.
+			 user-fair: same as job fair, but there is one queue per user id.
+
+			 indexed_queues maps id (either job or user) to MessageQueue*
+
+     selection method
+		   probabilistic: weight each queue, choose randomly (count-balanced)
+			   Nonempty queues are maintained in a vector. When one is added it is appended.
+				 When one is remove it is swapped with the last.
+			 cycle: round-robin order with repeats
+			   Nonempty queues are maintained in a map or unordered_map so that removing
+				 one does not change the order of others.
+			   How to do weighting: maintain rolling_weight, starting at 0.
+				 On each cycle, rollover_weight += weight. Process up to floor(rollover_weight) messages,
+				 then subtract floor(rollover_weight).
+				 0, 1.7 (do 1) .7 -> 2.4 (do 2) .4 -> 2.1 (do 2) .1 -> 1.8 (do 1) ...
+			 time: choose queue with least cumulative time
+			   Nonempty queues are maintained in a heap where the heap with the minimum
+				 cumulative time is at the top.
+
+			   FYI: timer function performance
+				 MPI_Wtime: avg call time 17.3ns, precision .23ns
+				 std::chrono: avg call time 19.2ns, precision 1ns
+				 gettimeofday(microseconds): avg call time 18.7ns, precision 1000ns
+				 clock_gettime(CLOCK_MONOTONIC): avg call time 18.0ns, precision 1ns
+				 clock_gettime(CLOCK_MONOTONIC_COARSE) avg call time 5.0ns, precision 1000000ns
+				 clock_gettime(CLOCK_MONOTONIC_RAW) avg call time 292ns, precision 1ns
+				 __rdtsc(clock ticks): avg call time 6.3ns, precision 2 ticks or .74ns
+
+		 weight_by_node_count
+		   If this is true, then each queue is weighted by the number of nodes it represents.
+			 In job-fair mode this is the number of nodes in the job. In user-fair mode this is
+			 the sum of the number of nodes in all jobs this user has running.
+
 */
 class FairQueue {
  public:
-	/* mode: fairness mode (enum defined in qp.h)
-		 queue_order: choose message queue randomly or cycle through in round-robin order
+	/* mode: who is competing, jobs or users (enum defined in qp.h)
 		 weight_by_node_count: implement size-fair by weighting queues by node count
-		 measure: fairness measure (enum defined in qp.h)
 		 job_info_lookup: a wrapper used to access the active job list
 		 max_idle_sec: deallocate queues that have been empty for at least this many seconds.
 	*/
-	FairQueue(FairnessMode mode,
-						FairnessOrder queue_order,
+	FairQueue(FairnessMode peer,
 						bool weight_by_node_count,
-						FairnessMeasure measure,
 						int mpi_rank, int thread_id,
 						JobInfoLookup &job_info_lookup, int max_idle_sec = 10);
 	~FairQueue();
 	
-	bool isEmpty();
+	// bool isEmpty();
 
 	// returns the number of queued messages
-	int getCount();
+	int getCount() {return message_count;}
 
 	// Add a message to the queue. The data is copied from 'msg'.
 	void putMessage(const IO_CMD_MSG *msg);
 
 	// Selects a message to process. If there are no messages, this returns false.
 	// Otherwise this copies the message to 'msg' and returns true.
-	bool getMessage(IO_CMD_MSG *msg);
+	virtual bool getMessage(IO_CMD_MSG *msg) = 0;
+
+	// After processing the last message returned by getMessage,
+	// caller can call again to tell me the cost of handling the message.
+	// This can be used to track how much time was spent on each message.
+	virtual void chargePreviousMessageCost(double value) {}
 
 	// This will be called occasionally.
 	// It provides a way to print status output or perform garbage collection.
@@ -112,7 +153,8 @@ class FairQueue {
 	void SetNextJobActive(void);
   */
 	
-private:
+ protected:
+
   // unused remnants of time-sharing version
 	/*
 	// the sum of weight of all jobs
@@ -196,6 +238,9 @@ private:
 		
 	};
 
+	// implemented by subclasses, since each one organizes the queues differently
+	virtual void addNonemptyQueue(MessageQueue *q) = 0;
+
 
 	/* Log fairness decisions, tracking the set of messages queues with
 		 data and which was selected. Choices from the same set of queues
@@ -270,9 +315,6 @@ private:
 	};  // DecisionLog
 
 
-	// return index into nonempty_queues
-	int chooseRandomNonemptyQueue();
-
 	// Given a message, return the key used to index into indexed_queues.
 	// In other words, if there is one queue per job this will return the job id,
 	// and if there is one queue per user it will return the user id.
@@ -290,11 +332,10 @@ private:
 	// Scans all message queues and removes those which have been idle for too long.
 	// This is called by housekeeping().
 	void purgeIdle();
-	
+
+	// user-fair, or job-fair
 	FairnessMode fairness_mode;
-	FairnessOrder queue_order;
 	bool weight_by_node_count;
-	FairnessMeasure fairness_measure;
 
 	int mpi_rank, thread_id;
 	JobInfoLookup &job_info_lookup;
@@ -306,26 +347,13 @@ private:
 
 	std::default_random_engine random_engine;
 	
-	// all current message queues
+	// all current message queues, empty or not
 	// key is job_id or user_id
-	using IndexedQueueType = std::map<int, MessageQueue*>;
+	using IndexedQueueType = std::unordered_map<int, MessageQueue*>;
 	IndexedQueueType indexed_queues;
-
-	// iterator to the queue from which the most recent message was processed.
-	// Used in round-robin scheduling.
-	// It would be faster to use an index into nonempty_queues, but the round-robin
-	// order would get corrupted when elements were added or removed.
-	IndexedQueueType::const_iterator prev_queue;
 
 	// duplicate data structure created for timesharing code
 	// std::vector<MessageQueue*> all_queues;
-
-	// all nonempty message queues
-	std::vector<MessageQueue*> nonempty_queues;
-
-	// Used in chooseRandomNonemptyQueue(). This is filled with the
-	// priority for each nonempty queue, then one is chosen randomly.
-	std::vector<double> nonempty_priorities;
 
 	// Call purgeIdle() when a message comes in with a timestamp after this.
 	long unsigned next_purge_timestamp;
@@ -337,3 +365,74 @@ private:
 	static DecisionLog shared_decision_log;
 	static int thread_count, n_threads_reported;
 };
+
+
+/* Choose message queue probabilistically. Nonempty queues are stored in a vector. */
+class FairQueueRandom : public FairQueue {
+ public:
+	FairQueueRandom(FairnessMode peer,
+									bool weight_by_node_count,
+									int mpi_rank, int thread_id,
+									JobInfoLookup &job_info_lookup,
+									int max_idle_sec = 10)
+		: FairQueue(peer, weight_by_node_count, mpi_rank, thread_id, job_info_lookup, max_idle_sec)
+		{}
+	
+
+	virtual void addNonemptyQueue(MessageQueue *q);
+	virtual bool getMessage(IO_CMD_MSG *msg);
+	// virtual void removeNonemptyQueue(MessageQueue *q);
+
+ private:
+	bool isEmpty() {return nonempty_queues.empty();}
+	int chooseRandomNonemptyQueue();
+
+	std::vector<MessageQueue*> nonempty_queues;
+
+	// Used in chooseRandomNonemptyQueue(). This is filled with the
+	// priority for each nonempty queue, then one is chosen randomly.
+	std::vector<double> nonempty_priorities;
+};
+
+
+/* Cycle through nonempty message queues in round-robin order.
+	 Queues are stored in an ordered map. An unordered map would
+	 be OK too, probably a little faster, but it could lead to
+	 irregular patterns of cycles if entries are repeatedly remove
+	 and re-added.
+. */
+class FairQueueCycle : public FairQueue {
+ public:
+	virtual void addNonemptyQueue(MessageQueue *q);
+	virtual bool getMessage(IO_CMD_MSG *msg);
+
+ private:
+	// key is user id or job id, depending on FairQueue::fairness_mode
+	using QueueMap = std::map<int, MessageQueue*>;
+	QueueMap nonempty_queues;
+
+	// Queue from which we should next select.
+	// May be nonempty_queues::end() if there's nothing to select.
+	QueueMap::const_iterator next_queue;
+};
+
+
+/* Choose message queue that has spent the least cumulative time,
+	 to balance time spent on each job/user.
+	 Nonempty queues are stored in a heap. */
+class FairQueueTime : public FairQueue {
+ public:
+	virtual void addNonemptyQueue(MessageQueue *q);
+	virtual void removeNonemptyQueue(MessageQueue *q);
+	virtual bool getMessage(IO_CMD_MSG *msg);
+	virtual void chargePreviousMessageCost(double value) {}
+};
+
+
+FairQueue* createFairQueue
+(FairnessOrder order,
+ FairnessMode mode,
+ bool weight_by_node_count,
+ int mpi_rank, int thread_id,
+ JobInfoLookup &job_info_lookup,
+ int max_idle_sec = 10);

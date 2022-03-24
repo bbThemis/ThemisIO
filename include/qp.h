@@ -45,9 +45,9 @@
 #define CTX_POLL_BATCH		(16)
 
 
-// Keep this in sync with SERVER_QUEUEPAIR::fairnessModeToString()
+// Keep this in sync with ServerOptions::fairnessModeToString()
 enum FairnessMode {
-	// tradition first in first out
+	// traditional first in first out
 	FIFO, 
 
 	// Priority based on jobs such that the throughput of each job is proportional
@@ -75,22 +75,11 @@ enum FairnessMode {
 };
 
 
-// Keep this in sync with SERVER_QUEUEPAIR::queueOrderToString()
+// Keep this in sync with ServerOptions::queueOrderToString()
 enum FairnessOrder {
 	FAIR_ORDER_RANDOM,  // message queue chosen randomly
-	FAIR_ORDER_CYCLE    // message queue chosen in round-robin order
-};
-
-
-// Keep this in sync with SERVER_QUEUEPAIR::fairnessMeasureToString()
-enum FairnessMeasure {
-	// Balance the number of requests served.
-	// Short requests cost the same as long requests.
-  FAIR_MEASURE_COUNT,
-
-	// Balance the cumulative time spent.
-	// The cost of a request is proportional to time spent handling it.
-	FAIR_MEASURE_TIME
+	FAIR_ORDER_CYCLE,   // queue chosen in round-robin order
+	FAIR_ORDER_TIME     // queue chosen to balance cumulative time
 };
 
 
@@ -165,7 +154,6 @@ public:
 	FairnessMode fairness_mode;
 	FairnessOrder queue_order;
 	bool weight_by_node_count;
-	FairnessMeasure fairness_measure;
 
 	pthread_mutex_t process_lock;	// for this process
 
@@ -244,8 +232,7 @@ public:
   ServerOptions() :
 	  fairness_mode(getDefaultFairnessMode()),
 		queue_order(getDefaultQueueOrder()),
-		weight_by_node_count(false),
-		fairness_measure(getDefaultFairnessMeasure())
+		weight_by_node_count(false)
 		{}
 
 	// Returns true iff the command line arguments are successfully parsed.
@@ -287,22 +274,10 @@ public:
 
 	bool getNodeWeighting() {return weight_by_node_count;}
 
-	// FairnessMeasure is defined in qp.h
-	FairnessMeasure getFairnessMeasure() {return fairness_measure;}
-
-	// use this to change the default fairness measure
-	static FairnessMeasure getDefaultFairnessMeasure() {return FAIR_MEASURE_COUNT;}
-
-	static const char *fairnessMeasureToString(FairnessMeasure fairness_measure) {
-		return fairness_measure == FAIR_MEASURE_COUNT ? "count" : "time";
-	}
-	
-
 private:
 	FairnessMode fairness_mode;
 	FairnessOrder queue_order;
 	bool weight_by_node_count;
-	FairnessMeasure fairness_measure;
 };
 
 

@@ -19,16 +19,31 @@ int FairQueue::thread_count = 0;
 int FairQueue::n_threads_reported = 0;
 
 
+FairQueue* createFairQueue
+(FairnessOrder order,
+ FairnessMode mode,
+ bool weight_by_node_count,
+ int mpi_rank, int thread_id,
+ JobInfoLookup &job_info_lookup,
+ int max_idle_sec) {
+
+	if (order == FAIR_ORDER_RANDOM) {
+		return new FairQueueRandom(mode, weight_by_node_count, mpi_rank, thread_id,
+															 job_info_lookup, max_idle_sec);
+	} else {
+		printf("order \"%s\" not supported yet\n", ServerOptions::queueOrderToString(order));
+		return nullptr;
+	}
+}
+
+
+
 FairQueue::FairQueue(FairnessMode mode_, 
-										 FairnessOrder order_,
 										 bool weight_nodes_,
-										 FairnessMeasure measure_,
 										 int mpi_rank_, int thread_id_,
 										 JobInfoLookup &job_info_lookup_, int max_idle_sec_) :
 	fairness_mode(mode_),
-	queue_order(order_),
 	weight_by_node_count(weight_nodes_),
-	fairness_measure(measure_),
 	mpi_rank(mpi_rank_),
 	thread_id(thread_id_),
 	job_info_lookup(job_info_lookup_),
@@ -62,11 +77,14 @@ FairQueue::~FairQueue() {
 	}
 }
 
+
 void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 	int key = getKey(msg);
 	MessageQueue *q;
 	bool was_empty;
 	static bool first_output = true;
+
+	// printf("putMessage %p jobid=%d userid=%d\n", msg, job_info_lookup.getSlurmJobId(msg), job_info_lookup.getUserId(msg));
 
 	message_count++;
 	auto iqt = indexed_queues.find(key);
@@ -92,9 +110,8 @@ void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 
 	q->add(msg);
 
-	if (was_empty) {
-		nonempty_queues.push_back(q);
-	}
+	if (was_empty)
+		addNonemptyQueue(q);
 }
 
 // unused remnants of time-sharing version
@@ -328,69 +345,6 @@ void FairQueue::reload(void) {
 }
 #endif  // #if 0
 
-bool FairQueue::isEmpty() {
-	return nonempty_queues.empty();
-}
-
-
-int FairQueue::getCount() {
-	return message_count;
-}
-
-
-int FairQueue::chooseRandomNonemptyQueue() {
-	long unsigned now = getTime();
-	int n = nonempty_queues.size();
-
-	double priority_sum = 0;
-	nonempty_priorities.resize(n);
-	for (int i=0; i < n; i++) {
-		nonempty_priorities[i] = nonempty_queues[i]->getPriority(now);
-		assert(nonempty_priorities[i] > 0);
-		priority_sum += nonempty_priorities[i];
-	}
-
-	std::uniform_real_distribution<double> distrib(0, priority_sum);
-	double r = distrib(random_engine), r_orig = r;
-
-	// if nothing is selected (possibly due to roundoff errors), select the last one
-	int choice_idx = n-1;
-
-	for (int i=0; i < n-1; i++) {
-		if (nonempty_priorities[i] > r) {
-			choice_idx = i;
-			break;
-		} else {
-			r -= nonempty_priorities[i];
-		}
-	}
-
-	decision_log.log(nonempty_queues, nonempty_queues[choice_idx]->id);
-
-	return choice_idx;
-}
-
-
-bool FairQueue::getMessage(IO_CMD_MSG *msg) {
-	if (isEmpty()) return false;
-
-	int queue_idx = chooseRandomNonemptyQueue();
-	
-	MessageQueue *q = nonempty_queues[queue_idx];
-	q->remove(msg);
-	message_count--;
-	
-	if (q->messages.empty()) {
-		// mark this queue idle and move it off the nonempty list
-		q->idle_timestamp = getTime();
-
-		size_t last_idx = nonempty_queues.size() - 1;
-		nonempty_queues[queue_idx] = nonempty_queues[last_idx];
-		nonempty_queues.resize(last_idx);
-	}
-
-	return true;
-}
 
 // unused remnants of time-sharing version
 #if 0
@@ -730,4 +684,64 @@ std::string FairQueue::DecisionLog::decisionSetToString(int *data) {
 		buf << data[n+i+1];
 	}
 	return buf.str();
+}
+
+
+void FairQueueRandom::addNonemptyQueue(MessageQueue *q) {
+	nonempty_queues.push_back(q);
+}
+
+
+bool FairQueueRandom::getMessage(IO_CMD_MSG *msg) {
+	if (isEmpty()) return false;
+
+	int queue_idx = chooseRandomNonemptyQueue();
+	
+	MessageQueue *q = nonempty_queues[queue_idx];
+	q->remove(msg);
+	message_count--;
+	
+	if (q->messages.empty()) {
+		// mark this queue idle and move it off the nonempty list
+		q->idle_timestamp = getTime();
+
+		size_t last_idx = nonempty_queues.size() - 1;
+		nonempty_queues[queue_idx] = nonempty_queues[last_idx];
+		nonempty_queues.resize(last_idx);
+	}
+
+	return true;
+}
+
+
+int FairQueueRandom::chooseRandomNonemptyQueue() {
+	long unsigned now = getTime();
+	int n = nonempty_queues.size();
+
+	double priority_sum = 0;
+	nonempty_priorities.resize(n);
+	for (int i=0; i < n; i++) {
+		nonempty_priorities[i] = nonempty_queues[i]->getPriority(now);
+		assert(nonempty_priorities[i] > 0);
+		priority_sum += nonempty_priorities[i];
+	}
+
+	std::uniform_real_distribution<double> distrib(0, priority_sum);
+	double r = distrib(random_engine), r_orig = r;
+
+	// if nothing is selected (possibly due to roundoff errors), select the last one
+	int choice_idx = n-1;
+
+	for (int i=0; i < n-1; i++) {
+		if (nonempty_priorities[i] > r) {
+			choice_idx = i;
+			break;
+		} else {
+			r -= nonempty_priorities[i];
+		}
+	}
+
+	decision_log.log(nonempty_queues, nonempty_queues[choice_idx]->id);
+
+	return choice_idx;
 }
