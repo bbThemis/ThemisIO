@@ -663,7 +663,7 @@ bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg, std::unordered_map<Act
 	// printf("random_value %f\t",random_value);
 	
 	{
-		// std::lock_guard<std::mutex> lock(allocLock);
+		std::lock_guard<std::mutex> lock(allocLock);
 		// printf("appAlloc: %u in getMessage_FromActiveJob\n", &allocLock);
 		// if(!appAlloc.empty()) {
 		// 	printf("appAlloc size:%d");

@@ -118,7 +118,7 @@ void LnetOst::setAllocations(const LnetEntity *remote, const LnetMsg *msg) {
     msg->extractData(&r, offset);
     bws.push_back(std::make_tuple(id, r));
   }
-  // std::lock_guard<std::mutex> lock(allocLock);
+  std::lock_guard<std::mutex> lock(allocLock);
   appAlloc.clear();
   double sum = 0;
   printf("Rank %d setAllocations:\n", mpi_rank);
@@ -175,7 +175,7 @@ void LnetOst::onRemoteServerRequest(const LnetEntity *remote)
 //   this->addClient(i);
 // }
 void LnetOst::getActiveRequests(std::vector<ActiveRequest>& reqs) {
-  // std::lock_guard<std::mutex> lock(reqLock);
+  std::lock_guard<std::mutex> lock(reqLock);
   for(auto& v: activeReqs) {
     for(int i = 0; i < v.second; i++) {
       reqs.push_back(v.first);
