@@ -37,6 +37,8 @@ using MapOstToAppAllocs_t = std::vector<AppAllocs_t>;
 class LnetMds: public LnetServer
 {
   private:
+    // std::mutex ost_lock;
+
     std::vector<OscInfo*> _oscs;
     std::vector<OstInfo*> _osts;
     std::map<std::string, OstInfo*> _dirToOst;

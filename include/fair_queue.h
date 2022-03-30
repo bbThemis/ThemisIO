@@ -76,6 +76,8 @@ class FairQueue {
 
 	// Add a message to the queue. The data is copied from 'msg'.
 	void putMessage(const IO_CMD_MSG *msg);
+	void putMessage(const IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
+	                            std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock);
 	void putMessage_TimeSharing(const IO_CMD_MSG *msg);
 	void putMessage_TimeSharing(const IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
 	                            std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock);
@@ -84,6 +86,8 @@ class FairQueue {
 	// Selects a message to process. If there are no messages, this returns false.
 	// Otherwise this copies the message to 'msg' and returns true.
 	bool getMessage(IO_CMD_MSG *msg);
+	bool getMessage(IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
+	                              std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock);
 
 	bool getMessage_FromActiveJob(IO_CMD_MSG *msg);
 	bool getMessage_FromActiveJob(IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,

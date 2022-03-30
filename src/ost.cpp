@@ -23,7 +23,7 @@ const int DEFAULT_GC_TIMER = 15;
 
 OST::OST(const LSockAddr &addr, int port, int id, const char *name, int lnetport/*, int dataport*/,
         std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
-        std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock):activeReqs(activeReqs), reqLock(reqLock), appAlloc(appAlloc), allocLock(allocLock)
+        std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock, bool& appAllocChange):activeReqs(activeReqs), reqLock(reqLock), appAlloc(appAlloc), allocLock(allocLock), appAllocChange(appAllocChange)
 {
   this->_info = new OstInfo();
   this->_info->id = id;
@@ -32,7 +32,7 @@ OST::OST(const LSockAddr &addr, int port, int id, const char *name, int lnetport
   this->_info->listenport = lnetport;
   // this->_info->dataport = dataport;
   // this->_dataNet = new DatanetOst(this->_info);
-  this->_ostNet = new LnetOst(addr, port, this->_info, activeReqs, reqLock, /*, this->_dataNet*/appAlloc, allocLock);
+  this->_ostNet = new LnetOst(addr, port, this->_info, activeReqs, reqLock, /*, this->_dataNet*/appAlloc, allocLock, appAllocChange);
   this->_mdsConnected = this->_ostNet->pubOstInfoToMds();
 }
 

@@ -699,6 +699,19 @@ void printMessage(const IO_CMD_MSG *msg, const char *prefix) {
 				 msg->T_Queued/1000000., hex_content);
 }
 
+struct UpdateWeightThreadParams {
+    FairQueue* pFairQueue;
+	std::unordered_map<int, std::pair<double,double>>* appAlloc;
+	std::mutex* allocLock;
+};
+static void* Func_Update_Job_Weight(void* pParam) {
+	FairQueue* pFairQueue = ((UpdateWeightThreadParams*)pParam)->pFairQueue;
+	std::unordered_map<int, std::pair<double,double>>* appAlloc = ((UpdateWeightThreadParams*)pParam)->appAlloc;
+	std::mutex* allocLock = ((UpdateWeightThreadParams*)pParam)->allocLock;
+	while(1) {
+		pFairQueue->Update_Job_Weight(*appAlloc, *allocLock);
+	}
+}
 
 void fairQueueWorker(int thread_id) {
 	int IdxMin, IdxMax, range;
@@ -742,8 +755,8 @@ void fairQueueWorker(int thread_id) {
 		for (CIO_QUEUE *queue = IO_Queue_List + IdxMin;
 				 queue <= IO_Queue_List + IdxMax;
 				 queue++) {
-			// Move all queued msg to fair queue!!! Fast response to the new incoming requests from new jobs!
-			while(!queue->isEmptyUnsafe())	{
+
+			while (!queue->isEmptyUnsafe())	{
 				if (queue->Dequeue(&msg) == 0) {
 					msg.tid = thread_id;
 					// printMessage(&msg, "incomingMsg");
@@ -795,19 +808,6 @@ void print_activeReqs(std::unordered_map<ActiveRequest, int, hash_activeReq>& ac
 		printf("jobid[%d]: %d\n", v.first._info.id, v.second);
 	}
 	printf("////////////////////\n");
-}
-struct UpdateWeightThreadParams {
-    FairQueue* pFairQueue;
-	std::unordered_map<int, std::pair<double,double>>* appAlloc;
-	std::mutex* allocLock;
-};
-static void* Func_Update_Job_Weight(void* pParam) {
-	FairQueue* pFairQueue = ((UpdateWeightThreadParams*)pParam)->pFairQueue;
-	std::unordered_map<int, std::pair<double,double>>* appAlloc = ((UpdateWeightThreadParams*)pParam)->appAlloc;
-	std::mutex* allocLock = ((UpdateWeightThreadParams*)pParam)->allocLock;
-	while(1) {
-		pFairQueue->Update_Job_Weight(*appAlloc, *allocLock);
-	}
 }
 
 void fairQueueWorker_TimeSharing(int thread_id, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
@@ -958,7 +958,7 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 	std::mutex& reqLock = *(readParams->reqLock);
     std::unordered_map<int, std::pair<double,double>>& appAlloc = *(readParams->appAlloc);
 	std::mutex& allocLock = *(readParams->allocLock);
-	
+	bool& appAllocChange = *(readParams->appAllocChange);
 	CoreBinding.Bind_This_Thread();
 	idx_qp_server = thread_id % NUM_THREAD_IO_WORKER_INTER_SERVER;
 
@@ -971,8 +971,13 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 		printf("DBG> FairQueue thread_id %d inter-server-queue %d\n", thread_id, thread_id);
 		Inter_server_communication_loop(thread_id, &(IO_Queue_List[thread_id]));
 	} else {
-//		fairQueueWorker(thread_id);
-		fairQueueWorker_TimeSharing(thread_id, activeReqs, reqLock, appAlloc, allocLock);
+		if(Server_qp.fairness_mode==GIFT) {
+			fairQueueWorker_TimeSharing(thread_id, activeReqs, reqLock, appAlloc, allocLock);
+		} else {
+			fairQueueWorker(thread_id);
+		}
+		
+// 		
 	}
 
 	return NULL;

@@ -8,13 +8,14 @@
 extern int mpi_rank;
 LnetOst::LnetOst(const LSockAddr &addr, int port, const OstInfo *info/*, DatanetOst *dnet*/,
     std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
-    std::unordered_map<int, std::pair<double,double>>& appAlloc, std::mutex& allocLock)
+    std::unordered_map<int, std::pair<double,double>>& appAlloc, std::mutex& allocLock, bool& appAllocChange)
   : LnetServer(info->listenport),
     _info(info),
     activeReqs(activeReqs),
     reqLock(reqLock),
     appAlloc(appAlloc),
-    allocLock(allocLock)
+    allocLock(allocLock),
+    appAllocChange(appAllocChange)
 {
   this->_toMds = new LnetClient(addr, port);
   this->_mdsInfo = new MdsInfo();
@@ -86,9 +87,10 @@ void LnetOst::onDisconnect(const LnetEntity *remote)
 //     this->_oscs.erase(osc);
 //   }
 }
-
+extern int mpi_rank;
 void LnetOst::onClientRequest(const LnetEntity *remote)
 {
+  // std::cerr <<"MPI rank " <<  mpi_rank << ": onClientRequest" << std::endl;
   if (!remote || !remote->sock || !remote->sock->isValid()) return;
   if (remote->type == Mds) {
     return this->onRemoteServerRequest(remote);
@@ -116,7 +118,7 @@ void LnetOst::setAllocations(const LnetEntity *remote, const LnetMsg *msg) {
     msg->extractData(&r, offset);
     bws.push_back(std::make_tuple(id, r));
   }
-  std::lock_guard<std::mutex> lock(allocLock);
+  // std::lock_guard<std::mutex> lock(allocLock);
   appAlloc.clear();
   double sum = 0;
   printf("Rank %d setAllocations:\n", mpi_rank);
@@ -128,6 +130,7 @@ void LnetOst::setAllocations(const LnetEntity *remote, const LnetMsg *msg) {
     // appAlloc[std::get<0>(a)] = std::get<1>(a);
     printf("appAlloc[%d]:[%f,%f]\n",std::get<0>(a), appAlloc[std::get<0>(a)].first, appAlloc[std::get<0>(a)].second);
   }
+  appAllocChange = true;
   // double factor = 1.0;
   // if(sum < 1) {
   //   factor = 1/sum;
@@ -172,7 +175,7 @@ void LnetOst::onRemoteServerRequest(const LnetEntity *remote)
 //   this->addClient(i);
 // }
 void LnetOst::getActiveRequests(std::vector<ActiveRequest>& reqs) {
-  std::lock_guard<std::mutex> lock(reqLock);
+  // std::lock_guard<std::mutex> lock(reqLock);
   for(auto& v: activeReqs) {
     for(int i = 0; i < v.second; i++) {
       reqs.push_back(v.first);

@@ -56,6 +56,52 @@ FairQueue::~FairQueue() {
 	}
 }
 
+// Only for GIFT
+// void FairQueue::putMessage(const IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
+// 	                            std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock) {
+// 	int key = getKey(msg);
+// 	MessageQueue *q;
+// 	bool was_empty;
+// 	static bool first_output = true;
+
+// 	message_count++;
+// 	auto iqt = indexed_queues.find(key);
+// 	int job_id = job_info_lookup.getSlurmJobId(msg);
+// 	int user_id = job_info_lookup.getUserId(msg);
+// 	if (iqt == indexed_queues.end()) {
+// 		// create new message queue
+// 		int weight = 0;
+// 		q = new MessageQueue(key, job_id, user_id, getTime(), weight);
+// 		indexed_queues[key] = q;
+// 		was_empty = true;
+
+// #if REPORT_JOB_START_AND_END
+// 		printf("FairQueue::putMessage.newqueue time=%.2f threadid=%d key=%d jobid=%d userid=%d nodecount=%d weight=%d\n", 
+// 					 getTime()/1000000., thread_id, key, job_id, user_id, job_info_lookup.getNodeCount(msg), weight);
+// #endif
+
+// 	} else {
+// 		q = iqt->second;
+// 		was_empty = q->messages.empty();
+// 	}
+
+// 	q->add(msg);
+
+// 	if (was_empty) {
+// 		nonempty_queues.push_back(q);
+// 	}
+// 	{
+// 		std::lock_guard<std::mutex> lock(reqLock);
+// 		AppInfo inf;
+// 		inf.id = job_id;
+// 		sprintf(inf.name, "%d", job_id);
+// 		ActiveRequest rq = {._info = inf, ._t = Write};
+// 		activeReqs[rq]++;
+// 	}
+// }
+
+
+
 void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 	int key = getKey(msg);
 	MessageQueue *q;
@@ -546,6 +592,37 @@ int FairQueue::chooseRandomNonemptyQueue() {
 	return choice_idx;
 }
 
+// Only for Gift
+// bool FairQueue::getMessage(IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
+//                                          std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock) {
+// 	if (isEmpty()) return false;
+
+// 	int queue_idx = chooseRandomNonemptyQueue();
+	
+// 	MessageQueue *q = nonempty_queues[queue_idx];
+// 	int job_id = q->job_id;
+// 	q->remove(msg);
+// 	message_count--;
+// 	{
+// 		std::lock_guard<std::mutex> lock(reqLock);
+// 		AppInfo inf;
+// 		inf.id = job_id;
+// 		sprintf(inf.name, "%d", job_id);
+// 		ActiveRequest rq = {._info = inf, ._t = Write};
+// 		activeReqs[rq]--;		
+// 	}
+// 	if (q->messages.empty()) {
+// 		// mark this queue idle and move it off the nonempty list
+// 		q->idle_timestamp = getTime();
+
+// 		size_t last_idx = nonempty_queues.size() - 1;
+// 		nonempty_queues[queue_idx] = nonempty_queues[last_idx];
+// 		nonempty_queues.resize(last_idx);
+// 	}
+
+// 	return true;
+// }
+
 
 bool FairQueue::getMessage(IO_CMD_MSG *msg) {
 	if (isEmpty()) return false;
@@ -586,7 +663,7 @@ bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg, std::unordered_map<Act
 	// printf("random_value %f\t",random_value);
 	
 	{
-		std::lock_guard<std::mutex> lock(allocLock);
+		// std::lock_guard<std::mutex> lock(allocLock);
 		// printf("appAlloc: %u in getMessage_FromActiveJob\n", &allocLock);
 		// if(!appAlloc.empty()) {
 		// 	printf("appAlloc size:%d");

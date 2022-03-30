@@ -41,7 +41,7 @@ std::unordered_map<ActiveRequest, int, hash_activeReq> activeReqs;
 std::mutex reqLock;
 std::unordered_map<int, std::pair<double, double>> appAlloc;
 std::mutex allocLock;
-
+bool appAllocChange = false; // No need to use lock?
 
 CORE_BINDING CoreBinding;
 
@@ -61,6 +61,7 @@ struct OSTThreadParams {
     std::mutex* reqLock;
 	std::unordered_map<int, std::pair<double, double>>* appAlloc;
 	std::mutex* allocLock;
+	bool* appAllocChange;
 };
 
 typedef	struct	{
@@ -295,7 +296,7 @@ static void* Func_thread_qp_server(void *pParam)
     
     for(i=0; i<NUM_THREAD_IO_WORKER; i++) {
 		IO_Worker_tid_List[i] = i;
-		params[i] = {.workerId = &(IO_Worker_tid_List[i]), .activeReqs = &activeReqs, .reqLock = &reqLock, .appAlloc = &appAlloc, .allocLock = &allocLock };
+		params[i] = {.workerId = &(IO_Worker_tid_List[i]), .activeReqs = &activeReqs, .reqLock = &reqLock, .appAlloc = &appAlloc, .allocLock = &allocLock, .appAllocChange = &appAllocChange };
 	}
 	for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
 		if(pthread_create(&(pthread_IO_Worker[i]), NULL, Func_thread_IO_Worker, (void*)&(params[i])/*&(IO_Worker_tid_List[i])*/)) {
@@ -318,7 +319,7 @@ static void* Func_Setup_Connection_To_Mds(void* pParam) {
 	std::mutex* reqLock = ((OSTThreadParams*)pParam)->reqLock;
 	std::unordered_map<int, std::pair<double, double>>* appAlloc = ((OSTThreadParams*)pParam)->appAlloc;
 	std::mutex* allocLock = ((OSTThreadParams*)pParam)->allocLock;
-	
+	bool* appAllocChange =  ((OSTThreadParams*)pParam)->appAllocChange;
 	char mds_host[256];
 	int mds_port;
 	char name[256];
@@ -332,8 +333,8 @@ static void* Func_Setup_Connection_To_Mds(void* pParam) {
 	printf("mds: %s %d\n", mds_host, mds_port);
 	fclose(fIn);
 	LSockAddr addr(mds_host, mds_port);
-	pServer_qp->ost = new OST(addr, mds_port, mpi_rank, name, -1, *activeReqs, *reqLock, *appAlloc, *allocLock);
-	// printf("OST Initialization Done!\n");
+	pServer_qp->ost = new OST(addr, mds_port, mpi_rank, name, -1, *activeReqs, *reqLock, *appAlloc, *allocLock, *appAllocChange);
+	printf("OST %d Initialization Done!\n", mpi_rank);
 	pServer_qp->ost->eventLoop();
 }
 extern long int nOPs_Done[NUM_THREAD_IO_WORKER];
@@ -487,10 +488,7 @@ int main(int argc, char **argv)
 	ostParam.reqLock = &reqLock;
 	ostParam.appAlloc = &appAlloc;
 	ostParam.allocLock = &allocLock;
-	if(pthread_create(&(thread_connect_mds), NULL, Func_Setup_Connection_To_Mds, &ostParam)) {
-		fprintf(stderr, "Error creating thread\n");
-		return 1;
-	}
+	
 	if(mpi_rank == 0)	{
 		printf("INFO> There are %d servers.\n", nFSServer);
 		fOut = fopen(FS_PARAM_FILE, "w");
@@ -505,12 +503,15 @@ int main(int argc, char **argv)
 		}
 		fclose(fOut);
 	}
-
+	if(pthread_create(&(thread_connect_mds), NULL, Func_Setup_Connection_To_Mds, &ostParam)) {
+		fprintf(stderr, "Error creating thread\n");
+		return 1;
+	}
 	if(pthread_create(&(thread_qp_server), NULL, Func_thread_qp_server, &Server_qp)) {
 		fprintf(stderr, "Error creating thread\n");
 		return 1;
 	}
-
+	
 //	Setup_Signal_QueuePair();
 	while(1)	{
 		if(Server_Started)	break;

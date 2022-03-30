@@ -85,6 +85,8 @@ void LnetMds::addOst(const LSocket &remote, const OstInfo *info)
   LClientSocket *sock = new LClientSocket(remote.sockfd());
   OstInfo *i = new OstInfo(info);
   i->sock = sock;
+  // need lock
+  // std::lock_guard<std::mutex> lock(ost_lock);
   this->_osts.push_back(i);
   std::cerr << *i << " connected" << std::endl;
   this->_dirToOst[i->name] = i;
@@ -374,6 +376,7 @@ bool LnetMds::bcastMsgToOsts(const LnetMsg *msg)
 {
   if (this->_osts.size() <= 0) return false;
   std::cerr << "Broadcasting timer msg to all OSTs" << std::endl;
+  // std::lock_guard<std::mutex> lock(ost_lock);
   for (auto s: this->_osts) {
     if (this->sendMsgToOst(msg, s->id) < (ssize_t)sizeof(*msg)) {
       return false;

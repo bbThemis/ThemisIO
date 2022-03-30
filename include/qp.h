@@ -40,6 +40,7 @@ struct IOThreadParams {
     std::mutex* reqLock;
 	std::unordered_map<int, std::pair<double, double>>* appAlloc;
 	std::mutex* allocLock;
+	bool* appAllocChange;
 };
 
 
