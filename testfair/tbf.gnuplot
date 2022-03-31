@@ -8,11 +8,11 @@ set yrange [0:29000]
 # competing median 10866
 
 
-set arrow from 1,14660 to 59,14660 lt 7 lw 1 nohead
-set label "14660 MB/s" at 16,(14660+1200) left font "Times,14"
+set arrow from 1,17446 to 59,17446 lt 7 lw 1 nohead
+set label "17446 MB/s" at 16,(17446+1200) left font "Times,14"
 
-set arrow from 5,8108 to 55,8108 lt 7 lw 1 nohead
-set label "8108 MB/s" at 13,(8108+1200) right font "Times,14"
+set arrow from 5,8878 to 55,8878 lt 7 lw 1 nohead
+set label "8878 MB/s" at 13,(8878+1200) right font "Times,14"
 
 # set arrow from 5,7289 to 55,7289 dt 2 lw 1 nohead
 # set label "7289 MB/s" at 6,(7289+1200) left font "Times,14"

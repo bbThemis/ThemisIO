@@ -424,13 +424,14 @@ bool FairQueue::getMessage(IO_CMD_MSG *msg) {
     // //std::cout << "hi" << std::endl;
     MessageQueue *q = nonempty_queues[queue_idx];
     double proportion = 1.0;//max_rate / total_rate;
+    double curr_time = getTime();
     //std::cout << proportion << std::endl;
-    if(getTime() - q->prev_time < new_deadline*1000000) 
+    if(curr_time - q->prev_time < new_deadline*1000000) 
         return false;
 
 	q->remove(msg);
 	message_count--;
-    q->prev_time = getTime();
+    q->prev_time += new_deadline*1000000;
 	
 	if (q->messages.empty()) {
 		// mark this queue idle and move it off the nonempty list
