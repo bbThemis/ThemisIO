@@ -38,6 +38,10 @@ public:
 		return ActiveJobList[jobKey(msg)].uid;
 	}
 
+    float getRate(const IO_CMD_MSG *msg) {
+        return ActiveJobList[jobKey(msg)].rate;
+    }
+
 private:
 	int jobKey(const IO_CMD_MSG *msg) {
 		int job_key = msg->idx_JobRec;
@@ -64,7 +68,7 @@ class FairQueue {
 		 max_idle_sec: deallocate queues that have been empty for at least this many seconds.
 	*/
 	FairQueue(FairnessMode mode, int mpi_rank, int thread_id,
-						JobInfoLookup &job_info_lookup, int max_idle_sec = 10);
+						JobInfoLookup &job_info_lookup, int max_idle_sec = 10, int tokens = 0);
 	~FairQueue();
 	
 	bool isEmpty();
@@ -104,10 +108,15 @@ class FairQueue {
 private:
 	// the sum of weight of all jobs
 	float weight_sum;
+    double max_rate;
+    double total_rate;
 	int nJob;
 	int IdxActiveJob;
 	int pad;
+    int tokens;
 //	MessageQueue *q_ActiveJob;
+
+    
 
 	double T_ThisCycle;
 
@@ -123,9 +132,11 @@ private:
 	};
 	
 	struct MessageQueue {
-		MessageQueue(int id_, int job_id_, int user_id_, long now, int weight_)
-			: id(id_), job_id(job_id_), user_id(user_id_), idle_timestamp(now), weight(weight_) {
+		MessageQueue(int id_, int job_id_, int user_id_, long now, int weight_, double rate_ = 200.0, bool htc_ = false)
+			: id(id_), job_id(job_id_), user_id(user_id_), idle_timestamp(now), weight(weight_), rate(rate_), htc(htc_) {
 				T_Create = now * 1.0;
+                deadline = 1.0/rate_;
+                prev_time = now;
 			}
 								 
 		std::queue<MessageContainer> messages;
@@ -133,6 +144,7 @@ private:
 		// id, either job id or user id, depending on fairness mode
 		int id;
 		float weight;	 // size-fair: node count. Otherwise 1.
+        double rate;
 
 		int job_id, user_id;
 
@@ -142,8 +154,15 @@ private:
 		// timestamp of the first item in the queue
 		long unsigned front_timestamp;
 
+        // timestamp of the last time a request dequeued
+        long unsigned prev_time;
+
 		// The time when current queue was create for current job
 		long int T_Create;
+
+        // Rule - Lustre 
+        double deadline;
+        bool htc;
 
 		// the time balance current queue has. It could be negative since one long OP could take long time. 
 		long int T_Balance;
@@ -274,7 +293,7 @@ private:
 
 
 	// return index into nonempty_queues
-	int chooseRandomNonemptyQueue();
+	int chooseRandomNonemptyQueue(double &total_rate);
 
 	
 	int getKey(const IO_CMD_MSG *msg) {
@@ -296,6 +315,8 @@ private:
 	JobInfoLookup &job_info_lookup;
 	unsigned long start_time_usec;
 	int max_idle_sec;
+    std::vector<std::pair<MessageQueue*,double>> sorted_arr;
+    std::pair<MessageQueue*, double> currQ;
 
 	// total number messages in queue
 	int message_count;

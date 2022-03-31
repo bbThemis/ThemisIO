@@ -37,6 +37,7 @@ typedef	struct	{
 	uint32_t ctid;	// client thred id
 	uint32_t cuid;	// client user id
 	uint32_t cgid;	// client user group id
+    float rate; // Rule_Lustre paper param
 	char szClientHostName[MAX_HOSTNAME_LEN];
 	char szClientExeName[MAX_EXENAME_LEN];
 }JOB_INFO_DATA;

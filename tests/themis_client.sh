@@ -75,12 +75,13 @@ function setMyfsConf() {
 }
 
 
-while getopts ":hj:n:u:s:" option
+while getopts ":hj:n:u:s:r:" option
 do
   case $option in
     j) export THEMIS_FAKE_JOBID=$OPTARG;;
     n) export THEMIS_FAKE_NNODES=$OPTARG;;
     u) export THEMIS_FAKE_USERID=$OPTARG;;
+    r) export TOKEN_RATE=$OPTARG;;
     s) sleep $OPTARG;;
     h)
       printHelp

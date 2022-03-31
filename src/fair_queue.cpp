@@ -2,7 +2,9 @@
 #include <sys/time.h>
 #include <random>
 #include <iomanip>
+#include <iostream>
 #include <unordered_map>
+#include <algorithm>
 
 /* Set this to a nonzero value to enable a debug output message each time a
 	 new job is encountered, and a message when that job is considered idle
@@ -18,14 +20,15 @@ int FairQueue::n_threads_reported = 0;
 
 
 FairQueue::FairQueue(FairnessMode mode_, int mpi_rank_, int thread_id_,
-										 JobInfoLookup &job_info_lookup_, int max_idle_sec_) :
+										 JobInfoLookup &job_info_lookup_, int max_idle_sec_, int tokens_) :
 	fairness_mode(mode_),
 	mpi_rank(mpi_rank_),
 	thread_id(thread_id_),
 	job_info_lookup(job_info_lookup_),
 	max_idle_sec(max_idle_sec_),
 	message_count(0),
-	next_purge_timestamp(0)
+	next_purge_timestamp(0),
+    tokens(tokens_)
 {
 
 	std::random_device rdev;
@@ -34,6 +37,7 @@ FairQueue::FairQueue(FairnessMode mode_, int mpi_rank_, int thread_id_,
 	weight_sum = 0;
 	nJob = 0;
 	IdxActiveJob = -1;
+    max_rate = 18000.0/16.0;
 //	it_ActiveJob = NULL;
 	
 	decision_log.changeThreadCount(1);
@@ -51,6 +55,21 @@ FairQueue::~FairQueue() {
 
 void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 	int key = getKey(msg);
+    double rate = 6000.0/16.0;//job_info_lookup.getRate(msg);
+    int job_id = job_info_lookup.getSlurmJobId(msg);
+    if(job_id == 1001){
+        rate = 16000.0/16.0;
+    }
+    else if(job_id == 1002){
+        rate = 16000.0/16.0;
+    }
+    else if(job_id == 1003){
+        rate = 4000.0/16.0;
+    }
+    //printf("%f\n", rate);
+    //printf("PUTTING PUTTING PUTTING\n");
+
+   
 	MessageQueue *q;
 	bool was_empty;
 	static bool first_output = true;
@@ -62,7 +81,13 @@ void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 		int weight = fairness_mode == SIZE_FAIR ? job_info_lookup.getNodeCount(msg) : 1;
 		int job_id = job_info_lookup.getSlurmJobId(msg);
 		int user_id = job_info_lookup.getUserId(msg);
-		q = new MessageQueue(key, job_id, user_id, getTime(), weight);
+        bool htc = false;
+        if(job_id  < 1004){
+            htc = false;
+        }
+		q = new MessageQueue(key, job_id, user_id, getTime(), weight, rate, htc);
+        sorted_arr.push_back(std::make_pair(q, 1.0/rate));
+
 		indexed_queues[key] = q;
 		was_empty = true;
 
@@ -241,6 +266,7 @@ void FairQueue::Update_Job_Weight(void) {
 }
 
 void FairQueue::putMessage_TimeSharing(const IO_CMD_MSG *msg) {
+    //printf("HEREHEHERE\n");
 	MessageQueue *q;
 	static bool first_output = true;
 	int job_id = job_info_lookup.getSlurmJobId(msg);
@@ -321,17 +347,29 @@ int FairQueue::getCount() {
 }
 
 
-int FairQueue::chooseRandomNonemptyQueue() {
+int FairQueue::chooseRandomNonemptyQueue(double &new_deadline) {
 	long unsigned now = getTime();
 	int n = nonempty_queues.size();
 
 	double priority_sum = 0;
+    double total_rate = 0.0;
+    double non_htc_total = 0.0;
 	nonempty_priorities.resize(n);
 	for (int i=0; i < n; i++) {
 		nonempty_priorities[i] = nonempty_queues[i]->getPriority(now);
 		assert(nonempty_priorities[i] > 0);
 		priority_sum += nonempty_priorities[i];
+        if(!nonempty_queues[i]->htc){
+            non_htc_total += (1.0/nonempty_queues[i]->deadline);    
+        }
+        total_rate += (1.0/nonempty_queues[i]->deadline);
 	}
+    double proportion = 1.0;// total_rate/max_rate;
+    double htc_rate = total_rate - non_htc_total;
+    double proportion_htc = non_htc_total/(max_rate - htc_rate);
+    if(proportion_htc < 1.0){
+        proportion_htc = 1.0;
+    }
 
 	std::uniform_real_distribution<double> distrib(0, priority_sum);
 	double r = distrib(random_engine), r_orig = r;
@@ -349,6 +387,14 @@ int FairQueue::chooseRandomNonemptyQueue() {
 	}
 
 	decision_log.log(nonempty_queues, nonempty_queues[choice_idx]->id);
+    
+    if(nonempty_queues[choice_idx]->htc){
+        new_deadline = nonempty_queues[choice_idx]->deadline;
+    }
+    else{
+        new_deadline = proportion_htc * nonempty_queues[choice_idx]->deadline;
+    }
+    
 
 	return choice_idx;
 }
@@ -356,12 +402,35 @@ int FairQueue::chooseRandomNonemptyQueue() {
 
 bool FairQueue::getMessage(IO_CMD_MSG *msg) {
 	if (isEmpty()) return false;
+    //if(sorted_arr.size() == 0) return false;
 
-	int queue_idx = chooseRandomNonemptyQueue();
-	
-	MessageQueue *q = nonempty_queues[queue_idx];
+    double new_deadline;
+	int queue_idx = chooseRandomNonemptyQueue(new_deadline);
+    // std::sort(sorted_arr.begin(), sorted_arr.end(), [](auto &left, auto &right){
+    //         return left.second < right.second;
+    //     });
+
+    
+    // //printf("%d\n", sorted_arr.size());
+
+	// MessageQueue *q = sorted_arr[0].first;
+    // double deadline = sorted_arr[0].second;
+    // //printf("time: %lu, prev time: %lu, deadline: %f\n", getTime(), q->prev_time, deadline);
+    
+    
+    
+    // //printf("time: %lu, prev time: %lu, deadline: %f\n", getTime(), q->prev_time, deadline);
+    
+    // //std::cout << "hi" << std::endl;
+    MessageQueue *q = nonempty_queues[queue_idx];
+    double proportion = 1.0;//max_rate / total_rate;
+    //std::cout << proportion << std::endl;
+    if(getTime() - q->prev_time < new_deadline*1000000) 
+        return false;
+
 	q->remove(msg);
 	message_count--;
+    q->prev_time = getTime();
 	
 	if (q->messages.empty()) {
 		// mark this queue idle and move it off the nonempty list
@@ -370,6 +439,7 @@ bool FairQueue::getMessage(IO_CMD_MSG *msg) {
 		size_t last_idx = nonempty_queues.size() - 1;
 		nonempty_queues[queue_idx] = nonempty_queues[last_idx];
 		nonempty_queues.resize(last_idx);
+        //sorted_arr.erase(sorted_arr.begin());
 	}
 
 	return true;

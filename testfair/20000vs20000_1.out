@@ -1,0 +1,12 @@
+TACC:  Starting up job 4177396 
+TACC:  Starting parallel tasks... 
+rw_speed time=2022-03-22:12:05:01 np=56 nn=1 sim_nn=1 rank0host=c205-015.frontera.tacc.utexas.edu -prefix=/myfs/rw_speed -iosize=1048576 -filesize=104857600 -time=60.0 -tag=job1
+rw_speed.job1 time=2022-03-22:12:06:00 nn=1 np=56 user=856323 jobid=4177396 mbps=11827.411 mbps_rank_stddev=29.936 mbps_1sec_time_slices=(0.0,4805.0,14209.0,14629.0,12617.0,16290.0,13216.0,13920.0,16235.0,12676.0,15803.0,15418.0,14388.0,17019.0,14818.0,16145.0,10032.0,4168.0,7696.0,8408.0,8419.0,8162.0,7755.0,8104.0,8464.0,8547.0,8607.0,8284.0,8231.0,8350.0,8842.0,8666.0,8436.0,8374.0,8735.0,8850.0,8714.0,8621.0,8337.0,8771.0,8853.0,8619.0,8528.0,8593.0,8925.0,16677.0,15813.0,17319.0,15502.0,16633.0,16077.0,15192.0,16993.0,14925.0,17006.0,15265.0,15629.0,16984.0,15087.0,17186.0,54.0)
+TACC:  Shutdown complete. Exiting. 
+
+
+TACC:  Starting up job 4177396 
+TACC:  Starting parallel tasks... 
+rw_speed time=2022-03-22:12:05:17 np=56 nn=1 sim_nn=1 rank0host=c205-028.frontera.tacc.utexas.edu -prefix=/myfs/rw_speed -iosize=1048576 -filesize=104857600 -time=30.0 -tag=job2
+rw_speed.job2 time=2022-03-22:12:05:45 nn=1 np=56 user=856323 jobid=4177396 mbps=8256.829 mbps_rank_stddev=22.652 mbps_1sec_time_slices=(0.0,1920.0,4967.0,7722.0,8323.0,8435.0,8208.0,8014.0,7878.0,8438.0,8465.0,8620.0,8275.0,8028.0,8244.0,8826.0,8656.0,8361.0,8334.0,8758.0,8802.0,8769.0,8571.0,8350.0,8786.0,8843.0,8569.0,8545.0,8582.0,8837.0,54.0)
+TACC:  Shutdown complete. Exiting. 

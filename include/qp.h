@@ -97,6 +97,7 @@ typedef	struct	{
 	int nPut_Get, nPut_Get_Done;
 	int jobid, idx_queue;	// jobid and the index of queue that handles this jobid
 	int idx_JobRec, cuid, cgid, ctid, bTimeout, bServerReady;
+    float rate; // Rule_Lustre param
 
 	// These are only needed between file servers. Not needed for the pairs with regular compute node (file server clients). 
 	uint64_t remote_addr_new_msg;	// the address of remote buffer to notify a new message

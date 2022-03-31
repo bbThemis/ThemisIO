@@ -327,7 +327,7 @@ void Scale_Probability_List(void)
 	active_prob ^= 1;
 }
 
-void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id)
+void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id, float rate)
 {
 	int i;
 	JOB_OP_SEND *pJob_OP = Server_qp.pJob_OP_Send;
@@ -337,6 +337,7 @@ void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id)
 	ActiveJobList[idx_rec].nnode = nnode;
 	ActiveJobList[idx_rec].nQP = 1;	// A new QP was just established. 
 	ActiveJobList[idx_rec].uid = user_id;
+    ActiveJobList[idx_rec].rate = rate;
 	ActiveJobList[idx_rec].nTokenAV = 0;
 	ActiveJobList[idx_rec].nTokenReload = 0;
 	ActiveJobList[idx_rec].nOps_Done = 0;
@@ -747,6 +748,7 @@ void fairQueueWorker(int thread_id) {
 				if (queue->Dequeue(&msg) == 0) {
 					msg.tid = thread_id;
 					// printMessage(&msg, "incomingMsg");
+                    //printf("PUTTING MESSAGE\n");
 					fair_queue.putMessage(&msg);
 					pending_count++;
 				}
@@ -898,7 +900,7 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 		Inter_server_communication_loop(thread_id, &(IO_Queue_List[thread_id]));
 	} else {
 //		fairQueueWorker(thread_id);
-		fairQueueWorker_TimeSharing(thread_id);
+		fairQueueWorker(thread_id);
 	}
 
 	return NULL;

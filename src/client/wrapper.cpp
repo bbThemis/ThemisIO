@@ -3373,7 +3373,7 @@ inline int Wait_For_IO_Request_Result(int Tag_Magic)
 		t2_ms = (tm2.tv_sec * 1000) + (tm2.tv_usec / 1000);
 		if( (t2_ms - t1_ms) > QP_WAIT_RESULT_TIMEOUT_MS )	{
 			gethostname(szHostName, 63);
-			printf("DBG> Timeout. pid = %d on %s\n", getpid(), szHostName);
+			printf("DBG2> Timeout. pid = %d on %s\n", getpid(), szHostName);
                         fflush(stdout);
                         sleep(300);
 

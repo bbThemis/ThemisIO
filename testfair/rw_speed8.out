@@ -1,0 +1,4 @@
+TACC:  Starting up job 4114370 
+ERROR: -o option requested 840 offset, only 168 are available!
+ERROR: Number of hosts (requested through -n) plus offset (via -o) exceeds the total number of slots available.
+Error -> MPI job exited with code: 1 
