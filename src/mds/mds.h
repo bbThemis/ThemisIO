@@ -37,16 +37,17 @@ using MapOstToAppAllocs_t = std::vector<AppAllocs_t>;
 class LnetMds: public LnetServer
 {
   private:
-    // std::mutex ost_lock;
+    std::mutex* ost_lock;
 
     std::vector<OscInfo*> _oscs;
     std::vector<OstInfo*> _osts;
     std::map<std::string, OstInfo*> _dirToOst;
     std::map<const LnetEntity* , std::vector<ActiveRequest>> _ostReqs;
     std::mutex *_m;
+    
     std::condition_variable *_waitForAllOsts;
     bool *_dataIsReady;
-
+    std::mutex *_ost_lock;
     void addOsc(const LSocket &remote, const OscInfo *info);
     void addOst(const LSocket &remote, const OstInfo *info);
     void sendOstsInfo(const LnetEntity *remote);
@@ -69,7 +70,7 @@ class LnetMds: public LnetServer
     virtual void onRemoteServerRequest(const LnetEntity *);
 
   public:
-    LnetMds(int port, std::mutex *m, std::condition_variable *cv, bool *b);
+    LnetMds(int port, std::mutex *m, std::condition_variable *cv, bool *b, std::mutex* ost_lock);
     ~LnetMds();
     ssize_t sendMsgToOst(const LnetMsg *msg, int id) const;
     ssize_t recvMsgFromOst(LnetMsg *msg, int id) const;
@@ -86,6 +87,7 @@ class MDS
     std::mutex *m;
     std::condition_variable *waitForAllOsts;
     bool dataIsReady;
+    std::mutex *ost_lock;
 
   public:
     // constructor(s)

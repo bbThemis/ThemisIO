@@ -5,14 +5,16 @@
 #include "mds.h"
 
 // const int DEFAULT_PORT = 58889;
-const int DEFAULT_TIMER = 4;
+const int DEFAULT_TIMER = 1;
 
+unsigned int microseconds = 500;
 MDS::MDS(int port)
 {
   this->m = new std::mutex();
   this->waitForAllOsts = new std::condition_variable();
   this->dataIsReady = false;
-  this->_mdsNet = new LnetMds(port, this->m, this->waitForAllOsts, &this->dataIsReady);
+  this->ost_lock = new std::mutex();
+  this->_mdsNet = new LnetMds(port, this->m, this->waitForAllOsts, &this->dataIsReady, this->ost_lock);
 }
 
 MDS::~MDS()
@@ -36,7 +38,8 @@ void MDS::eventLoop()
 void MDS::startTimer()
 {
   while (true) {
-    ::sleep(DEFAULT_TIMER);
+    // ::sleep(DEFAULT_TIMER);
+    ::usleep(microseconds);
     printf("MDS bcast Msg!\n");
     LnetMsg msg(Timer);
     if (this->_mdsNet->bcastMsgToOsts(&msg)) {
