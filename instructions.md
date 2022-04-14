@@ -73,7 +73,6 @@ throughput of each job during each second of the test. This is the data used to 
 
 
 ## Instructions for recreating GIFT results on ThemisIO
-## GIFT
 Switch to GIFT branch
 1. Download and Build ThemisIO As in the original version
 2. Build GIFT Coupoun Server
