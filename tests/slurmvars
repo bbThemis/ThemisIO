@@ -1,0 +1,3 @@
+#!/bin/bash
+
+echo export SLURM_NODELIST=$SLURM_NODELIST ";" export SLURM_JOBID=$SLURM_JOBID ";" export SLURM_NNODES=$SLURM_NNODES
