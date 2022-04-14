@@ -62,3 +62,12 @@ throughput of each job during each second of the test. This is the data used to 
     ```
 1 . In the client shell, run `./test.user-fair.4v1.sh`. This output is the data used to generate figure 6(c) in the paper.
 
+## Instructions for recreating TBF results on ThemisIO
+
+1. After cloning the repository, switch to the `TBF_on_themis` branch. 
+2. Follow steps 1 - 5 above exactly
+3. In the client shell, run `./test_tbf.sh`.  There is a line in the output with the prefix `rw_speed.job1` and
+   another with the prefix `rw_speed.job2` each containing a set of name=value pairs. 
+   In each of those is a field titled `mbps_1sec_time_slices=` which contains the
+   throughput of each job during each second of the test. This is the data used to generate figure 7(c) in the paper.
+
