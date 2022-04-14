@@ -5,28 +5,23 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
 function printHelp() {
   cat <<EOF
-
   themis_client.sh [opt] <client program> [<client program args>]
     opt:
       -j <jobid>
       -n <node count>
       -u <user id>
       -s <# of seconds to sleep before running client program>
-
   Set environment variables before running a client program.
     LD_PRELOAD - set this to ThemisIO/client/wrapper.so
     MYFS_CONF - set this to ThemisIO/myfs.param
     THEMIS_FAKE_JOBID - set this if -j specified
     THEMIS_FAKE_NNODES - set this if -n specified
     THEMIS_FAKE_USERID - set this if -u specified
-
   The script will automatically look for wrapper.so and myfs.param in
   a few different directories relative to the current directory and
   the directory in which this script resides.
-
   MYFS_CONF will not be modified if is set.
   LD_PRELOAD will not be modified if it aready includes the string 'wrapper.so'
-
 EOF
   exit
 }

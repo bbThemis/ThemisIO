@@ -4,12 +4,14 @@
 #include <pthread.h>
 #include <vector>
 #include <queue>
+#include <mutex>
 #include <unordered_map>
 #include <set>
 #include <algorithm>
 #include <random>
 #include <sstream>
 #include <iomanip>
+#include <utility>
 #include "qp.h"
 #include "io_queue.h"
 
@@ -74,16 +76,18 @@ class FairQueue {
 
 	// Add a message to the queue. The data is copied from 'msg'.
 	void putMessage(const IO_CMD_MSG *msg);
-
 	void putMessage_TimeSharing(const IO_CMD_MSG *msg);
+	void putMessage_TimeSharing(const IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
+	                            std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock);
     void Update_Job_Weight(void);
-
+	void Update_Job_Weight(std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock);
 	// Selects a message to process. If there are no messages, this returns false.
 	// Otherwise this copies the message to 'msg' and returns true.
 	bool getMessage(IO_CMD_MSG *msg);
 
 	bool getMessage_FromActiveJob(IO_CMD_MSG *msg);
-
+	bool getMessage_FromActiveJob(IO_CMD_MSG *msg, std::unordered_map<ActiveRequest, int, hash_activeReq>& activeReqs, std::mutex& reqLock,
+	                              std::unordered_map<int, std::pair<double, double>>& appAlloc, std::mutex& allocLock);
 	// recharge all jobs with designed time length
 	void reload();
 
@@ -102,6 +106,7 @@ class FairQueue {
 	double getElapsed();
 	
 private:
+	uint64_t rseed[2];
 	// the sum of weight of all jobs
 	float weight_sum;
 	int nJob;

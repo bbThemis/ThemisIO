@@ -39,7 +39,7 @@
 #include "io_ops_common.h"
 
 
-#define PORT 8888
+#define PORT 58888
 
 #define SIZE_IO_REDIRECT_HT	(4096)
 
@@ -431,7 +431,7 @@ void CLIENT_QUEUEPAIR::Setup_Socket(char szServerIP[])
         printf("\nInvalid address/ Address not supported \n"); 
         return; 
     }
-	
+	// printf("\n%s \n", szServerIP); 
 //	gettimeofday(&tm1, NULL);
     if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) { 
         printf("\nConnection Failed \n"); 
@@ -838,6 +838,7 @@ static void Take_a_Short_Nap(int nsec)
 
 static void Read_FS_Param(void)
 {
+	// printf("READ FS PARAM\n");
 	char szFileName[128], *szServerConf=NULL;
 	FILE *fIn;
 	int i, j, nItems;
@@ -868,6 +869,7 @@ static void Read_FS_Param(void)
 	
 	for(i=0; i<pFileServerList->nFSServer; i++)	{
 		nItems = fscanf(fIn, "%s%d", pFileServerList->FS_List[i].szIP, &(pFileServerList->FS_List[i].port));
+		// printf("%s %d\n", pFileServerList->FS_List[i].szIP, pFileServerList->FS_List[i].port);
 		if(nItems != 2)	{
 			printf("ERROR> Failed to read ip port information of file server.\nQuit\n");
 			fclose(fIn);

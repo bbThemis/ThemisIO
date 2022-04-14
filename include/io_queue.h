@@ -49,6 +49,8 @@ void* Func_thread_Global_Fair_Sharing(void *pParam);
 
 void Update_Active_JobList(void);
 void ConstructJobProbabilityList(void);
+// GIFT
+static void* Func_Update_Job_Weight(void *pParam);
 
 // The first queue takes care of special jobs (jobid == 0). e.g., query whether a directory exists or not. No token is needed for such OPs. 
 

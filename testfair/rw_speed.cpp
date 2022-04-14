@@ -413,16 +413,16 @@ int main(int argc, char **argv) {
 
 	int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
-  // make sure everyone was able to open their files
-  int min_fd;
-  MPI_Allreduce(&fd, &min_fd, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-  if (min_fd < 0) {
-    if (fd == -1) {
-      printf("[%d] Error creating %s: %s\n", rank, filename, strerror(errno));
-    }
-    MPI_Finalize();
-    return 1;
-  }
+	// make sure everyone was able to open their files
+	int min_fd;
+	MPI_Allreduce(&fd, &min_fd, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+	if (min_fd < 0) {
+		if (fd == -1) {
+		printf("[%d] Error creating %s: %s\n", rank, filename, strerror(errno));
+		}
+		MPI_Finalize();
+		return 1;
+	}
 
 	vector<long> data(opt.io_size / sizeof(long));
 	vector<long> expected_data(opt.io_size / sizeof(long));
@@ -448,14 +448,14 @@ int main(int argc, char **argv) {
 
 		// printf("[%d] %.3f writing...\n", rank, getTime());
 		for (file_offset = 0; 
-				 file_offset < opt.file_size;
-				 file_offset += opt.io_size) {
+			 file_offset < opt.file_size;
+			 file_offset += opt.io_size) {
 
 			// out of time
 			if (getTime() > opt.run_time_sec) {
-        done=true;
-        break;
-      }
+				done=true;
+				break;
+			}
 
 			fillBuffer(data, file_offset);
 			int bytes_written = write(fd, data.data(), opt.io_size);
@@ -483,14 +483,14 @@ int main(int argc, char **argv) {
 		assert(fd >= 0);
 		
 		for (file_offset = 0; 
-				 file_offset < opt.file_size;
-				 file_offset += opt.io_size) {
+			 file_offset < opt.file_size;
+			 file_offset += opt.io_size) {
 
 			// out of time
 			if (getTime() > opt.run_time_sec) {
-        done=true;
-        break;
-      }
+				done=true;
+				break;
+			}
 
 			fillBuffer(expected_data, file_offset);
 			int bytes_read = read(fd, data.data(), opt.io_size);
@@ -526,12 +526,13 @@ int main(int argc, char **argv) {
 
   // printf("[%d] %ld bytes\n", rank, io_bytes);
 	long total_io_bytes;
-  double rank_io_bytes_stddev;
-  gatherStats(io_bytes, total_io_bytes, rank_io_bytes_stddev);
+  	double rank_io_bytes_stddev;
+ 	gatherStats(io_bytes, total_io_bytes, rank_io_bytes_stddev);
 
 	double total_mbps = total_io_bytes / ((1<<20) * elapsed_sec);
-  double mbps_rank_stddev = rank_io_bytes_stddev / ((1<<20) * elapsed_sec);
-
+  	double mbps_rank_stddev = rank_io_bytes_stddev / ((1<<20) * elapsed_sec);
+	
+	// printf("rank=%d  mbps_1sec_time_slices=%s\n", rank, io_over_time.toString().c_str());
 	io_over_time.gather();
 
 	// summarize output
@@ -554,7 +555,7 @@ int main(int argc, char **argv) {
 	if (opt.cleanup)
 		remove(filename);
 
-  MPI_Finalize();
+    MPI_Finalize();
 
 	return 0;
 }

@@ -4,4 +4,4 @@
 # export ASAN_OPTIONS=verify_asan_link_order=0
 export MLX5_SINGLE_THREADED=0
 
-./server "$@"
+./server --policy job-fair"$@"

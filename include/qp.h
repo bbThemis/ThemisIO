@@ -26,6 +26,23 @@
 #include "qp_common.h"
 #include "io_queue.h"
 
+#include "ost/ost.h"
+#include "ost/lnet.h"
+
+// For GIFT Usage
+#include <vector>
+#include <unordered_map>
+#include <mutex>
+#include <utility>
+struct IOThreadParams {
+    int* workerId;
+    std::unordered_map<ActiveRequest, int, hash_activeReq>* activeReqs;
+    std::mutex* reqLock;
+	std::unordered_map<int, std::pair<double, double>>* appAlloc;
+	std::mutex* allocLock;
+};
+
+
 //#define N_THREAD_PREALLOCATE_QP	(1)
 #define N_THREAD_PREALLOCATE_QP	(16)
 #define N_THREAD_ADD_PREALLOCATE_QP	(4)
@@ -65,7 +82,9 @@ enum FairnessMode {
 	USER_JOB_FAIR,
 
 	// group-user-size
-	GROUP_USER_SIZE_FAIR
+	GROUP_USER_SIZE_FAIR,
+
+	GIFT
 };
 
 
@@ -127,6 +146,7 @@ typedef	struct	{
 
 
 class SERVER_QUEUEPAIR {
+// for mds only
 public:
 	in_addr_t sock_addr;    // local IP or INADDR_ANY
 	int sock_port;          // local port to listen on
@@ -196,6 +216,8 @@ pthread_mutex_t process_lock;	// for this process
 	void Destroy_A_QueuePair(int idx);
 	void Refill_PreAllocated_QP_Pool(void);
 	int Get_IO_Worker_Index_from_QP_Index(int idx_qp);
+public:
+	OST* ost;
 };
 
 typedef struct	{
@@ -229,7 +251,7 @@ public:
 	static FairnessMode getDefaultFairnessMode() {return FIFO;};
 
 	static const char *fairnessModeToString(FairnessMode fairness_mode) {
-		static char szFairnessModeString[16][64]={"fifo", "size-fair", "job-fair", "user-fair", "user-size-fair", "user-job-fair", "group-user-size-fair"};
+		static char szFairnessModeString[16][64]={"fifo", "size-fair", "job-fair", "user-fair", "user-size-fair", "user-job-fair", "group-user-size-fair", "gift"};
 
 		return szFairnessModeString[(int)fairness_mode];
 //		return fairness_mode == SIZE_FAIR ? "size-fair"

@@ -1,0 +1,5 @@
+TACC:  Starting up job 4240933 
+TACC:  Starting parallel tasks... 
+rw_speed time=2022-04-14:14:20:45 np=56 nn=1 sim_nn=1 rank0host=c202-015.frontera.tacc.utexas.edu -prefix=/myfs/rw_speed -iosize=1048576 -filesize=104857600 -time=30.0 -tag=job2
+rw_speed.job2 time=2022-04-14:14:21:14 nn=1 np=56 user=878709 jobid=4240933 mbps=9889.440 mbps_rank_stddev=32.306 mbps_1sec_time_slices=(5656.0,8542.0,10032.0,7980.0,9045.0,10136.0,9888.0,10429.0,10102.0,9559.0,9575.0,10058.0,9728.0,9718.0,9895.0,10723.0,10078.0,9183.0,9973.0,9952.0,9063.0,10369.0,10287.0,10048.0,9796.0,10145.0,10868.0,10820.0,10599.0,10040.0,55.0)
+TACC:  Shutdown complete. Exiting. 

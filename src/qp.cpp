@@ -243,12 +243,14 @@ SERVER_QUEUEPAIR::SERVER_QUEUEPAIR(void)
         printf("\n mutex process_lock init failed\n"); 
         exit(1);
     }
+	
 }
 
 SERVER_QUEUEPAIR::~SERVER_QUEUEPAIR(void)
 {
 	pthread_mutex_destroy(&process_lock);
 	pthread_mutex_destroy(&lock_preallocate_qp);
+	delete ost;
 }
 
 void SERVER_QUEUEPAIR::ScanNewMsg(void)	// scan all queue pairs for make a list of queue pairs with new msg

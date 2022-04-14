@@ -24,6 +24,10 @@
 
 #include <mpi.h> 
 
+#include <vector>
+#include <mutex>
+#include <unordered_map>
+#include <utility>
 #include "qp.h"
 #include "myfs.h"
 #include "corebinding.h"
@@ -31,7 +35,13 @@
 #include "io_queue.h"
 
 #define T_FREQ_REPORT_RESULT (1)
-#define PORT 8888
+#define PORT 58888
+// For GIFT
+std::unordered_map<ActiveRequest, int, hash_activeReq> activeReqs;
+std::mutex reqLock;
+std::unordered_map<int, std::pair<double, double>> appAlloc;
+std::mutex allocLock;
+
 
 CORE_BINDING CoreBinding;
 
@@ -44,6 +54,14 @@ extern pthread_t pthread_preallocate[N_THREAD_PREALLOCATE_QP];
 extern pthread_t pthread_IO_Worker[NUM_THREAD_IO_WORKER];
 extern CCreatedUniqueThread Unique_Thread;
 extern CIO_QUEUE IO_Queue_List[MAX_NUM_QUEUE];
+
+struct OSTThreadParams {
+    SERVER_QUEUEPAIR* pServerQP;
+    std::unordered_map<ActiveRequest, int, hash_activeReq>* activeReqs;
+    std::mutex* reqLock;
+	std::unordered_map<int, std::pair<double, double>>* appAlloc;
+	std::mutex* allocLock;
+};
 
 typedef	struct	{
 	uint32_t lid;
@@ -84,7 +102,7 @@ pthread_attr_t thread_attr;
 
 void Get_Local_Server_Info(void);
 void Setup_QP_Among_Servers(void);
-
+static void* Func_Setup_Connection_To_Mds(void* pParam);
 
 
 void Setup_QP_Among_Servers(void)
@@ -234,6 +252,7 @@ static void* Func_thread_Polling_New_Msg(void *pParam)
 	sleep(1);
 
 	while(1)	{
+		// printf("Scan New Msg\n");
 		pServer_qp->ScanNewMsg();
 	}
 
@@ -246,7 +265,7 @@ static void* Func_thread_qp_server(void *pParam)
 	SERVER_QUEUEPAIR *pServer_qp;
 	int i;
 	int IO_Worker_tid_List[NUM_THREAD_IO_WORKER];
-
+    IOThreadParams params[NUM_THREAD_IO_WORKER];
 	pServer_qp = (SERVER_QUEUEPAIR *)pParam;
 	pServer_qp->Init_Server_IB_Env(DEFAULT_REM_BUFF_SIZE);
 	pServer_qp->Init_Server_Socket(2048, ThisNode.port);
@@ -273,9 +292,13 @@ static void* Func_thread_qp_server(void *pParam)
 		}
 	}
 */
-	for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
+    
+    for(i=0; i<NUM_THREAD_IO_WORKER; i++) {
 		IO_Worker_tid_List[i] = i;
-		if(pthread_create(&(pthread_IO_Worker[i]), NULL, Func_thread_IO_Worker, &(IO_Worker_tid_List[i]))) {
+		params[i] = {.workerId = &(IO_Worker_tid_List[i]), .activeReqs = &activeReqs, .reqLock = &reqLock, .appAlloc = &appAlloc, .allocLock = &allocLock };
+	}
+	for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
+		if(pthread_create(&(pthread_IO_Worker[i]), NULL, Func_thread_IO_Worker, (void*)&(params[i])/*&(IO_Worker_tid_List[i])*/)) {
 			fprintf(stderr, "Error creating thread\n");
 			return 0;
 		}
@@ -288,6 +311,31 @@ static void* Func_thread_qp_server(void *pParam)
 	return 0;
 }
 
+static void* Func_Setup_Connection_To_Mds(void* pParam) {
+	SERVER_QUEUEPAIR *pServer_qp;
+	pServer_qp = ((OSTThreadParams*)pParam)->pServerQP;
+	std::unordered_map<ActiveRequest, int, hash_activeReq>* activeReqs = ((OSTThreadParams*)pParam)->activeReqs;
+	std::mutex* reqLock = ((OSTThreadParams*)pParam)->reqLock;
+	std::unordered_map<int, std::pair<double, double>>* appAlloc = ((OSTThreadParams*)pParam)->appAlloc;
+	std::mutex* allocLock = ((OSTThreadParams*)pParam)->allocLock;
+	
+	char mds_host[256];
+	int mds_port;
+	char name[256];
+	FILE* fIn = fopen(MDS_PARAM_FILE, "r");
+  	if(fIn == NULL)	{
+		printf("ERROR> Fail to read file: %s\nQuit.\n", MDS_PARAM_FILE);
+		exit(1);
+	}
+	gethostname(name, sizeof(name));
+	fscanf(fIn, "%s%d", mds_host, &mds_port);
+	printf("mds: %s %d\n", mds_host, mds_port);
+	fclose(fIn);
+	LSockAddr addr(mds_host, mds_port);
+	pServer_qp->ost = new OST(addr, mds_port, mpi_rank, name, -1, *activeReqs, *reqLock, *appAlloc, *allocLock);
+	// printf("OST Initialization Done!\n");
+	pServer_qp->ost->eventLoop();
+}
 extern long int nOPs_Done[NUM_THREAD_IO_WORKER];
 static long int nOPs_Done_Sum=0;
 static int T_Cur=0;
@@ -379,7 +427,7 @@ int main(int argc, char **argv)
 {
 	int i;
 	FILE *fOut;
-	pthread_t thread_qp_server, thread_print_data, thread_polling_newmsg, thread_global_sharing;
+	pthread_t thread_qp_server, thread_print_data, thread_polling_newmsg, thread_global_sharing, thread_connect_mds;
 //	unsigned char *pNewMsg_ToSend=NULL;
 //	IO_CMD_MSG *pIO_Cmd_toSend;
 //	struct ibv_mr *mr_local;
@@ -433,7 +481,16 @@ int main(int argc, char **argv)
 
 	Get_Local_Server_Info();
 	MPI_Allgather(&ThisNode, sizeof(FS_SEVER_INFO), MPI_CHAR, AllFSNodes, sizeof(FS_SEVER_INFO), MPI_CHAR, MPI_COMM_WORLD);
-
+	OSTThreadParams ostParam;
+	ostParam.pServerQP = &Server_qp;
+	ostParam.activeReqs = &activeReqs;
+	ostParam.reqLock = &reqLock;
+	ostParam.appAlloc = &appAlloc;
+	ostParam.allocLock = &allocLock;
+	if(pthread_create(&(thread_connect_mds), NULL, Func_Setup_Connection_To_Mds, &ostParam)) {
+		fprintf(stderr, "Error creating thread\n");
+		return 1;
+	}
 	if(mpi_rank == 0)	{
 		printf("INFO> There are %d servers.\n", nFSServer);
 		fOut = fopen(FS_PARAM_FILE, "w");
@@ -564,7 +621,10 @@ bool ServerOptions::parseCommandLineArgs(int argc, char **argv) {
 				fairness_mode = USER_JOB_FAIR;
 			} else if (!strcmp(arg, "group-user-size-fair")) {
 				fairness_mode = GROUP_USER_SIZE_FAIR;
-			} else {
+			} else if (!strcmp(arg, "gift")) {
+				fairness_mode = GIFT;
+			}
+			 else {
 				return false;
 			}
 		}
