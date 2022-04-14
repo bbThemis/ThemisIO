@@ -5,9 +5,9 @@
 #include "mds.h"
 
 // const int DEFAULT_PORT = 58889;
-const int DEFAULT_TIMER = 1;
+// const int DEFAULT_TIMER = 1;
 
-// unsigned int microseconds = 500000;
+unsigned int microseconds = 500000;
 MDS::MDS(int port)
 {
   this->m = new std::mutex();
