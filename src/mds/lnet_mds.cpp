@@ -15,11 +15,13 @@ static std::vector<double> effectiveSysBw;
 
 
 
-LnetMds::LnetMds(int port, std::mutex *m, std::condition_variable *cv, bool *b)
+LnetMds::LnetMds(int port, std::mutex *m, std::condition_variable *cv, bool *b, std::mutex *ost_lock)
   : LnetServer(port),
     _m(m),
     _waitForAllOsts(cv),
-    _dataIsReady(b)
+    _dataIsReady(b),
+    _ost_lock(ost_lock)
+
 {
 }
 
@@ -82,6 +84,7 @@ void LnetMds::addOsc(const LSocket &remote, const OscInfo *info)
 
 void LnetMds::addOst(const LSocket &remote, const OstInfo *info)
 {
+  std::lock_guard<std::mutex> lock(*_ost_lock);
   LClientSocket *sock = new LClientSocket(remote.sockfd());
   OstInfo *i = new OstInfo(info);
   i->sock = sock;
@@ -372,6 +375,7 @@ ssize_t LnetMds::recvMsgFromOst(LnetMsg *msg, int id) const
 
 bool LnetMds::bcastMsgToOsts(const LnetMsg *msg)
 {
+  std::lock_guard<std::mutex> lock(*_ost_lock);
   if (this->_osts.size() <= 0) return false;
   std::cerr << "Broadcasting timer msg to all OSTs" << std::endl;
   for (auto s: this->_osts) {
