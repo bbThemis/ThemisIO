@@ -327,7 +327,7 @@ void Scale_Probability_List(void)
 	active_prob ^= 1;
 }
 
-void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id, float rate)
+void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id, float rule_rate)
 {
 	int i;
 	JOB_OP_SEND *pJob_OP = Server_qp.pJob_OP_Send;
@@ -337,7 +337,7 @@ void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id, flo
 	ActiveJobList[idx_rec].nnode = nnode;
 	ActiveJobList[idx_rec].nQP = 1;	// A new QP was just established. 
 	ActiveJobList[idx_rec].uid = user_id;
-    ActiveJobList[idx_rec].rate = rate;
+    ActiveJobList[idx_rec].rule_rrate = rule_rate;
 	ActiveJobList[idx_rec].nTokenAV = 0;
 	ActiveJobList[idx_rec].nTokenReload = 0;
 	ActiveJobList[idx_rec].nOps_Done = 0;

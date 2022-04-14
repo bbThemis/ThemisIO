@@ -316,15 +316,16 @@ void CLIENT_QUEUEPAIR::Setup_QueuePair(int IdxServer, char loc_buff[], size_t si
 	data_to_send.JobInfo.cip = pFileServerList->myip;
 	data_to_send.JobInfo.ctid = tid;
 	data_to_send.JobInfo.cuid = getuid();
-    data_to_send.JobInfo.rate = 0.0f;
+    data_to_send.JobInfo.rule_rate = 0.0f;
 
 	fake_user_id = getenv("THEMIS_FAKE_USERID");
 	if (fake_user_id)
 		sscanf(fake_user_id, "%u", &data_to_send.JobInfo.cuid);
 
     token_rate = getenv("TOKEN_RATE");
+    
     if (token_rate)
-        sscanf(fake_user_id, "%f", &data_to_send.JobInfo.rate);
+        sscanf(token_rate, "%f", &data_to_send.JobInfo.rule_rate);
 
 	data_to_send.JobInfo.cgid = getgid();
 	memcpy(data_to_send.JobInfo.szClientHostName, szHostName, MAX_HOSTNAME_LEN);

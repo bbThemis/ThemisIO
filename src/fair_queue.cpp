@@ -55,19 +55,9 @@ FairQueue::~FairQueue() {
 
 void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 	int key = getKey(msg);
-    double rate = 6000.0/16.0;//job_info_lookup.getRate(msg);
     int job_id = job_info_lookup.getSlurmJobId(msg);
-    if(job_id == 1001){
-        rate = 16000.0/16.0;
-    }
-    else if(job_id == 1002){
-        rate = 16000.0/16.0;
-    }
-    else if(job_id == 1003){
-        rate = 4000.0/16.0;
-    }
-    //printf("%f\n", rate);
-    //printf("PUTTING PUTTING PUTTING\n");
+    double rate = job_info_lookup.getRate(msg);
+    rate /= (NUM_THREAD_IO_WORKER - NUM_THREAD_IO_WORKER_INTER_SERVER);
 
    
 	MessageQueue *q;

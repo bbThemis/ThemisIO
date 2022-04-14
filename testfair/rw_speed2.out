@@ -1,5 +1,5 @@
-TACC:  Starting up job 4202763 
+TACC:  Starting up job 4239288 
 TACC:  Starting parallel tasks... 
-rw_speed time=2022-03-31:09:17:33 np=56 nn=1 sim_nn=1 rank0host=c206-027.frontera.tacc.utexas.edu -prefix=/myfs/rw_speed -iosize=1048576 -filesize=104857600 -time=30.0 -tag=job2
-rw_speed.job2 time=2022-03-31:09:18:03 nn=1 np=56 user=856323 jobid=4202763 mbps=8999.178 mbps_rank_stddev=23.455 mbps_1sec_time_slices=(3064.0,8200.0,8340.0,9331.0,9334.0,9014.0,8577.0,10186.0,9741.0,10122.0,9576.0,9193.0,8454.0,8605.0,9541.0,9277.0,8870.0,8477.0,9059.0,9288.0,8388.0,9017.0,8819.0,9081.0,9034.0,8569.0,9231.0,9147.0,8747.0,8948.0,55.0)
+rw_speed time=2022-04-14:04:44:13 np=56 nn=1 sim_nn=1 rank0host=c202-019.frontera.tacc.utexas.edu -prefix=/myfs/rw_speed -iosize=1048576 -filesize=104857600 -time=30.0 -tag=job2
+rw_speed.job2 time=2022-04-14:04:44:43 nn=1 np=56 user=856323 jobid=4239288 mbps=300.531 mbps_rank_stddev=0.792 mbps_1sec_time_slices=(0.0,536.0,304.0,288.0,304.0,304.0,304.0,297.0,295.0,304.0,304.0,304.0,294.0,298.0,304.0,304.0,256.0,288.0,304.0,304.0,304.0,240.0,288.0,304.0,304.0,304.0,304.0,288.0,304.0,304.0,56.0)
 TACC:  Shutdown complete. Exiting. 

@@ -75,7 +75,7 @@ function setMyfsConf() {
 }
 
 
-while getopts ":hj:n:u:s:r:" option
+while getopts ":hj:n:u:r:s:" option
 do
   case $option in
     j) export THEMIS_FAKE_JOBID=$OPTARG;;

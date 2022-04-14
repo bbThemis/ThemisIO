@@ -39,7 +39,7 @@ public:
 	}
 
     float getRate(const IO_CMD_MSG *msg) {
-        return ActiveJobList[jobKey(msg)].rate;
+        return ActiveJobList[jobKey(msg)].rule_rrate;
     }
 
 private:
