@@ -57,6 +57,89 @@ All rights are reserved.
 #define MAX_OPENED_DIR	(512)
 #define MAX_OPENED_DIR_M1	((MAX_OPENED_DIR) - 1)
 
+#define PROT_READ	0x1		/* Page can be read.  */
+#define PROT_WRITE	0x2		/* Page can be written.  */
+#define PROT_EXEC	0x4		/* Page can be executed.  */
+#define PROT_NONE	0x0		/* Page can not be accessed.  */
+#define PROT_GROWSDOWN	0x01000000	/* Extend change to start of
+					   growsdown vma (mprotect only).  */
+#define PROT_GROWSUP	0x02000000	/* Extend change to start of
+					   growsup vma (mprotect only).  */
+
+/* Sharing types (must choose one and only one of these).  */
+#define MAP_SHARED	0x01		/* Share changes.  */
+#define MAP_PRIVATE	0x02		/* Changes are private.  */
+#ifdef __USE_MISC
+# define MAP_TYPE	0x0f		/* Mask for type of mapping.  */
+#endif
+
+/* Other flags.  */
+#define MAP_FIXED	0x10		/* Interpret addr exactly.  */
+#ifdef __USE_MISC
+# define MAP_FILE	0
+# define MAP_ANONYMOUS	0x20		/* Don't use a file.  */
+# define MAP_ANON	MAP_ANONYMOUS
+# define MAP_32BIT	0x40		/* Only give out 32-bit addresses.  */
+#endif
+
+/* These are Linux-specific.  */
+#ifdef __USE_MISC
+# define MAP_GROWSDOWN	0x00100		/* Stack-like segment.  */
+# define MAP_DENYWRITE	0x00800		/* ETXTBSY */
+# define MAP_EXECUTABLE	0x01000		/* Mark it as an executable.  */
+# define MAP_LOCKED	0x02000		/* Lock the mapping.  */
+# define MAP_NORESERVE	0x04000		/* Don't check for reservations.  */
+# define MAP_POPULATE	0x08000		/* Populate (prefault) pagetables.  */
+# define MAP_NONBLOCK	0x10000		/* Do not block on IO.  */
+# define MAP_STACK	0x20000		/* Allocation is for a stack.  */
+# define MAP_HUGETLB	0x40000		/* Create huge page mapping.  */
+#endif
+
+/* Flags to `msync'.  */
+#define MS_ASYNC	1		/* Sync memory asynchronously.  */
+#define MS_SYNC		4		/* Synchronous memory sync.  */
+#define MS_INVALIDATE	2		/* Invalidate the caches.  */
+
+/* Flags for `mlockall'.  */
+#define MCL_CURRENT	1		/* Lock all currently mapped pages.  */
+#define MCL_FUTURE	2		/* Lock all additions to address
+					   space.  */
+
+/* Flags for `mremap'.  */
+#ifdef __USE_GNU
+# define MREMAP_MAYMOVE	1
+# define MREMAP_FIXED	2
+#endif
+
+/* Advice to `madvise'.  */
+#ifdef __USE_BSD
+# define MADV_NORMAL	  0	/* No further special treatment.  */
+# define MADV_RANDOM	  1	/* Expect random page references.  */
+# define MADV_SEQUENTIAL  2	/* Expect sequential page references.  */
+# define MADV_WILLNEED	  3	/* Will need these pages.  */
+# define MADV_DONTNEED	  4	/* Don't need these pages.  */
+# define MADV_REMOVE	  9	/* Remove these pages and resources.  */
+# define MADV_DONTFORK	  10	/* Do not inherit across fork.  */
+# define MADV_DOFORK	  11	/* Do inherit across fork.  */
+# define MADV_MERGEABLE	  12	/* KSM may merge identical pages.  */
+# define MADV_UNMERGEABLE 13	/* KSM may not merge identical pages.  */
+# define MADV_HUGEPAGE	  14	/* Worth backing with hugepages.  */
+# define MADV_NOHUGEPAGE  15	/* Not worth backing with hugepages.  */
+# define MADV_DONTDUMP	  16    /* Explicity exclude from the core dump,
+                                   overrides the coredump filter bits.  */
+# define MADV_DODUMP	  17	/* Clear the MADV_DONTDUMP flag.  */
+# define MADV_HWPOISON	  100	/* Poison a page for testing.  */
+#endif
+
+/* The POSIX people had to invent similar names for the same things.  */
+#ifdef __USE_XOPEN2K
+# define POSIX_MADV_NORMAL	0 /* No further special treatment.  */
+# define POSIX_MADV_RANDOM	1 /* Expect random page references.  */
+# define POSIX_MADV_SEQUENTIAL	2 /* Expect sequential page references.  */
+# define POSIX_MADV_WILLNEED	3 /* Will need these pages.  */
+# define POSIX_MADV_DONTNEED	4 /* Don't need these pages.  */
+#endif
+
 //pthread_mutex_t global_lock;
 static const int IO_Msg_Size_op = ( offsetof(IO_CMD_MSG,op) + sizeof(int) );
 
@@ -279,6 +362,9 @@ static org_close_nocancel real_close_nocancel=NULL;
 
 typedef ssize_t (*org_read)(int fd, void *buf, size_t count);
 static org_read real_read=NULL;
+
+typedef void * (*org_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+static org_mmap real_mmap=NULL;
 
 typedef ssize_t (*org_write)(int fd, const void *buf, size_t count);
 static org_write real_write=NULL;
@@ -1061,6 +1147,43 @@ ssize_t stripe_read(int fd, char *szFileName, void *buf, size_t size, off_t offs
 	}
 }
 
+extern "C" void* ishank_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
+{
+    printf("HI in in my_mmap %d %p\n", fd, real_mmap);
+    if(real_mmap == NULL){
+       real_mmap = (org_mmap)dlsym(RTLD_NEXT, "mmap");
+    }
+    int fd_Directed = Get_Fd_Redirected(fd);
+
+	if(fd_Directed >= FD_FILE_BASE)	{
+        printf("other? should be here in mmap from stuff\n");
+        return (void*)0x69;
+    }
+    return real_mmap(addr, length, prot, flags, fd, offset);
+    // printf("HI\n");
+    // return (void *) 0x69;
+}
+//extern "C" void * __mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) __attribute__ ( (alias ("mmap")) );
+//extern "C" void * mmap64(void *addr, size_t length, int prot, int flags, int fd, off_t offset) __attribute__ ( (alias ("mmap")) );
+
+
+// extern "C" void* mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
+// {
+//     printf("HI in mmap %d\n", fd);
+//     if(real_mmap == NULL){
+//         real_mmap = (org_mmap)dlsym(RTLD_NEXT, "mmap");
+//     }
+//     int fd_Directed = Get_Fd_Redirected(fd);
+
+// 	if(fd_Directed >= FD_FILE_BASE)	{
+//         printf("other? should be here in mmap from stuff\n");
+//         return (void*)0x69;
+//     }
+//     return real_mmap(addr, length, prot, flags, fd, offset);
+//     // printf("HI\n");
+//     // return (void *) 0x69;
+// }
+
 extern "C" ssize_t my_read(int fd, void *buf, size_t size)
 {
 	IO_CMD_MSG *pIO_Cmd;
@@ -1124,6 +1247,7 @@ extern "C" ssize_t my_read(int fd, void *buf, size_t size)
 
 extern "C" ssize_t pread(int fd, void *buf, size_t size, off_t offset)
 {
+    //printf("in pread\n");
 	IO_CMD_MSG *pIO_Cmd;
 	RW_FUNC_RETURN *pResult;
 	struct ibv_mr *mr_loc_buf=NULL;
@@ -2123,6 +2247,7 @@ __thread dirent one_dirent;
 
 extern "C" dirent *readdir(DIR *__dirp)
 {
+    printf("HERE in readdir\n");
 	int *pNumEntry, *pEntryOffsetList, *pIdxMin, *pIdxMax, offset, *pIdx_fs;
 	char *pEntryNameBuff, *pDirName;
 	IO_CMD_MSG *pIO_Cmd;
@@ -4235,6 +4360,7 @@ static void Find_Func_Addr(char szPathLib[], char szFunc_List[][MAX_LEN_FUNC_NAM
 }
 
 
+
 static void Init_udis86(void)
 {
 	ud_init(&ud_obj);
@@ -4444,6 +4570,7 @@ static void Setup_Trampoline(void)
 	real_unlink = (org_unlink)(pTrampoline[5].trampoline);
 	real_fxstat = (org_fxstat)(pTrampoline[6].trampoline);
 	real_xstat = (org_xstat)(pTrampoline[7].trampoline);
+    //real_mmap = (org_mmap)(pTrampoline[8].trampoline);
 	
 	//start to patch orginal function
 	for(i=0; i<NHOOK; i++)	{
@@ -4838,6 +4965,11 @@ __attribute__((constructor)) void Init_FS_Client()
 	for(i=0; i<NHOOK; i++)	{
 		func_addr[i] += delta;
 	}
+
+    //assert(real_mmap == NULL);
+    // if(real_mmap == NULL){
+    //     real_mmap = (org_mmap)dlsym(RTLD_NEXT, "mmap");
+    // }
 
 //	Query_Original_Func_Address();	// get addresses of org functions
 	p_patch = Query_Available_Memory_BLock((void*)(org_func_addr[0]));
