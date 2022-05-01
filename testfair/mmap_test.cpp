@@ -48,14 +48,38 @@
 struct addr_range{
     void * addr_begin;
     size_t len;
+    int fd;
 };
 
-unordered_map<int, std::vector<addr_range>> fd_map;
+std::unordered_map<unsigned long, addr_range> addr_map;
 
+long page_size = sysconf(_SC_PAGE_SIZE);
 
+void populate_map(size_t length, void * original, int fd){
+    size_t num_pages = length / page_size;
+    addr_range data;
+    data.addr_begin = original;
+    data.fd = fd;
+    data.len = length;
+    for(size_t i = 0; i < num_pages; i++){
+        unsigned long page_addrs = ((unsigned long) original) + i*page_size;
+        addr_map.emplace(page_addrs, data);
+
+    }
+}
+
+addr_range get_addr_data(void * addr){
+    unsigned long addr_num = (unsigned long) addr;
+    unsigned long remainder = addr_num % page_size;
+    addr_num -= remainder;
+    addr_range data = addr_map[addr_num];
+    return data;
+}
 
 extern "C" void* ishank_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset){
-    void * ans = mmap(addr, length, prot, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    
+    void * ans = mmap(NULL, length, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    //printf("made it 3-6\n");
     
     if(fd < 0) return ans;
 
@@ -63,27 +87,46 @@ extern "C" void* ishank_mmap(void *addr, size_t length, int prot, int flags, int
 
     ssize_t remaining = length;
     while(remaining > 0){
+        //printf("made it 3-7\n");
         ssize_t num_read = pread(fd, ans, remaining, offset);
+        //printf("made it 3-8\n");
         if(num_read == -1 || num_read == 0){
             break;
         }
         offset += num_read;
         ans += num_read;
         remaining -= num_read;
-        printf("num_read : %ld\n", num_read);
-        printf("remainging : %ld\n", remaining);
+        //printf("num_read : %ld\n", num_read);
+        //printf("remainging : %ld\n", remaining);
     }
 
+    populate_map(length, original, fd);
 
     return original;
 }
 
-extern "C" int msync(void *addr, size_t length, int flags){
+extern "C" int ishank_msync(void *addr, size_t length, int flags){
     ssize_t remaining = length;
+    addr_range data = get_addr_data(addr);
+    int fd = data.fd;
+    assert(addr >= data.addr_begin);
+    off_t offset = (off_t)((char*)addr - (char*)data.addr_begin);
     while(remaining > 0){
-        ssize_t num_written = pwrite()
+        ssize_t num_written = pwrite(fd, addr, remaining, offset);
+        //printf("num written: %ld\n", num_written);
+        offset += num_written;
+        remaining -= num_written;
+        addr += num_written;
     }
+    return 0;
 }
+
+extern "C" int ishank_munmap(void *addr, size_t length){
+    ssize_t remaining = length;
+    addr_range data = get_addr_data(addr);
+    int fd = data.fd;
+    return munmap(data.addr_begin, data.len);
+} 
 
 using std::string;
 using std::vector;
@@ -455,7 +498,7 @@ int main(int argc, char **argv) {
 	string filename_str = opt.getFilename();
 	const char *filename = filename_str.c_str();
 	// printf("[%d] filename=\"%s\"\n", rank, filename);
-    printf("PRE OPEN\n");
+    //printf("PRE OPEN\n");
 	int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
   // make sure everyone was able to open their files
@@ -486,39 +529,41 @@ int main(int argc, char **argv) {
 	double start_time = MPI_Wtime();
 	int iteration = 0;
 
-    printf("in prog %d\n", fd);
-    void * ptr = ishank_mmap(0, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
+    //printf("in prog %d\n", fd);
+    void * ptr_write = ishank_mmap(0, opt.file_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
+    void * orig_ptr_write = ptr_write;
     //pread(fd, NULL, 8, 0);
     // DIR * d = opendir("./");
     // assert(d != NULL); 
     // readdir(d);
-    printf("ptr val: %p\n", ptr);
+    //printf("ptr val: %p\n", ptr_write);
     
     //assert(ptr == (void *)0x69);
 
 	while (!done) {
+        //printf("starting while\n");
+        ptr_write = orig_ptr_write;
 		iteration++;
 
 		// write to the file
 
 		// printf("[%d] %.3f writing...\n", rank, getTime());
-		for (file_offset = 0; 
-				 file_offset < opt.file_size;
-				 file_offset += opt.io_size) {
+		for (file_offset = 0; file_offset < opt.file_size; file_offset += opt.io_size) {
 
 			// out of time
 			if (getTime() > opt.run_time_sec) {
-        done=true;
-        break;
-      }
+                done=true;
+                break;
+            }
 
 			fillBuffer(data, file_offset);
-			int bytes_written = write(fd, data.data(), opt.io_size);
-			if (bytes_written != opt.io_size) {
-				printf("[%d] %.6f write fail, %d of %d bytes\n", rank, getTime(), bytes_written, opt.io_size);
-				done = true;
-				break;
-			}
+			memcpy(ptr_write, data.data(), opt.io_size);
+            ptr_write += opt.io_size;
+			// if (bytes_written != opt.io_size) {
+			// 	printf("[%d] %.6f write fail, %d of %d bytes\n", rank, getTime(), bytes_written, opt.io_size);
+			// 	done = true;
+			// 	break;
+			// }
 			io_bytes += opt.io_size;
 			io_over_time.inc();
 		}
@@ -527,53 +572,75 @@ int main(int argc, char **argv) {
 		// printf("[%d] %.3f reading...\n", rank, getTime());
 
 		// XXX ThemisIO doesn't yet support seek
+        //printf("hi\n");
+        int ret = ishank_msync(orig_ptr_write, opt.file_size, 0);
+        //printf("made it %d\n", ret);
+        assert(ret == 0);
 		close(fd);
+        //ret = ishank_munmap(orig_ptr, opt.file_size);
+        //printf("made it2\n");
 		fd = open(filename, O_RDONLY);
-		if (fd < 0) {
+        //printf("made it3\n");
+        
+        
+		
+        if (fd < 0) {
 			printf("[%d] %.6f read iteration %d of %s, open returned %d, error %s\n",
 						 rank, getTime(), iteration, filename, fd, strerror(errno));
 			break;
 		}
+        //printf("made it3-5\n");
+        void * ptr_read = ishank_mmap(0, opt.file_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        //printf("made it4\n");
+        void * orig_ptr_read = ptr_read;
 			
 		assert(fd >= 0);
 		
-		for (file_offset = 0; 
-				 file_offset < opt.file_size;
-				 file_offset += opt.io_size) {
+        for (file_offset = 0; 
+                file_offset < opt.file_size;
+                file_offset += opt.io_size) {
 
-			// out of time
-			if (getTime() > opt.run_time_sec) {
-        done=true;
-        break;
-      }
+            // out of time
+            if (getTime() > opt.run_time_sec) {
+                done=true;
+                break;
+            }
 
 			fillBuffer(expected_data, file_offset);
-			int bytes_read = read(fd, data.data(), opt.io_size);
-			if (bytes_read != opt.io_size) {
-				printf("[%d] %.6f read fail, %d of %d bytes\n", rank, getTime(), bytes_read, opt.io_size);
-				done = true;
-				break;
-			}
-			if (memcmp(expected_data.data(), data.data(), opt.io_size)) {
+			// int bytes_read = read(fd, data.data(), opt.io_size);
+			// if (bytes_read != opt.io_size) {
+			// 	printf("[%d] %.6f read fail, %d of %d bytes\n", rank, getTime(), bytes_read, opt.io_size);
+			// 	done = true;
+			// 	break;
+			// }
+            //printf("made it5\n");
+			if (memcmp(expected_data.data(), ptr_read, opt.io_size)) {
 				printf("[%d] %.6f data read back incorrectly at offset %ld\n", rank, getTime(), file_offset);
 				done = true;
 				break;
 			}
-
+            //if(ptr != orig_ptr - opt.io_size)
+            ptr_read = (void *) ((char *) ptr_read + opt.io_size);
+            //printf("made it6 %ld __ %ld\n", file_offset, opt.file_size);
 			io_bytes += opt.io_size;
 			io_over_time.inc();
 		}
+        ret = ishank_munmap(orig_ptr_read, opt.file_size);
+        //printf("made it7 ret: %d\n", ret);
 
 		// XXX ThemisIO doesn't yet support seek
 		close(fd);
+        //printf("made it8\n");
 		fd = open(filename, O_WRONLY);
+        //printf("made it9\n");
 		if (fd < 0) {
 			printf("[%d] %.6f write iteration %d of %s, open returned %d error %s\n",
 						 rank, getTime(), iteration, filename, fd, strerror(errno));
 			break;
 		}
-
+        //printf("made it10\n");
 		assert(fd >= 0);
+        //printf("made it11\n");
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
