@@ -2247,7 +2247,7 @@ __thread dirent one_dirent;
 
 extern "C" dirent *readdir(DIR *__dirp)
 {
-    printf("HERE in readdir\n");
+    //printf("HERE in readdir\n");
 	int *pNumEntry, *pEntryOffsetList, *pIdxMin, *pIdxMax, offset, *pIdx_fs;
 	char *pEntryNameBuff, *pDirName;
 	IO_CMD_MSG *pIO_Cmd;
