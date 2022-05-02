@@ -337,6 +337,9 @@ static org_rmdir real_rmdir=NULL;
 typedef int (*org_unlink)(const char *path);
 static org_unlink real_unlink=NULL;
 
+typedef int (*org_dup)(int oldfd);
+static org_dup real_dup=NULL;
+
 typedef int (*org_dup2)(int oldfd, int newfd);
 static org_dup2 real_dup2=NULL;
 
@@ -1485,6 +1488,27 @@ extern "C" off_t my_lseek(int fd, off_t offset, int whence)
 	return real_lseek(fd, offset, whence);
 }
 
+extern "C" int dup(int oldfd){
+    int i, fd_Directed, newfd;
+
+    if(real_dup==NULL)	{
+		real_dup = (org_dup)dlsym(RTLD_NEXT, "__dup");
+	}
+
+	if(Inited == 0) {       // init() not finished yet
+		return real_dup(oldfd);
+	}
+
+	fd_Directed = Get_Fd_Redirected(oldfd); 
+    
+
+
+
+
+    
+
+}
+
 extern "C" int dup2(int oldfd, int newfd)
 {
 	int i, fd_Directed, idx_io_redirect, pid;
@@ -2120,6 +2144,8 @@ __thread dirent one_dirent;
 //extern "C" void Request_Dir_Entries_List(DIR *__dirp, long int offset, long int nLen)
 //{
 //}
+
+
 
 extern "C" dirent *readdir(DIR *__dirp)
 {

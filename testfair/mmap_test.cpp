@@ -79,7 +79,6 @@ addr_range get_addr_data(void * addr){
 extern "C" void* ishank_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset){
     
     void * ans = mmap(NULL, length, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-    //printf("made it 3-6\n");
     
     if(fd < 0) return ans;
 
@@ -87,17 +86,13 @@ extern "C" void* ishank_mmap(void *addr, size_t length, int prot, int flags, int
 
     ssize_t remaining = length;
     while(remaining > 0){
-        //printf("made it 3-7\n");
         ssize_t num_read = pread(fd, ans, remaining, offset);
-        //printf("made it 3-8\n");
         if(num_read == -1 || num_read == 0){
             break;
         }
         offset += num_read;
         ans += num_read;
         remaining -= num_read;
-        //printf("num_read : %ld\n", num_read);
-        //printf("remainging : %ld\n", remaining);
     }
 
     populate_map(length, original, fd);
