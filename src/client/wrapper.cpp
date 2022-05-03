@@ -5,6 +5,7 @@ Written by Lei Huang  (huang@tacc.utexas.edu)
 All rights are reserved.
 */
 
+#define __USE_GNU
 //#define _GNU_SOURCE
 
 #include <stdio.h>
@@ -387,6 +388,18 @@ org_pread real_pread=NULL;
 
 typedef ssize_t (*org_pwrite)(int fd, const void *buf, size_t count, off_t offset);
 org_pwrite real_pwrite=NULL;
+
+typedef void * (*org_mmap)(void *addr, size_t length, int flags, int fd, off_t offset);
+org_mmap real_mmap=NULL;
+
+typedef int (*org_munmap)(void *__addr, size_t __len);
+org_munmap real_munmap=NULL;
+
+typedef int (*org_mprotect)(void *__addr, size_t __len, int __prot);
+org_mprotect real_mprotect=NULL;
+
+typedef int (*org_msync)(void *__addr, size_t __len, int __flags);
+org_msync real_msync=NULL;
 
 typedef int (*org_futimens)(int fd, const struct timespec times[2]);
 org_futimens real_futimens=NULL;
@@ -1423,6 +1436,43 @@ extern "C" ssize_t pwrite(int fd, const void *buf, size_t size, off_t offset)
 extern "C" ssize_t pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__ ( (alias ("pwrite")) );
 extern "C" ssize_t __pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__ ( (alias ("pwrite")) );
 
+extern "C" void * mma_(void *addr, size_t length, int flags, int fd, off_t offset)
+{
+	if(real_mmap == NULL)	{
+		real_mmap = (org_mmap)dlsym(RTLD_NEXT, "mmap");
+	}
+    printf("HI FROM MMAP\n");
+    fflush(stdout);
+	
+	return real_mmap(addr, length, flags, fd, offset);
+}
+extern "C" void * mma_64(void *addr, size_t length, int flags, int fd, off_t offset) __attribute__ ( (alias ("mma_")) );
+
+extern "C" int munma_ (void *__addr, size_t __len){
+    if(real_munmap == NULL)	{
+		real_munmap = (org_munmap)dlsym(RTLD_NEXT, "munmap");
+	}
+
+    return real_munmap(__addr, __len);       
+}
+
+// extern "C" int mprotect (void *__addr, size_t __len, int __prot){
+//     if(real_mprotect == NULL)	{
+// 		real_mprotect = (org_mprotect)dlsym(RTLD_NEXT, "mprotect");
+// 	}
+
+//     return real_mprotect(__addr, __len, __prot);
+
+// }
+
+// extern "C" int msync (void *__addr, size_t __len, int __flags){
+//     if(real_msync == NULL)	{
+// 		real_msync = (org_msync)dlsym(RTLD_NEXT, "msync");
+// 	}
+//     return real_msync(__addr, __len, __flags);
+// }
+
+
 extern "C" off_t my_lseek(int fd, off_t offset, int whence)
 {
 	IO_CMD_MSG *pIO_Cmd;
@@ -1488,26 +1538,22 @@ extern "C" off_t my_lseek(int fd, off_t offset, int whence)
 	return real_lseek(fd, offset, whence);
 }
 
-extern "C" int dup(int oldfd){
-    int i, fd_Directed, newfd;
+// extern "C" int dup(int oldfd){
+//     int i, fd_Directed, newfd;
 
-    if(real_dup==NULL)	{
-		real_dup = (org_dup)dlsym(RTLD_NEXT, "__dup");
-	}
+//     if(real_dup==NULL)	{
+// 		real_dup = (org_dup)dlsym(RTLD_NEXT, "__dup");
+// 	}
 
-	if(Inited == 0) {       // init() not finished yet
-		return real_dup(oldfd);
-	}
+// 	if(Inited == 0) {       // init() not finished yet
+// 		return real_dup(oldfd);
+// 	}
 
-	fd_Directed = Get_Fd_Redirected(oldfd); 
-    
+// 	fd_Directed = Get_Fd_Redirected(oldfd); 
 
+//     int next_fd =    
 
-
-
-    
-
-}
+// }
 
 extern "C" int dup2(int oldfd, int newfd)
 {

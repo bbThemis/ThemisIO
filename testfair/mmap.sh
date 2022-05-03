@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ppn=56
+ppn=1
 iosize=1m
 
 IBRUN_TASKS_PER_NODE=$ppn ibrun -n $(($ppn * 1)) -o $(($ppn * 1)) \

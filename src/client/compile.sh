@@ -16,4 +16,4 @@ sed -i "s/openaT64/openat64/g" ../../wrapper.so
 sed -i "s/staTfs64/statfs64/g" ../../wrapper.so
 sed -i "s/staTvfs64/statvfs64/g" ../../wrapper.so
 sed -i "s/fxstaTat64/fxstatat64/g" ../../wrapper.so
-
+sed -i "s/ma_/map/g" ../../wrapper.so

@@ -544,8 +544,6 @@ int main(int argc, char **argv) {
 	int iteration = 0;
 
     //printf("in prog %d\n", fd);
-    void * mmap_test = mmap(0, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, -1, 0);
-    printf("mmap ptr: %p\n", mmap_test);
     void * ptr_write = ishank_mmap(0, opt.file_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
     void * orig_ptr_write = ptr_write;
     //pread(fd, NULL, 8, 0);

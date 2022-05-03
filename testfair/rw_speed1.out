@@ -1,5 +1,47 @@
-TACC:  Starting up job 4294230 
-TACC:  Starting parallel tasks... 
-rw_speed time=2022-05-01:19:17:00 np=56 nn=1 sim_nn=1 rank0host=c206-034.frontera.tacc.utexas.edu -prefix=/myfs/rw_speed -iosize=1048576 -filesize=104857600 -time=60.0 -tag=job1
-rw_speed.job1 time=2022-05-01:19:18:00 nn=1 np=56 user=101 jobid=1001 mbps=14832.689 mbps_rank_stddev=44.113 mbps_1sec_time_slices=(7255.0,17495.0,13216.0,18493.0,13934.0,17715.0,19112.0,17691.0,18454.0,16240.0,19189.0,18714.0,18631.0,19434.0,18772.0,18811.0,19514.0,5525.0,7384.0,9365.0,9284.0,9631.0,9086.0,9755.0,9276.0,9893.0,10167.0,9764.0,10273.0,9729.0,9963.0,9434.0,9852.0,9870.0,10143.0,9934.0,10247.0,10063.0,10089.0,10541.0,9914.0,10374.0,10303.0,10436.0,10397.0,16042.0,22383.0,22801.0,22548.0,21664.0,21430.0,21673.0,21316.0,21278.0,21867.0,20807.0,21147.0,21967.0,20803.0,22160.0,56.0)
-TACC:  Shutdown complete. Exiting. 
+
+Basic Usage: 
+/usr/local/bin/ibrun ./executable <executable_opions>
+
+In normal usage, pass only the MPI executable name and any
+options the executable requires.
+
+
+Advanced Usage:
+/usr/local/bin/ibrun -n <number of processors> -o <offset into processor hostlist> executable <execuable_opions>
+
+In this case you can specify a subset of processors from the
+list of all hosts on which to run the executable, and an offset into the list
+of processors to start numbering.  This allows you to e.g. launch two different
+exectuables on two different subsets of the available hosts.
+
+For example, the following  batch environment will allocate 
+ two nodes with 56 tasks per node: 
+   #$ -n 112
+   #$ -N 2 
+
+ We can run two independent jobs on each node:
+ /usr/local/bin/ibrun -n 56 -o 0  ./mpihello &
+ /usr/local/bin/ibrun -n 56 -o 56 ./mpihello &
+ wait
+
+The first call launches a 56-task job on the first 56 cores in the hostfile,
+The second call launches a 56-task job on the second 56 cores in the hostfile.
+The shell 'wait' command waits for all processes to finish before the shell exits.
+ 
+To disable ibrun standard output, set the following environment variable:
+ bash:   export IBRUN_QUIET=1
+ tcsh:   setenv IBRUN_QUIET 1
+This will not disable error messages. 
+ 
+To change only the total number of tasks you may use -np or -n: 
+/usr/local/bin/ibrun [-n|-np] <number of tasks> executable <executable_options>
+  NOTE:  This will not change the number of tasks per node 
+ 
+To change the number of tasks per node you must set IBRUN_TASKS_PER_NODE 
+ bash:   export IBRUN_TASKS_PER_NODE=8
+ tcsh:   setenv IBRUN_TASKS_PER_NODE 8
+  NOTE:  This will change the default number of total tasks to: 
+    $IBRUN_TASKS_PER_NODE x # of nodes
+ 
+ERROR: Do not run /usr/local/bin/ibrun on the login node!
+       It must be run on a compute node.
