@@ -84,6 +84,10 @@ addr_range get_addr_data(void * addr){
     return data;
 }
 
+extern "C" void* ishank_mmap_share(void *addr, size_t length, int prot, int flags, int fd, off_t offset){
+
+}
+
 extern "C" void* ishank_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset){
     
     void * ans = mmap(NULL, length, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
@@ -492,6 +496,7 @@ int main(int argc, char **argv) {
 	MPI_Comm_size(MPI_COMM_WORLD, &np);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	node_count = getNodeCount();
+    printf("NODE COUNT: %d\n", node_count);
 	int simulated_node_count = getSimulatedNodeCount();
 	t0 = MPI_Wtime();
 
