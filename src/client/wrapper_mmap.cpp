@@ -88,7 +88,7 @@ static void* Query_Available_Memory_BLock(void *);
 
 
 //#define NHOOK	(6)
-#define NHOOK	(8)
+#define NHOOK	(9)
 #define NHOOK_IN_PTHREAD	(5)
 
 static long int func_addr[NHOOK], func_addr_in_lib_pthread[NHOOK_IN_PTHREAD];
@@ -260,8 +260,8 @@ typedef struct {
 TRAMPOLINE *pTrampoline;
 
 long int FirstBlockSize=0;
-static char szFunc_List[NHOOK][MAX_LEN_FUNC_NAME]={"my_open", "my_close_nocancel", "my_read", "my_write", "my_lseek", "my_unlink", "my_fxstat", "my_xstat"};	// C 
-static char szOrgFunc_List[NHOOK][MAX_LEN_FUNC_NAME]={"open64", "__close_nocancel", "__read", "__write", "lseek64", "unlink", "__fxstat", "__xstat64"};
+static char szFunc_List[NHOOK][MAX_LEN_FUNC_NAME]={"my_open", "my_close_nocancel", "my_read", "my_write", "my_lseek", "my_unlink", "my_fxstat", "my_xstat", "my_mmap"};	// C 
+static char szOrgFunc_List[NHOOK][MAX_LEN_FUNC_NAME]={"open64", "__close_nocancel", "__read", "__write", "lseek64", "unlink", "__fxstat", "__xstat64","mmap"};
 
 extern "C" int my_fxstat(int vers, int fd, struct stat *buf);
 
@@ -389,7 +389,7 @@ org_pread real_pread=NULL;
 typedef ssize_t (*org_pwrite)(int fd, const void *buf, size_t count, off_t offset);
 org_pwrite real_pwrite=NULL;
 
-typedef void * (*org_mmap)(void *addr, size_t length, int flags, int fd, off_t offset);
+typedef void * (*org_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
 org_mmap real_mmap=NULL;
 
 typedef int (*org_munmap)(void *__addr, size_t __len);
@@ -1437,17 +1437,17 @@ extern "C" ssize_t pwrite(int fd, const void *buf, size_t size, off_t offset)
 extern "C" ssize_t pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__ ( (alias ("pwrite")) );
 extern "C" ssize_t __pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__ ( (alias ("pwrite")) );
 
-extern "C" void * mma_(void *addr, size_t length, int flags, int fd, off_t offset)
+extern "C" void * my_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
 	if(real_mmap == NULL)	{
-		real_mmap = (org_mmap)dlsym(RTLD_NEXT, "mmap@plt");
+		real_mmap = (org_mmap)dlsym(RTLD_NEXT, "mmap");
 	}
-    printf("HI FROM MMAP\n");
+    printf("HI FROM MMAP %p, %lu, %d, %d, %d, %d\n", addr, length, prot, flags, fd, offset);
     fflush(stdout);
 	
-	return real_mmap(addr, length, flags, fd, offset);
+	return real_mmap(addr, length, prot, flags, fd, offset);
 }
-extern "C" void * mma_64(void *addr, size_t length, int flags, int fd, off_t offset) __attribute__ ( (alias ("mma_")) );
+//extern "C" void * mma_64(void *addr, size_t length, int prot, int flags, int fd, off_t offset) __attribute__ ( (alias ("mma_")) );
 
 extern "C" int munma_ (void *__addr, size_t __len){
     if(real_munmap == NULL)	{
@@ -4254,7 +4254,7 @@ static void Find_Func_Addr(char szPathLib[], char szFunc_List[][MAX_LEN_FUNC_NAM
 		exit(1);
 	}
 	
-	map_start = mmap(0, file_stat.st_size, PROT_READ, MAP_SHARED, fd, 0);
+	map_start = my_mmap(0, file_stat.st_size, PROT_READ, MAP_SHARED, fd, 0);
 	if((long int)map_start == -1)   {
 		printf("Fail to mmap file %s\nQuit\n", szPathLib);
 		exit(1);
@@ -4517,6 +4517,7 @@ static void Setup_Trampoline(void)
 	real_unlink = (org_unlink)(pTrampoline[5].trampoline);
 	real_fxstat = (org_fxstat)(pTrampoline[6].trampoline);
 	real_xstat = (org_xstat)(pTrampoline[7].trampoline);
+    real_mmap = (org_mmap)(pTrampoline[8].trampoline);
 	
 	//start to patch orginal function
 	for(i=0; i<NHOOK; i++)	{
@@ -4914,7 +4915,7 @@ __attribute__((constructor)) void Init_FS_Client()
 
 //	Query_Original_Func_Address();	// get addresses of org functions
 	p_patch = Query_Available_Memory_BLock((void*)(org_func_addr[0]));
-	p_patch_allocated = mmap(p_patch, MIN_MEM_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	p_patch_allocated = my_mmap(p_patch, MIN_MEM_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if(p_patch_allocated == MAP_FAILED) {
 		printf("Fail to allocate code block at %p with mmap().\nQuit\n", p_patch);
 		exit(1);

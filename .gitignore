@@ -5,3 +5,6 @@ server
 *.log
 myfs.param
 .vscode/
+wrapper.out
+testfair/simple.out
+testfair/mmap_test.out

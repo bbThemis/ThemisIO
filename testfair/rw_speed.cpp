@@ -38,6 +38,7 @@
 #include <vector>
 #include <iomanip>
 #include <sstream>
+#include <sys/resource.h>
 #include <mpi.h>
 
 using std::string;
@@ -564,6 +565,31 @@ int main(int argc, char **argv) {
 		remove(filename);
 
   MPI_Finalize();
+
+  struct rusage usage;
+      int ret = getrusage(RUSAGE_SELF, &usage);
+          if(ret != 0){
+                  return -1;    
+                      }
+
+                          printf("USER time: %ld.%06ld\n", usage.ru_utime.tv_sec, usage.ru_utime.tv_usec); 
+                              printf("System time: %ld.%06ld\n", usage.ru_stime.tv_sec, usage.ru_stime.tv_usec);
+                                  
+                                      printf("%ld\n", usage.ru_maxrss);
+                                          printf("%ld\n", usage.ru_ixrss);
+                                              printf("%ld\n", usage.ru_idrss);
+                                                  printf("%ld\n", usage.ru_isrss);
+                                                      printf("%ld\n", usage.ru_minflt); 
+                                                          printf("%ld\n", usage.ru_majflt);
+                                                              printf("%ld\n", usage.ru_nswap);
+                                                                  printf("%ld\n", usage.ru_inblock);
+                                                                      printf("%ld\n", usage.ru_oublock);
+                                                                          printf("%ld\n", usage.ru_msgsnd);
+                                                                              printf("%ld\n", usage.ru_msgrcv);
+                                                                                  printf("%ld\n", usage.ru_nsignals);
+                                                                                      printf("%ld\n", usage.ru_nvcsw);
+                                                                                          printf("%ld\n", usage.ru_nivcsw);
+
 
 	return 0;
 }

@@ -1,5 +1,5 @@
 set terminal pdf font "Times,18"
-set output 'test.job-fair.4v1.pdf'
+set output 'test.job-fair.4v2221.pdf'
 
 set yrange [0:29000]
 
