@@ -1,0 +1,37 @@
+#!/bin/bash
+
+#SBATCH -J myfs           # Job name
+#SBATCH -o myfs.o%j       # Name of stdout output file
+#SBATCH -p normal          # Queue (partition) name
+#SBATCH -N 256               # Total # of nodes
+#SBATCH -n 256               # Total # of mpi tasks
+#SBATCH -t 00:15:00        # Run time (hh:mm:ss)
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+
+THEMISDIR=$HOME/Themis2
+
+# set this to 1/2 the number of nodes above, because instances of the
+# ThemisIO server will run on 1/2 the nodes and IOR will run on the other half.
+nodes=128
+
+# policy=job-fair
+policy=fifo
+
+# If multiple tests are queued, be sure to start them in different directories,
+# because the server writes its connection info to the "myfs.param"
+# file in its current directory.
+dir=$THEMISDIR/tests/ior_tests/${policy}_$nodes
+mkdir -p $dir
+cd $dir
+
+export MLX5_SINGLE_THREADED=0
+ibrun -n $nodes $THEMISDIR/server --policy $policy &
+sleep 60
+
+# set this to the location of the ior binary
+IOR=$HOME/sw/ior/bin/ior
+IOR_CMD="$IOR -a POSIX -b 1G -C -F -e -w -W -r -g -G 27 -k -i 5 -s 1 -O stoneWallingWearOut=1 -O stoneWallingStatusFile=sw.tmp -D 40 -d 5 -t 1M"
+
+# use 8 instances of IOR on each node to saturate the interconnect
+IBRUN_TASKS_PER_NODE=8 ibrun -n $(( 8 * $nodes )) -o $(( 8 * $nodes )) $THEMISDIR/tests/themis_client.sh $IOR_CMD -o /myfs/iotest.job

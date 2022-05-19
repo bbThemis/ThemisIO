@@ -122,3 +122,14 @@ Switch to GIFT branch
     cd testfair
     bash test.1v1.sh
     ```
+
+## Instructions for recreating throughput scaling results
+
+1. Switch to the main branch and build the server and client.
+
+2. Edit the `tests/scaling_ior_throughput.job` file to set up the desired test.
+   Be sure to set the node count, THEMISDIR, policy, and IOR variables
+   appropriately.
+
+3. Submit the batch job. The results will be printed to stdout in a file
+   named myfs.o{jobid}.
