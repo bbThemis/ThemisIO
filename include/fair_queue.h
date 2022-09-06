@@ -179,7 +179,9 @@ class FairQueue {
 	
 	struct MessageQueue {
 		MessageQueue(int id_, int job_id_, int user_id_, long now, int weight_)
-			: id(id_), job_id(job_id_), user_id(user_id_), idle_timestamp(now), weight(weight_) {
+		: id(id_), weight(weight_), carry_weight(weight_), job_id(job_id_), user_id(user_id_),
+			idle_timestamp(now), cumulative_time(0) {
+			assert(weight > 0);
 				// T_Create = now * 1.0;
 			}
 								 
@@ -189,10 +191,17 @@ class FairQueue {
 		int id;
 		float weight;	 // size-fair: node count. Otherwise 1.
 
+		// used to implement weight in FAIR_ORDER_CYCLE mode
+		float carry_weight;
+
 		int job_id, user_id;
 
 		// timestamp this queue was most recently nonempty
 		long unsigned idle_timestamp;
+
+		// time spent processing messages from this queue
+		// used by FairQueueTime
+		double cumulative_time;
 		
 		// unused remnants of time-sharing version
 		/*
@@ -239,7 +248,7 @@ class FairQueue {
 	};
 
 	// implemented by subclasses, since each one organizes the queues differently
-	virtual void addNonemptyQueue(MessageQueue *q) = 0;
+	virtual void addNonemptyQueue(int key, MessageQueue *q) = 0;
 
 
 	/* Log fairness decisions, tracking the set of messages queues with
@@ -379,7 +388,10 @@ class FairQueueRandom : public FairQueue {
 		{}
 	
 
-	virtual void addNonemptyQueue(MessageQueue *q);
+	virtual void addNonemptyQueue(int key, MessageQueue *q) {
+		nonempty_queues.push_back(q);
+	}
+
 	virtual bool getMessage(IO_CMD_MSG *msg);
 	// virtual void removeNonemptyQueue(MessageQueue *q);
 
@@ -403,7 +415,20 @@ class FairQueueRandom : public FairQueue {
 . */
 class FairQueueCycle : public FairQueue {
  public:
-	virtual void addNonemptyQueue(MessageQueue *q);
+	FairQueueCycle(FairnessMode peer,
+								 bool weight_by_node_count,
+								 int mpi_rank, int thread_id,
+								 JobInfoLookup &job_info_lookup,
+								 int max_idle_sec = 10)
+		: FairQueue(peer, weight_by_node_count, mpi_rank, thread_id, job_info_lookup, max_idle_sec),
+		next_queue(nonempty_queues.end())
+		{}
+
+	virtual void addNonemptyQueue(int key, MessageQueue *q) {
+		nonempty_queues[key] = q;
+		q->carry_weight = q->weight;
+	}
+
 	virtual bool getMessage(IO_CMD_MSG *msg);
 
  private:
@@ -413,7 +438,7 @@ class FairQueueCycle : public FairQueue {
 
 	// Queue from which we should next select.
 	// May be nonempty_queues::end() if there's nothing to select.
-	QueueMap::const_iterator next_queue;
+	QueueMap::iterator next_queue;
 };
 
 
@@ -422,7 +447,7 @@ class FairQueueCycle : public FairQueue {
 	 Nonempty queues are stored in a heap. */
 class FairQueueTime : public FairQueue {
  public:
-	virtual void addNonemptyQueue(MessageQueue *q);
+	virtual void addNonemptyQueue(int key, MessageQueue *q);
 	virtual void removeNonemptyQueue(MessageQueue *q);
 	virtual bool getMessage(IO_CMD_MSG *msg);
 	virtual void chargePreviousMessageCost(double value) {}

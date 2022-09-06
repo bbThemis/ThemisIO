@@ -30,6 +30,12 @@ FairQueue* createFairQueue
 	if (order == FAIR_ORDER_RANDOM) {
 		return new FairQueueRandom(mode, weight_by_node_count, mpi_rank, thread_id,
 															 job_info_lookup, max_idle_sec);
+	} else if (order == FAIR_ORDER_CYCLE) {
+		return new FairQueueCycle(mode, weight_by_node_count, mpi_rank, thread_id,
+															job_info_lookup, max_idle_sec);
+	} else if (order == FAIR_ORDER_TIME) {
+		return new FairQueueTime(mode, weight_by_node_count, mpi_rank, thread_id,
+														 job_info_lookup, max_idle_sec);
 	} else {
 		printf("order \"%s\" not supported yet\n", ServerOptions::queueOrderToString(order));
 		return nullptr;
@@ -111,7 +117,7 @@ void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 	q->add(msg);
 
 	if (was_empty)
-		addNonemptyQueue(q);
+		addNonemptyQueue(key, q);
 }
 
 // unused remnants of time-sharing version
@@ -687,11 +693,6 @@ std::string FairQueue::DecisionLog::decisionSetToString(int *data) {
 }
 
 
-void FairQueueRandom::addNonemptyQueue(MessageQueue *q) {
-	nonempty_queues.push_back(q);
-}
-
-
 bool FairQueueRandom::getMessage(IO_CMD_MSG *msg) {
 	if (isEmpty()) return false;
 
@@ -745,3 +746,53 @@ int FairQueueRandom::chooseRandomNonemptyQueue() {
 
 	return choice_idx;
 }
+
+
+bool FairQueueCycle::getMessage(IO_CMD_MSG *msg) {
+	if (nonempty_queues.empty()) return false;
+	
+	if (next_queue == nonempty_queues.end())
+		next_queue = nonempty_queues.begin();
+
+	/*
+		Weight and carry_weight are used to implement size-fair processing.
+		In a round-robin scheme, if queue A has a weight of 2 and queue B has
+		a weight of 1, then two items will be pulled from queue A for each item
+		pulled from queue B.
+
+		carry_weight is a mechanism used to implement non-integer weights.
+		It is initialized to the weight. Each time an item is pulled off the
+		queue it is decreased by 1. Each time we cycle to the next queue
+		it is increased by weight. 
+
+		For example, if weight is 1.7:
+		  iteration  carry_weight-before  pull-item?  carry_weight-after
+			    1             1.7              yes             .7
+					2              .7              no             2.4
+					3             2.4              yes            1.4
+					4             1.4              yes             .4
+					5              .4              no             2.1
+          ...
+
+	*/
+
+	MessageQueue *q = next_queue->second;
+	q->remove(msg);
+	q->carry_weight -= 1;
+	message_count--;
+	
+	if (q->messages.empty()) {
+		// mark this queue idle and move it off the nonempty list
+		q->idle_timestamp = getTime();
+		next_queue = nonempty_queues.erase(next_queue);
+	} else if (q->carry_weight < 1) {
+		q->carry_weight += q->weight;
+		next_queue++;
+	}
+
+	// if carry_weight
+
+	return true;
+}
+
+
