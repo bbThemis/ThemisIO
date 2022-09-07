@@ -104,4 +104,8 @@ then
   exit 1
 fi
 
+# echo LD_PRELOAD=$LD_PRELOAD
+# echo MYFS_CONF=$MYFS_CONF
+# echo running $@
+
 "$@"

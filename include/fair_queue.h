@@ -271,7 +271,7 @@ class FairQueue {
 	class DecisionLog {
 	public:
 		// using a constant so the compiler can easily disable the code with no overhead
-		static const bool enabled = false;
+		static const bool enabled = true;
 
 		DecisionLog() {}
 		~DecisionLog() {clear();}
@@ -285,6 +285,11 @@ class FairQueue {
 		}
 		
 		void log(const std::vector<MessageQueue*> &nonempty_queues, int choice_id);
+		void log(const std::map<int,MessageQueue*> &nonempty_queues, int choice_id);
+
+    // This is called by both versions of log() above after they have filled
+    // temp_storage with [n, id(0), id(1), ..., id(n-1)].
+    void logInternal(int choice_id);
 
 		// combine the counts from that to this
 		void addLog(const DecisionLog &that);
@@ -447,9 +452,17 @@ class FairQueueCycle : public FairQueue {
 	 Nonempty queues are stored in a heap. */
 class FairQueueTime : public FairQueue {
  public:
-	virtual void addNonemptyQueue(int key, MessageQueue *q);
-	virtual void removeNonemptyQueue(MessageQueue *q);
-	virtual bool getMessage(IO_CMD_MSG *msg);
+  FairQueueTime(FairnessMode mode,
+                bool weight_by_node_count,
+                int mpi_rank, int thread_id,
+                JobInfoLookup &job_info_lookup,
+                int max_idle_sec = 10)
+		: FairQueue(mode, weight_by_node_count, mpi_rank, thread_id, job_info_lookup, max_idle_sec)
+		{}
+
+  virtual void addNonemptyQueue(int key, MessageQueue *q) {}
+	virtual void removeNonemptyQueue(MessageQueue *q) {}
+	virtual bool getMessage(IO_CMD_MSG *msg) {return false;}
 	virtual void chargePreviousMessageCost(double value) {}
 };
 

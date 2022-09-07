@@ -29,13 +29,13 @@ FairQueue* createFairQueue
 
 	if (order == FAIR_ORDER_RANDOM) {
 		return new FairQueueRandom(mode, weight_by_node_count, mpi_rank, thread_id,
-															 job_info_lookup, max_idle_sec);
+                               job_info_lookup, max_idle_sec);
 	} else if (order == FAIR_ORDER_CYCLE) {
 		return new FairQueueCycle(mode, weight_by_node_count, mpi_rank, thread_id,
-															job_info_lookup, max_idle_sec);
+                              job_info_lookup, max_idle_sec);
 	} else if (order == FAIR_ORDER_TIME) {
 		return new FairQueueTime(mode, weight_by_node_count, mpi_rank, thread_id,
-														 job_info_lookup, max_idle_sec);
+                             job_info_lookup, max_idle_sec);
 	} else {
 		printf("order \"%s\" not supported yet\n", ServerOptions::queueOrderToString(order));
 		return nullptr;
@@ -584,6 +584,38 @@ void FairQueue::DecisionLog::log(const std::vector<MessageQueue*> &nonempty_queu
 		temp[i+1] = id;
 	}
 
+  logInternal(choice_id);
+}
+
+
+void FairQueue::DecisionLog::log(const std::map<int,MessageQueue*> &nonempty_queues, int choice_id) {
+
+	if (!enabled) return;
+             
+	// make a copy of the all the ids of the queues from which the choice
+	// was made.  Use persistent temp_storage object to minimize reallocations.
+	int n = nonempty_queues.size();
+	temp_storage.resize(n + 1);
+	int *temp = temp_storage.data();
+	temp[0] = n;
+
+  int idx = 1;
+  for (auto &elem : nonempty_queues) {
+    int id = elem.first;
+    temp[idx++] = id;
+  }
+
+  logInternal(choice_id);
+}
+
+
+// temp_storage has been filled with [n, id(0), id(1), ..., id(n-1)]
+void FairQueue::DecisionLog::logInternal(int choice_id) {
+
+  int n = temp_storage[0];
+  assert(temp_storage.size() == n+1);
+  int *temp = temp_storage.data();
+
 	// order the ids so alternate orderings are merged
 	std::sort(temp+1, temp+1+n);
 
@@ -780,6 +812,8 @@ bool FairQueueCycle::getMessage(IO_CMD_MSG *msg) {
 	q->remove(msg);
 	q->carry_weight -= 1;
 	message_count--;
+
+	decision_log.log(nonempty_queues, q->id);
 	
 	if (q->messages.empty()) {
 		// mark this queue idle and move it off the nonempty list
@@ -790,9 +824,5 @@ bool FairQueueCycle::getMessage(IO_CMD_MSG *msg) {
 		next_queue++;
 	}
 
-	// if carry_weight
-
 	return true;
 }
-
-
