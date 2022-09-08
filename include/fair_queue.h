@@ -354,7 +354,7 @@ class FairQueue {
 	// This is called by housekeeping().
 	void purgeIdle();
 
-	// user-fair, or job-fair
+	// user-fair, job-fair, of first-in-first-out (FIFO; one queue)
 	FairnessMode fairness_mode;
 	bool weight_by_node_count;
 

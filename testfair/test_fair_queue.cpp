@@ -63,10 +63,11 @@ public:
 #include "../src/fair_queue.cpp"
 
 
+// map an id to a counter that starts at 0 and can only be incremented
 using KeyCounter = std::map<int,int>;
 
 
-/* Given a map of id->count, increment the count for this id. */
+/* Increment the count for this id. */
 void counterInc(KeyCounter &counter, int id) {
 	auto it = counter.find(id);
 	if (it == counter.end()) {
@@ -76,8 +77,8 @@ void counterInc(KeyCounter &counter, int id) {
 	}
 }
 
-/* Given a map if->count, list all ids and counts. */
-void counterList(const KeyCounter &counter) {
+/* Print all ids and counts in this KeyCounter. */
+void counterPrint(const KeyCounter &counter) {
 	for (auto &e : counter) {
 		printf("  %d: %d\n", e.first, e.second);
 	}
@@ -137,10 +138,10 @@ int main() {
 	}
 
 	printf("By job id:\n");
-	counterList(job_id_counter);
+	counterPrint(job_id_counter);
 
 	printf("By user id:\n");
-	counterList(user_id_counter);
+	counterPrint(user_id_counter);
   
 	delete q;
   
