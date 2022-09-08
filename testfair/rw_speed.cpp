@@ -229,7 +229,7 @@ public:
 		// make sure everyone is the same length
 		int max_len = slice_bytes.size();
 		MPI_Allreduce(MPI_IN_PLACE, &max_len, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
-		assert(max_len >= slice_bytes.size());
+		assert((size_t)max_len >= slice_bytes.size());
 		slice_bytes.resize(max_len, 0);
 		MPI_Reduce(rank==0 ? MPI_IN_PLACE : slice_bytes.data(), slice_bytes.data(),
 							 max_len, MPI_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
