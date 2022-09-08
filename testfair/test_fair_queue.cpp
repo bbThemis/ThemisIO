@@ -88,19 +88,20 @@ int main() {
 	FairnessOrder order;
 	FairnessMode mode;
 
-	order = FairnessOrder::FAIR_ORDER_RANDOM;
-	// order = FairnessOrder::FAIR_ORDER_CYCLE;
+	// order = FairnessOrder::FAIR_ORDER_RANDOM;
+	order = FairnessOrder::FAIR_ORDER_CYCLE;
 	// order = FairnessOrder::FAIR_ORDER_TIME;
 
-	// mode = FairnessMode::FIFO
-	mode = FairnessMode::USER_FAIR;
-	// mode = FairnessMode::JOB_FAIR;
+	// mode = FairnessMode::FIFO;
+	// mode = FairnessMode::USER_FAIR;
+	mode = FairnessMode::JOB_FAIR;
 	
   bool weight_by_node_count = true;
   int mpi_rank = 0, thread_id = 100;
   JOBREC job_list[MAX_JOB_COUNT];
-  int job_list_size = 0;  // !! update this when job_list is updated
+  int job_list_size = 0;
   JobInfoLookup job_info_lookup(job_list, &job_list_size);
+	IO_CMD_MSG msg;
   
   FairQueue *q = createFairQueue
     (order, mode, weight_by_node_count,
@@ -108,28 +109,31 @@ int main() {
 
 	KeyCounter job_id_counter, user_id_counter;
 
-  job_list[job_list_size++] = JOBREC(101, 1, 1001);
-  job_list[job_list_size++] = JOBREC(102, 1, 1002);
+  job_list[job_list_size++] = JOBREC(101, 3, 111);
+  // job_list[job_list_size++] = JOBREC(102, 2, 111);
+  job_list[job_list_size++] = JOBREC(204, 4, 222);
 
-  // add 10 messages to each job queue
-  for (int i=0; i < 10; ++i) {
-		IO_CMD_MSG msg_101(0);
-		q->putMessage(&msg_101);
-	}
-	
-  for (int i=0; i < 10; ++i) {
-		IO_CMD_MSG msg_102(1);
-		q->putMessage(&msg_102);
+  // add two messages for each job into the queue, because the carry_weight logic
+	// for weighted cyclic only works if there's always at least one message in the queue
+	for (int i=0; i < job_list_size; ++i) {
+		msg.idx_JobRec = i;
+		q->putMessage(&msg);
+		q->putMessage(&msg);
 	}
 
-	// pull all messages from the queue
-	IO_CMD_MSG msg;
-	while (q->getMessage(&msg)) {
+	// pull some messages from the queue, replacing the message each
+	// time so there is always one message from each job.
+	for (int i=0; i < 35; ++i) {
+		if (!q->getMessage(&msg)) {
+			printf("Error: queue should not be empty\n");
+			break;
+		}
 		int job_id = job_info_lookup.getSlurmJobId(&msg);
 		int user_id = job_info_lookup.getUserId(&msg);
 		printf("msg for job %d (%d)\n", job_id, msg.idx_JobRec);
 		counterInc(job_id_counter, job_id);
 		counterInc(user_id_counter, user_id);
+		q->putMessage(&msg);
 	}
 
 	printf("By job id:\n");

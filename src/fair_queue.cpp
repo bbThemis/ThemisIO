@@ -88,7 +88,7 @@ void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 	int key = getKey(msg);
 	MessageQueue *q;
 	bool was_empty;
-	static bool first_output = true;
+	// static bool first_output = true;
 
 	// printf("putMessage %p jobid=%d userid=%d\n", msg, job_info_lookup.getSlurmJobId(msg), job_info_lookup.getUserId(msg));
 
@@ -119,6 +119,7 @@ void FairQueue::putMessage(const IO_CMD_MSG *msg) {
 	if (was_empty)
 		addNonemptyQueue(key, q);
 }
+
 
 // unused remnants of time-sharing version
 #if 0
@@ -349,11 +350,8 @@ void FairQueue::reload(void) {
 	}
 
 }
-#endif  // #if 0
 
 
-// unused remnants of time-sharing version
-#if 0
 bool FairQueue::getMessage_FromActiveJob(IO_CMD_MSG *msg) {
 	long int t_Now;
 
@@ -613,7 +611,7 @@ void FairQueue::DecisionLog::log(const std::map<int,MessageQueue*> &nonempty_que
 void FairQueue::DecisionLog::logInternal(int choice_id) {
 
   int n = temp_storage[0];
-  assert(temp_storage.size() == n+1);
+  assert(temp_storage.size() == (size_t)(n+1));
   int *temp = temp_storage.data();
 
 	// order the ids so alternate orderings are merged
@@ -751,29 +749,36 @@ int FairQueueRandom::chooseRandomNonemptyQueue() {
 	long unsigned now = getTime();
 	int n = nonempty_queues.size();
 
-	double priority_sum = 0;
-	nonempty_priorities.resize(n);
-	for (int i=0; i < n; i++) {
-		nonempty_priorities[i] = nonempty_queues[i]->getPriority(now);
-		assert(nonempty_priorities[i] > 0);
-		priority_sum += nonempty_priorities[i];
-	}
+	int choice_idx;
+	
+	if (n == 1) {
+		choice_idx = 0;
+	} else {
+	
+		double priority_sum = 0;
+		nonempty_priorities.resize(n);
+		for (int i=0; i < n; i++) {
+			nonempty_priorities[i] = nonempty_queues[i]->getPriority(now);
+			assert(nonempty_priorities[i] > 0);
+			priority_sum += nonempty_priorities[i];
+		}
 
-	std::uniform_real_distribution<double> distrib(0, priority_sum);
-	double r = distrib(random_engine), r_orig = r;
+		std::uniform_real_distribution<double> distrib(0, priority_sum);
+		double r = distrib(random_engine);
 
-	// if nothing is selected (possibly due to roundoff errors), select the last one
-	int choice_idx = n-1;
+		// if nothing is selected (possibly due to roundoff errors), select the last one
+		choice_idx = n-1;
 
-	for (int i=0; i < n-1; i++) {
-		if (nonempty_priorities[i] > r) {
-			choice_idx = i;
-			break;
-		} else {
-			r -= nonempty_priorities[i];
+		for (int i=0; i < n-1; i++) {
+			if (nonempty_priorities[i] > r) {
+				choice_idx = i;
+				break;
+			} else {
+				r -= nonempty_priorities[i];
+			}
 		}
 	}
-
+	
 	decision_log.log(nonempty_queues, nonempty_queues[choice_idx]->id);
 
 	return choice_idx;
@@ -781,10 +786,6 @@ int FairQueueRandom::chooseRandomNonemptyQueue() {
 
 
 bool FairQueueCycle::getMessage(IO_CMD_MSG *msg) {
-	if (nonempty_queues.empty()) return false;
-	
-	if (next_queue == nonempty_queues.end())
-		next_queue = nonempty_queues.begin();
 
 	/*
 		Weight and carry_weight are used to implement size-fair processing.
@@ -807,6 +808,34 @@ bool FairQueueCycle::getMessage(IO_CMD_MSG *msg) {
           ...
 
 	*/
+
+	// shortcut if there are no messages
+	if (nonempty_queues.empty()) return false;
+
+	// start up again at the same queue we pulled from last time,
+	// in case it has a carry_weight >= 1.
+	// QueueMap::iterator next_queue = nonempty_queues.lower_bound(next_queue_id);
+	
+	if (next_queue == nonempty_queues.end())
+		next_queue = nonempty_queues.begin();
+
+	/*
+	// find a queue with carry_weight >= 1
+	while (true) {
+		MessageQueue *q = next_queue->second;
+		if (q->carry_weight >= 1) {
+			break;
+		} else {
+			// reset this queue's carry_weight and move to the next one
+			q->carry_weight += q->weight;
+			next_queue++;
+			if (next_queue == nonempty_queues.end())
+				next_queue = nonempty_queues.begin();
+		}
+	}
+	*/
+	
+	assert(next_queue != nonempty_queues.end() && next_queue->second->carry_weight >= 1);
 
 	MessageQueue *q = next_queue->second;
 	q->remove(msg);

@@ -11,8 +11,11 @@
 #include <random>
 #include <sstream>
 #include <iomanip>
+
+#ifndef FAIR_QUEUE_STANDALONE
 #include "qp.h"
 #include "io_queue.h"
+#endif
 
 // the length of one time slice. The time spent on each job is time*weight. 
 // Currently unused.
@@ -60,7 +63,7 @@ private:
 
 	 Fairness options:
 	   mode: fifo, job-fair, or user-fair
-		   In fifo mode, all messages are put in the same queue and processes in the order
+		   In fifo mode, all messages are put in the same queue and processed in the order
 			   in which they were received.
 		   job-fair: maintain one message queue per job id. When selecting a
 			   message, choose one of the per-job queues and process the first message.
@@ -73,7 +76,7 @@ private:
 			   Nonempty queues are maintained in a vector. When one is added it is appended.
 				 When one is remove it is swapped with the last.
 			 cycle: round-robin order with repeats
-			   Nonempty queues are maintained in a map or unordered_map so that removing
+			   Nonempty queues are maintained in a map so that removing
 				 one does not change the order of others.
 			   How to do weighting: maintain rolling_weight, starting at 0.
 				 On each cycle, rollover_weight += weight. Process up to floor(rollover_weight) messages,
@@ -97,6 +100,8 @@ private:
 			 In job-fair mode this is the number of nodes in the job. In user-fair mode this is
 			 the sum of the number of nodes in all jobs this user has running.
 
+			 BUG: user-fair node weighting isn't working right now
+
 */
 class FairQueue {
  public:
@@ -105,11 +110,11 @@ class FairQueue {
 		 job_info_lookup: a wrapper used to access the active job list
 		 max_idle_sec: deallocate queues that have been empty for at least this many seconds.
 	*/
-	FairQueue(FairnessMode peer,
+	FairQueue(FairnessMode mode,
 						bool weight_by_node_count,
 						int mpi_rank, int thread_id,
 						JobInfoLookup &job_info_lookup, int max_idle_sec = 10);
-	~FairQueue();
+	virtual ~FairQueue();
 	
 	// bool isEmpty();
 
@@ -306,7 +311,7 @@ class FairQueue {
 
 		// order decision sets by size and then ids
 		struct DecisionSetLessThan {
-			bool operator()(const int *a, const int *b) {
+			bool operator()(const int *a, const int *b) const {
 				int n = a[0];
 				if (n != b[0])
 					return n < b[0];
@@ -332,12 +337,14 @@ class FairQueue {
 	// Given a message, return the key used to index into indexed_queues.
 	// In other words, if there is one queue per job this will return the job id,
 	// and if there is one queue per user it will return the user id.
-	// In SIZE_FAIR mode, there is one queue per job, so this will return the job id.
+	// In FIFO mode everything ends up in one queue, so this returns 0.
 	int getKey(const IO_CMD_MSG *msg) {
-		if (fairness_mode == USER_FAIR) {
-			return job_info_lookup.getUserId(msg);
-		} else {
-			return job_info_lookup.getSlurmJobId(msg);
+		switch (fairness_mode) {
+		case USER_FAIR: return job_info_lookup.getUserId(msg);
+		case JOB_FAIR: return job_info_lookup.getSlurmJobId(msg);
+		default:
+			assert(fairness_mode == FIFO);
+			return 0;
 		}
 	}
 
@@ -384,12 +391,12 @@ class FairQueue {
 /* Choose message queue probabilistically. Nonempty queues are stored in a vector. */
 class FairQueueRandom : public FairQueue {
  public:
-	FairQueueRandom(FairnessMode peer,
+	FairQueueRandom(FairnessMode mode,
 									bool weight_by_node_count,
 									int mpi_rank, int thread_id,
 									JobInfoLookup &job_info_lookup,
 									int max_idle_sec = 10)
-		: FairQueue(peer, weight_by_node_count, mpi_rank, thread_id, job_info_lookup, max_idle_sec)
+		: FairQueue(mode, weight_by_node_count, mpi_rank, thread_id, job_info_lookup, max_idle_sec)
 		{}
 	
 
@@ -420,12 +427,12 @@ class FairQueueRandom : public FairQueue {
 . */
 class FairQueueCycle : public FairQueue {
  public:
-	FairQueueCycle(FairnessMode peer,
+	FairQueueCycle(FairnessMode mode,
 								 bool weight_by_node_count,
 								 int mpi_rank, int thread_id,
 								 JobInfoLookup &job_info_lookup,
 								 int max_idle_sec = 10)
-		: FairQueue(peer, weight_by_node_count, mpi_rank, thread_id, job_info_lookup, max_idle_sec),
+		: FairQueue(mode, weight_by_node_count, mpi_rank, thread_id, job_info_lookup, max_idle_sec),
 		next_queue(nonempty_queues.end())
 		{}
 
@@ -444,6 +451,7 @@ class FairQueueCycle : public FairQueue {
 	// Queue from which we should next select.
 	// May be nonempty_queues::end() if there's nothing to select.
 	QueueMap::iterator next_queue;
+	// int next_queue_id;
 };
 
 
