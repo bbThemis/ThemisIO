@@ -31,6 +31,7 @@
 #include "corebinding.h"
 #include "unique_thread.h"
 #include "io_queue.h"
+#include "rpc_engine.h"
 
 #define T_FREQ_REPORT_RESULT (1)
 #define PORT 8888
@@ -379,6 +380,9 @@ static void sigint_handler(int sig, siginfo_t *siginfo, void *uc)
 
 
 
+
+MERCURY_DATA mercury_Data;
+
 int main(int argc, char **argv)
 {
 	int i;
@@ -387,7 +391,6 @@ int main(int argc, char **argv)
 //	unsigned char *pNewMsg_ToSend=NULL;
 //	IO_CMD_MSG *pIO_Cmd_toSend;
 //	struct ibv_mr *mr_local;
-	
 
 	struct sigaction act, old_action;
 	
@@ -428,6 +431,35 @@ int main(int argc, char **argv)
 		MPI_Finalize();
 		return 1;
 	}
+
+	// Mercury Init
+	const char* local_addr_string = "ofi+verbs://";
+    hg_engine_init(&mercury_Data, HG_TRUE, local_addr_string);
+	char buf[ADDR_BUF_SIZE] = {'\0'};
+    hg_size_t buf_size = ADDR_BUF_SIZE;
+    hg_engine_print_self_addr(&mercury_Data, buf, buf_size);
+    char addr_string[ADDR_TOTAL_SIZE] = {'\0'};
+	sprintf(addr_string,"%d#", mpi_rank);
+    strcat(addr_string, buf);
+	if(mpi_rank == 0) {
+        clear_config();
+    }
+	// Gather addresses used for mercury rpc
+	MPI_Barrier(MPI_COMM_WORLD);
+	{
+        char* addr_strings = (mpi_rank == 0? (char*)malloc(sizeof(char) * nFSServer * ADDR_TOTAL_SIZE): NULL);
+        MPI_Gather(addr_string, ADDR_TOTAL_SIZE, MPI_CHAR, addr_strings, ADDR_TOTAL_SIZE, MPI_CHAR, 0, MPI_COMM_WORLD);
+        
+        if(mpi_rank == 0) {
+            for(int i = 0; i < nFSServer; i++) {
+                set_config(addr_strings + i * ADDR_TOTAL_SIZE, true);
+            }
+        }
+        free(addr_strings);
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+
+
 
 	// Store the fairness_mode in Server_qp.  It will be used in Func_thread_IO_Worker_FairQueue.
 	Server_qp.fairness_mode = server_options.getFairnessMode();
