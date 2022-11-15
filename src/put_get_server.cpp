@@ -24,6 +24,8 @@
 
 #include <mpi.h> 
 
+#include <mercury.h>
+
 #include "qp.h"
 #include "myfs.h"
 #include "corebinding.h"
@@ -375,6 +377,8 @@ static void sigint_handler(int sig, siginfo_t *siginfo, void *uc)
 }
 
 
+
+
 int main(int argc, char **argv)
 {
 	int i;
@@ -383,7 +387,7 @@ int main(int argc, char **argv)
 //	unsigned char *pNewMsg_ToSend=NULL;
 //	IO_CMD_MSG *pIO_Cmd_toSend;
 //	struct ibv_mr *mr_local;
-
+	
 
 	struct sigaction act, old_action;
 	
