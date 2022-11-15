@@ -434,30 +434,24 @@ int main(int argc, char **argv)
 
 	// Mercury Init
 	const char* local_addr_string = "ofi+verbs://";
+	mercury_Data.context_cnt = 2048;
     hg_engine_init(&mercury_Data, HG_TRUE, local_addr_string);
-	char buf[ADDR_BUF_SIZE] = {'\0'};
-    hg_size_t buf_size = ADDR_BUF_SIZE;
-    hg_engine_print_self_addr(&mercury_Data, buf, buf_size);
-    char addr_string[ADDR_TOTAL_SIZE] = {'\0'};
-	sprintf(addr_string,"%d#", mpi_rank);
-    strcat(addr_string, buf);
-	if(mpi_rank == 0) {
-        clear_config();
-    }
+	char addr_string[ADDR_BUF_SIZE] = {'\0'};
+    hg_size_t addr_string_size = ADDR_BUF_SIZE;
+    hg_engine_print_self_addr(&mercury_Data, addr_string, addr_string_size);
 	// Gather addresses used for mercury rpc
 	MPI_Barrier(MPI_COMM_WORLD);
-	{
-        char* addr_strings = (mpi_rank == 0? (char*)malloc(sizeof(char) * nFSServer * ADDR_TOTAL_SIZE): NULL);
-        MPI_Gather(addr_string, ADDR_TOTAL_SIZE, MPI_CHAR, addr_strings, ADDR_TOTAL_SIZE, MPI_CHAR, 0, MPI_COMM_WORLD);
-        
-        if(mpi_rank == 0) {
-            for(int i = 0; i < nFSServer; i++) {
-                set_config(addr_strings + i * ADDR_TOTAL_SIZE, true);
-            }
-        }
-        free(addr_strings);
-    }
+	char* addr_strings = (char*)malloc(sizeof(char) * nFSServer * ADDR_BUF_SIZE);
+	MPI_Allgather(addr_string, ADDR_BUF_SIZE, MPI_CHAR, addr_strings, ADDR_BUF_SIZE, MPI_CHAR, MPI_COMM_WORLD);
+	if(mpi_rank == 0) {
+		for(int i = 0; i < nFSServer; i++) {
+			fprintf(stdout, "%s\n", addr_strings[i]);
+		}
+	}
     MPI_Barrier(MPI_COMM_WORLD);
+	// Create buffers for rdma/bulk access by server
+	hg_init_memory();
+	// Register rpc functions
 
 
 
@@ -550,7 +544,8 @@ int main(int argc, char **argv)
 	Wait_For_IO_Request_Result(pIO_Cmd_toSend->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_toSend->rem_buff));
 	printf("DBG> Rank = %d result = %d\n", mpi_rank, pResult->ret_value);
 */
-	
+	hg_engine_finalize(&mercury_Data);
+    MPI_Barrier(MPI_COMM_WORLD);
 	if(pthread_join(thread_polling_newmsg, NULL)) {
 		fprintf(stderr, "Error joining thread.\n");
 		return 2;
