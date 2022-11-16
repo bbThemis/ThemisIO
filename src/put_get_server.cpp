@@ -434,7 +434,7 @@ int main(int argc, char **argv)
 
 	// Mercury Init
 	const char* local_addr_string = "ofi+verbs://";
-	mercury_Data.context_cnt = 2048;
+	mercury_Data.context_cnt = NUM_THREAD_IO_WORKER;
     hg_engine_init(&mercury_Data, HG_TRUE, local_addr_string);
 	char addr_string[ADDR_BUF_SIZE] = {'\0'};
     hg_size_t addr_string_size = ADDR_BUF_SIZE;
@@ -445,7 +445,7 @@ int main(int argc, char **argv)
 	MPI_Allgather(addr_string, ADDR_BUF_SIZE, MPI_CHAR, addr_strings, ADDR_BUF_SIZE, MPI_CHAR, MPI_COMM_WORLD);
 	if(mpi_rank == 0) {
 		for(int i = 0; i < nFSServer; i++) {
-			fprintf(stdout, "%s\n", addr_strings[i]);
+			fprintf(stdout, "rank %d address: %s\n", i, addr_strings + ADDR_BUF_SIZE * i);
 		}
 	}
     MPI_Barrier(MPI_COMM_WORLD);

@@ -40,13 +40,12 @@ hg_engine_init(MERCURY_DATA* pMercury_Data, hg_bool_t listen, const char *local_
         pMercury_Data->hg_contexts[i] = HG_Context_create_id(pMercury_Data->hg_class, i);
         assert(pMercury_Data->hg_contexts[i]);
     }
-    
     for(int i = 0; i < context_cnt; i++) {
-        hg_progress_param param;
-        param.pMercury_Data = pMercury_Data;
-        param.context_id = i;
+        hg_progress_param* param = (hg_progress_param*)malloc(sizeof(hg_progress_param));
+        param->pMercury_Data = pMercury_Data;
+        param->context_id = i;
         /* start up thread to drive progress */
-        ret = pthread_create(&pMercury_Data->hg_progress_tids[i], NULL, hg_progress_fn, &param);
+        ret = pthread_create(&pMercury_Data->hg_progress_tids[i], NULL, hg_progress_fn, (void *) param);
         assert(ret == 0);
     }
     
@@ -86,7 +85,7 @@ hg_progress_fn(void *arg)
     hg_progress_param* param = (hg_progress_param*)arg;
     MERCURY_DATA* pMercury_Data = param->pMercury_Data;
     int context_id = param->context_id;
-    fprintf(stdout, "%d: hg_progress_fn\n", context_id);
+    free(param);
     while (!hg_progress_shutdown_flag) {
         do {
             ret = HG_Trigger(pMercury_Data->hg_contexts[context_id], 0, 1, &actual_count);
@@ -96,7 +95,7 @@ hg_progress_fn(void *arg)
         if (!hg_progress_shutdown_flag)
             HG_Progress(pMercury_Data->hg_contexts[context_id], 100);
     }
-
+    
     return (NULL);
 }
 
