@@ -381,7 +381,7 @@ static void sigint_handler(int sig, siginfo_t *siginfo, void *uc)
 
 
 
-MERCURY_DATA mercury_Data;
+RPC_ENGINE rpc_engine(HG_TRUE, "ofi+verbs://", NUM_THREAD_IO_WORKER, 2048);
 
 int main(int argc, char **argv)
 {
@@ -433,12 +433,11 @@ int main(int argc, char **argv)
 	}
 
 	// Mercury Init
-	const char* local_addr_string = "ofi+verbs://";
-	mercury_Data.context_cnt = NUM_THREAD_IO_WORKER;
-    hg_engine_init(&mercury_Data, HG_TRUE, local_addr_string);
+	
+    rpc_engine.hg_engine_init();
 	char addr_string[ADDR_BUF_SIZE] = {'\0'};
     hg_size_t addr_string_size = ADDR_BUF_SIZE;
-    hg_engine_print_self_addr(&mercury_Data, addr_string, addr_string_size);
+    rpc_engine.hg_engine_print_self_addr(addr_string, addr_string_size);
 	// Gather addresses used for mercury rpc
 	MPI_Barrier(MPI_COMM_WORLD);
 	char* addr_strings = (char*)malloc(sizeof(char) * nFSServer * ADDR_BUF_SIZE);
@@ -450,7 +449,7 @@ int main(int argc, char **argv)
 	}
     MPI_Barrier(MPI_COMM_WORLD);
 	// Create buffers for rdma/bulk access by server
-	hg_init_memory();
+	rpc_engine.hg_init_memory();
 	// Register rpc functions
 
 
@@ -544,7 +543,6 @@ int main(int argc, char **argv)
 	Wait_For_IO_Request_Result(pIO_Cmd_toSend->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_toSend->rem_buff));
 	printf("DBG> Rank = %d result = %d\n", mpi_rank, pResult->ret_value);
 */
-	hg_engine_finalize(&mercury_Data);
     MPI_Barrier(MPI_COMM_WORLD);
 	if(pthread_join(thread_polling_newmsg, NULL)) {
 		fprintf(stderr, "Error joining thread.\n");

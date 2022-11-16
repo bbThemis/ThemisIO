@@ -8,33 +8,42 @@
 #ifndef RPC_ENGINE_H
 #define RPC_ENGINE_H
 
-typedef	struct	{
-	hg_context_t **hg_contexts;
+
+#define ADDR_BUF_SIZE 64
+#define LOCAL_ADDR_SIZE 32
+// #define ADDR_TOTAL_SIZE 96
+// #define MERCURY_CONFIG_FILE_NAME "myport.cfg"
+class RPC_ENGINE {
+public:
+    hg_context_t **hg_contexts;
     hg_class_t *hg_class;
     pthread_t* hg_progress_tids;
     int context_cnt;
-}MERCURY_DATA;
+    int max_num_qp;
+    char local_addr[LOCAL_ADDR_SIZE];
+    hg_bool_t listen;
+    RPC_ENGINE(hg_bool_t listen, const char *local_addr, int context_cnt, int max_num_qp);
+	~RPC_ENGINE(void);
+    void
+    hg_engine_init();
+    void
+    hg_engine_finalize();
+    void
+    hg_engine_print_self_addr(char buf[], hg_size_t buf_size);
+    void
+    hg_engine_addr_lookup(const char *name, hg_addr_t *addr);
+    void
+    hg_engine_addr_free(hg_addr_t addr);
+    void
+    hg_register_rpc();
+    void
+    hg_engine_create_handle(int context_id, hg_addr_t addr, hg_id_t id, hg_handle_t *handle);
+    void 
+    hg_init_memory();
+    void 
+    hg_free_memory();
+};
 
-#define ADDR_BUF_SIZE 64
-// #define ADDR_TOTAL_SIZE 96
-// #define MERCURY_CONFIG_FILE_NAME "myport.cfg"
-
-void
-hg_engine_init(MERCURY_DATA* pMercury_Data, hg_bool_t listen, const char *local_addr);
-void
-hg_engine_finalize(MERCURY_DATA* pMercury_Data);
-void
-hg_engine_print_self_addr(MERCURY_DATA* pMercury_Data, char buf[], hg_size_t buf_size);
-void
-hg_engine_addr_lookup(MERCURY_DATA* pMercury_Data, const char *name, hg_addr_t *addr);
-void
-hg_engine_addr_free(MERCURY_DATA* pMercury_Data, hg_addr_t addr);
-void
-hg_engine_create_handle(MERCURY_DATA* pMercury_Data, int context_id, hg_addr_t addr, hg_id_t id, hg_handle_t *handle);
-void 
-hg_init_memory();
-void 
-hg_free_memory();
 // void clear_config();
 // hg_return_t
 // set_config(const char *addr_name, bool append);

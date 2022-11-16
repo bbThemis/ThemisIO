@@ -18,34 +18,39 @@
 
 
 bool hg_progress_shutdown_flag = false;
-typedef	struct	{
-	MERCURY_DATA* pMercury_Data;
-    int context_id;
-}hg_progress_param;
-static void * hg_progress_fn(void *foo);
+void * hg_progress_fn(void *arg);
+
+RPC_ENGINE::RPC_ENGINE(hg_bool_t listen, const char *local_addr, int context_cnt, int max_num_qp) {
+    this->max_num_qp = max_num_qp;
+    this->context_cnt = context_cnt;
+    this->listen = listen;
+    strcpy(this->local_addr, local_addr);
+
+}
+
+RPC_ENGINE::~RPC_ENGINE() {
+    hg_engine_finalize();
+}
+
 void
-hg_engine_init(MERCURY_DATA* pMercury_Data, hg_bool_t listen, const char *local_addr)
+RPC_ENGINE::hg_engine_init()
 {
     int ret;
 
     HG_Set_log_level("warning");
     /* boilerplate HG initialization steps */
-    pMercury_Data->hg_class = HG_Init(local_addr, listen);
-    int context_cnt = pMercury_Data->context_cnt;
-    assert(pMercury_Data->hg_class);
+    hg_class = HG_Init(local_addr, listen);
+    assert(hg_class);
     
-    pMercury_Data->hg_contexts = (hg_context_t **)malloc(context_cnt * sizeof(hg_context_t *));
-    pMercury_Data->hg_progress_tids = (pthread_t *)malloc(context_cnt * sizeof(pthread_t));
+    hg_contexts = (hg_context_t **)malloc(context_cnt * sizeof(hg_context_t *));
+    hg_progress_tids = (pthread_t *)malloc(context_cnt * sizeof(pthread_t));
     for(int i = 0; i < context_cnt; i++) {
-        pMercury_Data->hg_contexts[i] = HG_Context_create_id(pMercury_Data->hg_class, i);
-        assert(pMercury_Data->hg_contexts[i]);
+        hg_contexts[i] = HG_Context_create_id(hg_class, i);
+        assert(hg_contexts[i]);
     }
     for(int i = 0; i < context_cnt; i++) {
-        hg_progress_param* param = (hg_progress_param*)malloc(sizeof(hg_progress_param));
-        param->pMercury_Data = pMercury_Data;
-        param->context_id = i;
         /* start up thread to drive progress */
-        ret = pthread_create(&pMercury_Data->hg_progress_tids[i], NULL, hg_progress_fn, (void *) param);
+        ret = pthread_create(&hg_progress_tids[i], NULL, hg_progress_fn, (void *)&hg_contexts[i]);
         assert(ret == 0);
     }
     
@@ -56,7 +61,7 @@ hg_engine_init(MERCURY_DATA* pMercury_Data, hg_bool_t listen, const char *local_
 
 
 void
-hg_engine_finalize(MERCURY_DATA* pMercury_Data)
+RPC_ENGINE::hg_engine_finalize()
 {
     int ret;
 
@@ -64,36 +69,32 @@ hg_engine_finalize(MERCURY_DATA* pMercury_Data)
     hg_progress_shutdown_flag = true;
 
     /* wait for it to shutdown cleanly */
-    for(int i = 0; i < pMercury_Data->context_cnt; i++) {
-        ret = pthread_join(pMercury_Data->hg_progress_tids[i], NULL);
+    for(int i = 0; i < context_cnt; i++) {
+        ret = pthread_join(hg_progress_tids[i], NULL);
         assert(ret == 0);
     }
     
     (void) ret;
     hg_free_memory();
-    free(pMercury_Data->hg_contexts);
-    free(pMercury_Data->hg_progress_tids);
+    free(hg_contexts);
+    free(hg_progress_tids);
     return;
 }
 
 /* dedicated thread function to drive Mercury progress */
-static void *
-hg_progress_fn(void *arg)
+void * hg_progress_fn(void *arg)
 {
     hg_return_t ret;
     unsigned int actual_count;
-    hg_progress_param* param = (hg_progress_param*)arg;
-    MERCURY_DATA* pMercury_Data = param->pMercury_Data;
-    int context_id = param->context_id;
-    free(param);
+    hg_context_t **hg_contexts = (hg_context_t **)arg;
     while (!hg_progress_shutdown_flag) {
         do {
-            ret = HG_Trigger(pMercury_Data->hg_contexts[context_id], 0, 1, &actual_count);
+            ret = HG_Trigger(*hg_contexts, 0, 1, &actual_count);
         } while (
             (ret == HG_SUCCESS) && actual_count && !hg_progress_shutdown_flag);
 
         if (!hg_progress_shutdown_flag)
-            HG_Progress(pMercury_Data->hg_contexts[context_id], 100);
+            HG_Progress(*hg_contexts, 100);
     }
     
     return (NULL);
@@ -101,23 +102,23 @@ hg_progress_fn(void *arg)
 
 
 void
-hg_engine_print_self_addr(MERCURY_DATA* pMercury_Data, char buf[], hg_size_t buf_size)
+RPC_ENGINE::hg_engine_print_self_addr(char buf[], hg_size_t buf_size)
 {
     hg_return_t ret;
     hg_addr_t addr;
     
 
-    ret = HG_Addr_self(pMercury_Data->hg_class, &addr);
+    ret = HG_Addr_self(hg_class, &addr);
     assert(ret == HG_SUCCESS);
     (void) ret;
 
-    ret = HG_Addr_to_string(pMercury_Data->hg_class, buf, &buf_size, addr);
+    ret = HG_Addr_to_string(hg_class, buf, &buf_size, addr);
     assert(ret == HG_SUCCESS);
     (void) ret;
 
     // printf("svr address string: \"%s\"\n", buf);
 
-    ret = HG_Addr_free(pMercury_Data->hg_class, addr);
+    ret = HG_Addr_free(hg_class, addr);
     assert(ret == HG_SUCCESS);
     (void) ret;
 
@@ -125,10 +126,10 @@ hg_engine_print_self_addr(MERCURY_DATA* pMercury_Data, char buf[], hg_size_t buf
 }
 
 void
-hg_engine_addr_lookup(MERCURY_DATA* pMercury_Data, const char *name, hg_addr_t *addr)
+RPC_ENGINE::hg_engine_addr_lookup(const char *name, hg_addr_t *addr)
 {
     hg_return_t ret;
-    ret = HG_Addr_lookup2(pMercury_Data->hg_class, name, addr);
+    ret = HG_Addr_lookup2(hg_class, name, addr);
     assert(ret == HG_SUCCESS);
     (void) ret;
 
@@ -136,11 +137,11 @@ hg_engine_addr_lookup(MERCURY_DATA* pMercury_Data, const char *name, hg_addr_t *
 }
 
 void
-hg_engine_addr_free(MERCURY_DATA* pMercury_Data, hg_addr_t addr)
+RPC_ENGINE::hg_engine_addr_free(hg_addr_t addr)
 {
     hg_return_t ret;
 
-    ret = HG_Addr_free(pMercury_Data->hg_class, addr);
+    ret = HG_Addr_free(hg_class, addr);
     assert(ret == HG_SUCCESS);
     (void) ret;
 
@@ -148,30 +149,30 @@ hg_engine_addr_free(MERCURY_DATA* pMercury_Data, hg_addr_t addr)
 }
 
 void
-hg_engine_create_handle(MERCURY_DATA* pMercury_Data, int context_id, hg_addr_t addr, hg_id_t id, hg_handle_t *handle)
+RPC_ENGINE::hg_engine_create_handle(int context_id, hg_addr_t addr, hg_id_t id, hg_handle_t *handle)
 {
     hg_return_t ret;
 
-    ret = HG_Create(pMercury_Data->hg_contexts[context_id], addr, id, handle);
+    ret = HG_Create(hg_contexts[context_id], addr, id, handle);
     assert(ret == HG_SUCCESS);
     (void) ret;
 
     return;
 }
 
-static void
-hg_test_register(MERCURY_DATA* pMercury_Data)
+void
+RPC_ENGINE::hg_register_rpc()
 {
     // hg_test_rpc_null_id_g = MERCURY_REGISTER(
     //     pMercury_Data->hg_class, "hg_test_rpc_null", void, void, hg_test_rpc_null_cb);
     
 }
 
-void hg_init_memory() {
-
+void RPC_ENGINE::hg_init_memory() {
+    
 }
 
-void hg_free_memory() {
+void RPC_ENGINE::hg_free_memory() {
 
 }
 
