@@ -11,8 +11,9 @@
 
 #define ADDR_BUF_SIZE 64
 #define LOCAL_ADDR_SIZE 32
-// #define ADDR_TOTAL_SIZE 96
-// #define MERCURY_CONFIG_FILE_NAME "myport.cfg"
+
+extern CIO_QUEUE IO_Queue_List[MAX_NUM_QUEUE];
+
 class RPC_ENGINE {
 public:
     hg_context_t **hg_contexts;
@@ -44,9 +45,6 @@ public:
     hg_free_memory();
 };
 
-// void clear_config();
-// hg_return_t
-// set_config(const char *addr_name, bool append);
 
 
 extern bool hg_progress_shutdown_flag;
