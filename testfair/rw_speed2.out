@@ -1,0 +1,7 @@
+TACC:  Starting up job 5103020 
+TACC:  Setting up parallel environment for MVAPICH2+mpispawn. 
+TACC:  Starting parallel tasks... 
+[c205-005.frontera.tacc.utexas.edu:mpirun_rsh][signal_processor] Caught signal 2, killing job
+TACC:  MPI job exited with code: 1 
+TACC:  Shutdown complete. Exiting. 
+[c205-007.frontera.tacc.utexas.edu:mpispawn_0][report_error] connect() failed: Connection refused (111)

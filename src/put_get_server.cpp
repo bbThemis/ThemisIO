@@ -435,18 +435,28 @@ int main(int argc, char **argv)
 	// Mercury Init
 	
     rpc_engine.hg_engine_init();
-	char addr_string[ADDR_BUF_SIZE] = {'\0'};
-    hg_size_t addr_string_size = ADDR_BUF_SIZE;
+	char addr_string[MAX_MERCURY_ADDR_LEN] = {'\0'};
+    hg_size_t addr_string_size = MAX_MERCURY_ADDR_LEN;
     rpc_engine.hg_engine_print_self_addr(addr_string, addr_string_size);
 	// Gather addresses used for mercury rpc
 	MPI_Barrier(MPI_COMM_WORLD);
-	char* addr_strings = (char*)malloc(sizeof(char) * nFSServer * ADDR_BUF_SIZE);
-	MPI_Allgather(addr_string, ADDR_BUF_SIZE, MPI_CHAR, addr_strings, ADDR_BUF_SIZE, MPI_CHAR, MPI_COMM_WORLD);
+	char* addr_strings = (char*)malloc(sizeof(char) * nFSServer * MAX_MERCURY_ADDR_LEN);
+	MPI_Allgather(addr_string, MAX_MERCURY_ADDR_LEN, MPI_CHAR, addr_strings, MAX_MERCURY_ADDR_LEN, MPI_CHAR, MPI_COMM_WORLD);
 	if(mpi_rank == 0) {
-		for(int i = 0; i < nFSServer; i++) {
-			fprintf(stdout, "rank %d address: %s\n", i, addr_strings + ADDR_BUF_SIZE * i);
+		FILE *config = NULL;
+		config = fopen(MERCURY_FS_PARAM_FILE, "w");
+		if(config == NULL) {
+			printf("ERROR> Fail to open file: %s\nQuit.\n", MERCURY_FS_PARAM_FILE);
+			exit(1);
 		}
+		fprintf(config, "%d %d\n", nFSServer, nNUMAPerNode);
+		for(int i = 0; i < nFSServer; i++) {
+			fprintf(stdout, "rank %d address: %s\n", i, addr_strings + MAX_MERCURY_ADDR_LEN * i);
+			fprintf(config, "%s\n", addr_strings + MAX_MERCURY_ADDR_LEN * i);
+		}
+		fclose(config);
 	}
+	rpc_engine.hg_register_rpc();
     MPI_Barrier(MPI_COMM_WORLD);
 	// Create buffers for rdma/bulk access by server
 	rpc_engine.hg_init_memory();

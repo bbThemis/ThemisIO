@@ -44,6 +44,9 @@ All rights are reserved.
 #include "io_ops_common.h"
 #include "xxhash.h"
 
+#include "rpc_engine.h"
+#include "rpc.h"
+
 #define min(a,b)        ( ((a)<(b)) ? (a) : (b) )
 #define max(a,b)        ( ((a)>(b)) ? (a) : (b) )
 
@@ -498,8 +501,83 @@ inline int Get_Fd_Redirected(int fd)
 	return fd;
 }
 
+
+__thread int done = 0;
+__thread pthread_cond_t done_cond = PTHREAD_COND_INITIALIZER;
+__thread pthread_mutex_t done_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+void test_connect(hg_handle_t handle, void* buffer) {
+    fprintf(stdout, "client calls test_connect\n");
+    int ret;
+    const struct hg_info *hgi;
+    struct rpc_test_connect_state *rpc_test_connect_state_p;
+    /* set up state structure */
+    rpc_test_connect_state_p = (rpc_test_connect_state *)malloc(sizeof(struct rpc_test_connect_state));
+    rpc_test_connect_state_p->handle = handle;
+    rpc_test_connect_state_p->buffer = buffer;
+    rpc_test_connect_state_p->in.size = strlen((char*)buffer);
+    assert(rpc_test_connect_state_p->buffer);
+    // TEST USE
+    sprintf((char *) rpc_test_connect_state_p->buffer, "Hello world!\n");
+    fflush(stdout);
+    /* register buffer for rdma/bulk access by server */
+    hgi = HG_Get_info(rpc_test_connect_state_p->handle);
+    assert(hgi);
+    ret = HG_Bulk_create(hgi->hg_class, 1, &rpc_test_connect_state_p->buffer,
+        &rpc_test_connect_state_p->in.size, HG_BULK_READ_ONLY, &rpc_test_connect_state_p->in.bulk_handle);
+    rpc_test_connect_state_p->bulk_handle = rpc_test_connect_state_p->in.bulk_handle;
+    assert(ret == 0);
+
+    /* Send rpc. Note that we are also transmitting the bulk handle in the
+     * input struct.  It was set above.
+     */
+    ret = HG_Forward(rpc_test_connect_state_p->handle, test_connect_cb, rpc_test_connect_state_p, &rpc_test_connect_state_p->in);
+    assert(ret == 0);
+    (void) ret;
+
+    return;
+}
+
+
+
+hg_return_t test_connect_cb(const struct hg_cb_info *info) {
+    fprintf(stdout, "client calls test_connect_cb\n");
+	fflush(stdout);
+    hg_test_connect_out_t out;
+    hg_return_t ret;
+    struct rpc_test_connect_state *rpc_test_connect_state_p = (rpc_test_connect_state *)info->arg;
+
+    assert(info->ret == HG_SUCCESS);
+
+    /* decode response */
+    ret = HG_Get_output(info->info.forward.handle, &out);
+    assert(ret == HG_SUCCESS);
+    (void) ret;
+    // fprintf(stdout, "out.ret=%d, in.size=%d\n", out.ret, rpc_write_state_p->in.size);
+    // assert(out.ret == rpc_write_state_p->in.size);
+
+    /* clean up resources consumed by this rpc */
+    HG_Bulk_free(rpc_test_connect_state_p->bulk_handle);
+    HG_Free_input(rpc_test_connect_state_p->handle, &rpc_test_connect_state_p->in);
+    HG_Free_output(rpc_test_connect_state_p->handle, &out);
+    HG_Destroy(rpc_test_connect_state_p->handle);
+    // free(rpc_write_state_p->buffer);
+    free(rpc_test_connect_state_p);
+
+    /* signal to main() that we are done */
+    pthread_mutex_lock(&done_mutex);
+    done++;
+    pthread_cond_signal(&done_cond);
+    pthread_mutex_unlock(&done_mutex);
+    
+    return HG_SUCCESS;
+}
+
+
 inline void Send_IO_Request(int idx_fs)
 {
+	printf("DBG> Send_IO_Request\n");
+	fflush(stdout);
 	IO_CMD_MSG *pIO_Cmd = (IO_CMD_MSG *)loc_buff;
 	RW_FUNC_RETURN *pResult = (RW_FUNC_RETURN *)rem_buff;
 	int bTimeout;
@@ -523,6 +601,28 @@ inline void Send_IO_Request(int idx_fs)
 			break;	// NEVER send multiple RF_RW_OP_DISCONNECT command!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		}
 	}
+
+	// RPC_ENGINE rpc_engine(HG_FALSE, "ofi+verbs://", 1, 1);
+	// // Mercury Init
+    // rpc_engine.hg_engine_init();
+    // // Register rpc functions
+    // rpc_engine.hg_register_rpc();
+	// // Send Request
+	// hg_addr_t svr_addr;
+	// printf("DBG> Server mercury addr: %s.\n", pFileServerList->FS_List[idx_fs].mercuryAddr);
+    // rpc_engine.hg_engine_addr_lookup(pFileServerList->FS_List[idx_fs].mercuryAddr, &svr_addr);
+	// hg_handle_t handle;
+    // rpc_engine.hg_engine_create_handle(0, svr_addr, hg_test_connect_id, &handle);
+	// char buffer[100];
+	// test_connect(handle, buffer);
+	// pthread_mutex_lock(&done_mutex);
+	// int ret = 0;
+	// struct timespec max_wait = {QP_WAIT_RESULT_TIMEOUT_MS / 1000, 0};
+    // while (done < 1) {
+    //     ret = pthread_cond_timedwait(&done_cond, &done_mutex, &max_wait);
+    // }  
+    // pthread_mutex_unlock(&done_mutex);
+	
 }
 /*
 static inline int fetch_and_add(int* variable, int value)

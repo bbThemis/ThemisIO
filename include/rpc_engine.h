@@ -4,15 +4,15 @@
 #include <mercury_macros.h>
 #include <pthread.h>
 
+#include "qp_common.h"
+
 
 #ifndef RPC_ENGINE_H
 #define RPC_ENGINE_H
 
 
 #define ADDR_BUF_SIZE 64
-#define LOCAL_ADDR_SIZE 32
 
-extern CIO_QUEUE IO_Queue_List[MAX_NUM_QUEUE];
 
 class RPC_ENGINE {
 public:
@@ -21,7 +21,7 @@ public:
     pthread_t* hg_progress_tids;
     int context_cnt;
     int max_num_qp;
-    char local_addr[LOCAL_ADDR_SIZE];
+    char local_addr[ADDR_BUF_SIZE];
     hg_bool_t listen;
     RPC_ENGINE(hg_bool_t listen, const char *local_addr, int context_cnt, int max_num_qp);
 	~RPC_ENGINE(void);

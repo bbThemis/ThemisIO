@@ -3,6 +3,7 @@
 
 #define IB_DEVICE	"ib0"
 #define FS_PARAM_FILE	"myfs.param"
+#define MERCURY_FS_PARAM_FILE "myport.cfg"
 
 //#define MAX_FS_SERVER	(2)
 
@@ -28,6 +29,8 @@
 
 #define MAX_HOSTNAME_LEN	(24)	// short name. 
 #define MAX_EXENAME_LEN		(16)	// short name. 
+
+#define MAX_MERCURY_ADDR_LEN (64)
 
 typedef	struct	{
 	uint32_t comm_tag;

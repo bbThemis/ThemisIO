@@ -1,4 +1,5 @@
 #include "rpc_engine.h"
+#include "rpc.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -18,6 +19,7 @@
 
 
 bool hg_progress_shutdown_flag = false;
+
 void * hg_progress_fn(void *arg);
 
 RPC_ENGINE::RPC_ENGINE(hg_bool_t listen, const char *local_addr, int context_cnt, int max_num_qp) {
@@ -165,6 +167,10 @@ RPC_ENGINE::hg_register_rpc()
 {
     // hg_test_rpc_null_id_g = MERCURY_REGISTER(
     //     pMercury_Data->hg_class, "hg_test_rpc_null", void, void, hg_test_rpc_null_cb);
+    hg_test_connect_id = MERCURY_REGISTER(
+        hg_class, "hg_test_connect", hg_test_connect_in_t, hg_test_connect_out_t, test_connect_handler);
+    printf("hg_test_connect_id: %d\n", hg_test_connect_id);
+    fflush(stdout);
     
 }
 

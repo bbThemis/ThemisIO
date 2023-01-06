@@ -38,6 +38,8 @@
 #include "qp_common.h"
 #include "io_ops_common.h"
 
+#include "rpc.h"
+
 
 #define PORT 8888
 
@@ -79,12 +81,14 @@ int fd_stdin=-1, fd_stdout=-1, fd_stderr=-1, Is_in_shell=0;
 static __thread unsigned char *rem_buff=NULL, *loc_buff=NULL; 
 static __thread struct ibv_mr *mr_rem = NULL, *mr_loc = NULL;
 
+
 void Finalize_Client();
 
 // file server info is stored at /dev/shm/myfs. Use bcast_dir to share this file across nodes. 
 typedef	struct	{
 	char szIP[16];
 	int port;
+	char mercuryAddr[MAX_MERCURY_ADDR_LEN];
 	int nQP;	// number of active queue pairs on this node
 	pthread_mutex_t fs_qp_lock;	// 40 bytes
 }FS_SEVER;
@@ -165,6 +169,10 @@ static __thread CLIENT_QUEUEPAIR *pClient_qp[MAX_FS_SERVER];
 static CLIENT_QUEUEPAIR *pClient_qp_List[MAX_QP_PER_PROCESS];
 
 extern int mpi_rank;
+
+
+void test_connect(hg_handle_t handle, void* buffer);
+hg_return_t test_connect_cb(const struct hg_cb_info *info);
 
 void Take_ShortName(char szHostName[])
 {
@@ -881,6 +889,57 @@ static void Read_FS_Param(void)
 	}
 	
 	fclose(fIn);
+
+}
+
+static void Read_FS_Mercury_Param(void)
+{
+	printf("DBG> Read_FS_Mercury_Param\n");
+	fflush(stdout);
+	char mercuryFileName[128], *mercuryServerConf=NULL;
+	FILE *fIn;
+	int i, j, nItems;
+	// TODO: /dev/shm/????
+	sprintf(mercuryFileName, "./%s", MERCURY_FS_PARAM_FILE);
+	fIn = fopen(mercuryFileName, "r");
+	if(fIn == NULL)	{
+		mercuryServerConf = getenv("MERCURY_MYFS_CONF");
+		if(mercuryServerConf == NULL)	{
+			printf("ERROR> Failed to open file %s and get env MERCURY_MYFS_CONF\nQuit\n", mercuryFileName);
+			exit(1);
+		}
+		else	{
+			fIn = fopen(mercuryServerConf, "r");
+			if(fIn == NULL)	{
+				printf("ERROR> Failed to open file %s and file %s\nQuit\n", mercuryFileName, mercuryServerConf);
+				exit(1);
+			}
+		}
+	}
+	
+	nItems = fscanf(fIn, "%d%d", &(pFileServerList->nFSServer), &(pFileServerList->nNUMAPerNode));
+	if(nItems != 2)	{
+		printf("ERROR> Failed to read nFSServer and nNUMAPerNode.\n");
+		fclose(fIn);
+		exit(1);
+	}
+	
+	for(i=0; i<pFileServerList->nFSServer; i++)	{
+		nItems = fscanf(fIn, "%s", pFileServerList->FS_List[i].mercuryAddr);
+		if(nItems != 2)	{
+			printf("ERROR> Failed to read mercury address information of file server.\nQuit\n");
+			fclose(fIn);
+			exit(1);
+		}
+		// if (pthread_mutex_init(&(pFileServerList->FS_List[i].fs_qp_lock), NULL) != 0) { 
+		// 	printf("\n mutex init failed\n"); 
+		// 	exit(1);
+		// }
+		// pFileServerList->FS_List[i].nQP = 0;
+	}
+	
+	fclose(fIn);
+
 }
 
 static int QueryLocalIP(void)
@@ -991,6 +1050,7 @@ void Init_Client()
 		memset(p_shm, 0, sizeof(FSSERVERLIST));
 		pFileServerList->Init_Start = 1;
 		Read_FS_Param();
+		// Read_FS_Mercury_Param();
 		memcpy(&FileServerListLocal, pFileServerList, sizeof(int)*8);
 		memcpy(&(FileServerListLocal.FS_List), &(pFileServerList->FS_List), sizeof(FS_SEVER)*pFileServerList->nFSServer);
 		pFileServerList->myip = QueryLocalIP();
@@ -1043,6 +1103,7 @@ static void Update_Queue_Pair_HeartBeat_Time(void);
 
 static void Update_Queue_Pair_HeartBeat_Time(void)
 {
+	printf("DEBUG> Update_Queue_Pair_HeartBeat_Time\n");
 	int i;
 	struct timeval tm1;	// tm1.tv_sec
 	uint64_t t_cur;
