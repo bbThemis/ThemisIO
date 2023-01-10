@@ -900,7 +900,7 @@ static void Read_FS_Mercury_Param(void)
 	FILE *fIn;
 	int i, j, nItems;
 	// TODO: /dev/shm/????
-	sprintf(mercuryFileName, "./%s", MERCURY_FS_PARAM_FILE);
+	sprintf(mercuryFileName, "/dev/shm/%s", MERCURY_FS_PARAM_FILE);
 	fIn = fopen(mercuryFileName, "r");
 	if(fIn == NULL)	{
 		mercuryServerConf = getenv("MERCURY_MYFS_CONF");
@@ -926,7 +926,7 @@ static void Read_FS_Mercury_Param(void)
 	
 	for(i=0; i<pFileServerList->nFSServer; i++)	{
 		nItems = fscanf(fIn, "%s", pFileServerList->FS_List[i].mercuryAddr);
-		if(nItems != 2)	{
+		if(nItems != 1)	{
 			printf("ERROR> Failed to read mercury address information of file server.\nQuit\n");
 			fclose(fIn);
 			exit(1);
@@ -969,6 +969,8 @@ static int QueryLocalIP(void)
 //__attribute__((constructor)) void Init_Client()
 void Init_Client()
 {
+	printf("DBG> Init_Client\n");
+	fflush(stdout);
 	int i, shm_fd, To_Init=0, nSizeHT_IO_Redirect, nSizeofShm;
 	char mutex_name[]="shm_fs_param";
 	void *p_shm;
@@ -1050,7 +1052,7 @@ void Init_Client()
 		memset(p_shm, 0, sizeof(FSSERVERLIST));
 		pFileServerList->Init_Start = 1;
 		Read_FS_Param();
-		// Read_FS_Mercury_Param();
+		Read_FS_Mercury_Param();
 		memcpy(&FileServerListLocal, pFileServerList, sizeof(int)*8);
 		memcpy(&(FileServerListLocal.FS_List), &(pFileServerList->FS_List), sizeof(FS_SEVER)*pFileServerList->nFSServer);
 		pFileServerList->myip = QueryLocalIP();

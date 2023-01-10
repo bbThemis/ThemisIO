@@ -602,26 +602,26 @@ inline void Send_IO_Request(int idx_fs)
 		}
 	}
 
-	// RPC_ENGINE rpc_engine(HG_FALSE, "ofi+verbs://", 1, 1);
-	// // Mercury Init
-    // rpc_engine.hg_engine_init();
-    // // Register rpc functions
-    // rpc_engine.hg_register_rpc();
-	// // Send Request
-	// hg_addr_t svr_addr;
-	// printf("DBG> Server mercury addr: %s.\n", pFileServerList->FS_List[idx_fs].mercuryAddr);
-    // rpc_engine.hg_engine_addr_lookup(pFileServerList->FS_List[idx_fs].mercuryAddr, &svr_addr);
-	// hg_handle_t handle;
-    // rpc_engine.hg_engine_create_handle(0, svr_addr, hg_test_connect_id, &handle);
-	// char buffer[100];
-	// test_connect(handle, buffer);
-	// pthread_mutex_lock(&done_mutex);
-	// int ret = 0;
-	// struct timespec max_wait = {QP_WAIT_RESULT_TIMEOUT_MS / 1000, 0};
-    // while (done < 1) {
-    //     ret = pthread_cond_timedwait(&done_cond, &done_mutex, &max_wait);
-    // }  
-    // pthread_mutex_unlock(&done_mutex);
+	RPC_ENGINE rpc_engine(HG_FALSE, "ofi+verbs://", 1, 1);
+	// Mercury Init
+    rpc_engine.hg_engine_init();
+    // Register rpc functions
+    rpc_engine.hg_register_rpc();
+	// Send Request
+	hg_addr_t svr_addr;
+	printf("DBG> Server mercury addr: %s.\n", pFileServerList->FS_List[idx_fs].mercuryAddr);
+    rpc_engine.hg_engine_addr_lookup(pFileServerList->FS_List[idx_fs].mercuryAddr, &svr_addr);
+	hg_handle_t handle;
+    rpc_engine.hg_engine_create_handle(0, svr_addr, hg_test_connect_id, &handle);
+	char buffer[100];
+	test_connect(handle, buffer);
+	pthread_mutex_lock(&done_mutex);
+	int ret = 0;
+	struct timespec max_wait = {QP_WAIT_RESULT_TIMEOUT_MS / 1000, 0};
+    while (done < 1) {
+        ret = pthread_cond_timedwait(&done_cond, &done_mutex, &max_wait);
+    }  
+    pthread_mutex_unlock(&done_mutex);
 	
 }
 /*

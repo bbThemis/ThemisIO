@@ -75,6 +75,26 @@ function setMyfsConf() {
 }
 
 
+function setMyMercuryfsConf() {
+  if [ -n "$MERCURY_MYFS_CONF" ]
+  then
+    # MYFS_CONF already set
+    return
+  fi
+
+  for dir in . .. $SCRIPT_DIR $SCRIPT_DIR/..
+  do
+    myport=$dir/myport.cfg
+    if [ -f $myport ]
+    then
+      # echo FOUND $myport
+      export MERCURY_MYFS_CONF=$myport
+      return
+    fi
+  done
+  echo $SCRIPT: Failed to find myport.cfg
+}
+
 while getopts ":hj:n:u:s:" option
 do
   case $option in
@@ -95,6 +115,7 @@ shift $(($OPTIND - 1))
 
 setPreload
 setMyfsConf
+setMyMercuryfsConf
 
 # run the client program
 

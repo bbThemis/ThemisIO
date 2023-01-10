@@ -11,6 +11,7 @@ hg_id_t hg_test_connect_id;
 /* callback/handler triggered upon receipt of rpc bulk write request */
 hg_return_t test_connect_handler(hg_handle_t handle) {
     fprintf(stdout, "server calls test_connect_handler\n");
+    fflush(stdout);
     hg_return_t ret;
     struct rpc_test_connect_state *rpc_test_connect_state_p;
     const struct hg_info *hgi;

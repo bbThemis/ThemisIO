@@ -1,7 +1,683 @@
-TACC:  Starting up job 5103020 
+TACC:  Starting up job 5104315 
 TACC:  Setting up parallel environment for MVAPICH2+mpispawn. 
 TACC:  Starting parallel tasks... 
-[c205-005.frontera.tacc.utexas.edu:mpirun_rsh][signal_processor] Caught signal 2, killing job
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Init_Client
+DBG> Send_IO_RequestDBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_RequestDBG> Send_IO_Request
+
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+DBG> Send_IO_Request
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+hg_test_connect_id: 442918972
+DBG> Server mercury addr: ofi+verbs;ofi_rxm://192.168.64.165:36182.
+client calls test_connect
+# [6300203.033233] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x170eab0 (NA_CB_SEND_UNEXPECTED)
+client calls test_connect_cb
+# [6300203.033505] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_38][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.090322] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x168dab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.090507] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_40][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.093181] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0xb2aab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.093386] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_45][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.094081] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1d24ab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.094219] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_35][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.117270] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x10e7ab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.117459] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_49][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.130569] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x24bbcf0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.130707] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_13][error_sighandler] Caught error: Aborted (signal 6)
+[c100-012.frontera.tacc.utexas.edu:mpispawn_0][readline] Unexpected End-Of-File on file descriptor 31. MPI process died?
+[c100-012.frontera.tacc.utexas.edu:mpispawn_0][mtpmi_processops] Error while reading PMI socket. MPI process died?
+# [6300203.157252] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1307ab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.157451] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_47][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.161036] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x2b5323c008f0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.161235] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_31][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.184556] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1f40ab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.184732] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_29][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.187305] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x197ae60 (NA_CB_SEND_UNEXPECTED)
+# [6300203.187465] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_2][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.197783] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0xd74ab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.197966] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_48][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.201421] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0xb19ab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.201565] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_51][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.203262] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x2b07584008f0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.203444] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_8][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.211059] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x81fdd0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.211239] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_28][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.212813] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x753ab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.212966] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_33][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.235504] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0xf94ab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.235702] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_54][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.238632] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0xce2cf0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.238777] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_6][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.246810] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1e237d0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.246991] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_17][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.248070] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x772ab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.248200] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_44][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.248489] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1643ab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.248637] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_55][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.257125] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x2532cf0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.257306] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_7][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.265248] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0xf35c60 (NA_CB_SEND_UNEXPECTED)
+# [6300203.265417] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_42][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.267469] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x2ae50bc00a80 (NA_CB_SEND_UNEXPECTED)
+# [6300203.267646] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_41][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.275162] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0xcebe60 (NA_CB_SEND_UNEXPECTED)
+# [6300203.275357] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_4][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.279634] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1d76660 (NA_CB_SEND_UNEXPECTED)
+# [6300203.279778] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_53][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.313875] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1446ab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.314066] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_52][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.314155] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1902e60 (NA_CB_SEND_UNEXPECTED)
+# [6300203.314316] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_10][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.316368] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x778cf0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.316503] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_9][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.317634] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x2bed160 (NA_CB_SEND_UNEXPECTED)
+# [6300203.317743] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_0][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.318490] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x115bcf0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.318616] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_1][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.318739] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1577ab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.318875] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_46][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.319303] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0xe8ecf0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.319461] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_5][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.320491] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1863660 (NA_CB_SEND_UNEXPECTED)
+# [6300203.320637] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_16][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.320795] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x10c0cf0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.320969] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_12][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.321212] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x5dacf0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.321341] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_3][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.321919] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x17f5390 (NA_CB_SEND_UNEXPECTED)
+# [6300203.322120] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_14][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.322381] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1eae660 (NA_CB_SEND_UNEXPECTED)
+# [6300203.322535] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_15][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.322840] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1bb4660 (NA_CB_SEND_UNEXPECTED)
+# [6300203.322976] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+# [6300203.322918] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1bbf660 (NA_CB_SEND_UNEXPECTED)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+# [6300203.323111] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_26][error_sighandler] Caught error: Aborted (signal 6)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_23][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.325661] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0xde6660 (NA_CB_SEND_UNEXPECTED)
+# [6300203.325850] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+# [6300203.325866] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0xdc3660 (NA_CB_SEND_UNEXPECTED)
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_22][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.326050] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_18][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.326593] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1a91660 (NA_CB_SEND_UNEXPECTED)
+# [6300203.326786] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_20][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.327065] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1d96660 (NA_CB_SEND_UNEXPECTED)
+# [6300203.327215] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_25][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.331254] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x131ecf0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.331410] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_11][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.333373] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x72f660 (NA_CB_SEND_UNEXPECTED)
+# [6300203.333522] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_19][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.338323] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0xb94660 (NA_CB_SEND_UNEXPECTED)
+# [6300203.338519] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_21][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.355701] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1804660 (NA_CB_SEND_UNEXPECTED)
+# [6300203.355936] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_27][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.358141] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1d6c660 (NA_CB_SEND_UNEXPECTED)
+# [6300203.358335] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_24][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.417400] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x138fab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.417570] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_34][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.431389] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1e77ab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.431561] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_39][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.431732] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x2adb7f0008f0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.431883] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_30][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.432727] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0xe6aab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.432941] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_36][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.433274] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x897ab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.433539] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_43][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.435818] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1fc5ab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.435952] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_32][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.437652] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x1639ab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.437891] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_50][error_sighandler] Caught error: Aborted (signal 6)
+# [6300203.438950] mercury->op: [warning] /work2/08571/yhkan/frontera/mercury/src/na/na_ofi.c:4972
+ # na_ofi_cq_process_retries(): Retry time elapsed, aborting operation 0x2544ab0 (NA_CB_SEND_UNEXPECTED)
+# [6300203.439145] mercury->hg: [error] /work2/08571/yhkan/frontera/mercury/src/mercury_core.c:3036
+ # hg_core_send_input_cb(): NA callback returned error (NA_TIMEOUT)
+client calls test_connect_cb
+rw_speed: wrapper.cpp:550: hg_return_t test_connect_cb(const hg_cb_info*): Assertion `info->ret == HG_SUCCESS' failed.
+[c100-012.frontera.tacc.utexas.edu:mpi_rank_37][error_sighandler] Caught error: Aborted (signal 6)
+/work2/08571/yhkan/frontera/ThemisIO/tests/themis_client.sh: line 128: 124438 Aborted                 "$@"
+[c100-012.frontera.tacc.utexas.edu:mpispawn_0][child_handler] MPI process (rank: 38, pid: 124173) exited with status 134
+[c100-012.frontera.tacc.utexas.edu:mpispawn_0][error_sighandler] Caught error: Segmentation fault (signal 11)
+bash: line 1: 124133 Segmentation fault      /usr/bin/env LD_LIBRARY_PATH=/opt/apps/gcc9_1/mvapich2-x/2.3/lib64:/opt/intel/compilers_and_libraries_2019.5.281/linux/compiler/lib/intel64:/opt/intel/compilers_and_libraries_2019.5.281/linux/mkl/lib/intel64:/opt/apps/gcc9_1/python3/3.8.2/lib:/opt/apps/gcc/9.1.0/lib64:/opt/apps/gcc/9.1.0/lib:/opt/apps/hwloc/1.11.12/lib:/opt/apps/pmix/3.1.4/lib:/work2/08571/yhkan/frontera/mercury/install/lib:/work2/08571/yhkan/frontera/mercury/libfabric-1.15.2/install/lib:/usr/lib64 MV2_FASTSSH_THRESHOLD=4 MV2_NPROCS_THRESHOLD=57 MPISPAWN_MPIRUN_MPD=0 USE_LINEAR_SSH=1 MPISPAWN_MPIRUN_HOST=c100-001.frontera.tacc.utexas.edu MPISPAWN_MPIRUN_HOSTIP=129.114.64.165 MPIRUN_RSH_LAUNCH=1 MPISPAWN_CHECKIN_PORT=47304 MPISPAWN_MPIRUN_PORT=47304 MPISPAWN_NNODES=1 MPISPAWN_GLOBAL_NPROCS=56 MPISPAWN_MPIRUN_ID=64261 MPISPAWN_ARGC=14 MPDMAN_KVS_TEMPLATE=kvs_679_c100-001.frontera.tacc.utexas.edu_64261 MPISPAWN_LOCAL_NPROCS=56 MPISPAWN_ARGV_0='/work2/08571/yhkan/frontera/ThemisIO/tests/themis_client.sh' MPISPAWN_ARGV_1='-u' MPISPAWN_ARGV_2='102' MPISPAWN_ARGV_3='-j' MPISPAWN_ARGV_4='1002' MPISPAWN_ARGV_5='-n' MPISPAWN_ARGV_6='1' MPISPAWN_ARGV_7='-s' MPISPAWN_ARGV_8='15' MPISPAWN_ARGV_9='./rw_speed' MPISPAWN_ARGV_10='-time=30' MPISPAWN_ARGV_11='-iosize=1m' MPISPAWN_ARGV_12='-filesize=100m' MPISPAWN_ARGV_13='-tag=job2' MPISPAWN_ARGC=14 MPISPAWN_GENERIC_ENV_COUNT=0 MPISPAWN_ID=0 MPISPAWN_WORKING_DIR=/work2/08571/yhkan/frontera/ThemisIO/testfair MPISPAWN_MPIRUN_RANK_0=0 MPISPAWN_MPIRUN_RANK_1=1 MPISPAWN_MPIRUN_RANK_2=2 MPISPAWN_MPIRUN_RANK_3=3 MPISPAWN_MPIRUN_RANK_4=4 MPISPAWN_MPIRUN_RANK_5=5 MPISPAWN_MPIRUN_RANK_6=6 MPISPAWN_MPIRUN_RANK_7=7 MPISPAWN_MPIRUN_RANK_8=8 MPISPAWN_MPIRUN_RANK_9=9 MPISPAWN_MPIRUN_RANK_10=10 MPISPAWN_MPIRUN_RANK_11=11 MPISPAWN_MPIRUN_RANK_12=12 MPISPAWN_MPIRUN_RANK_13=13 MPISPAWN_MPIRUN_RANK_14=14 MPISPAWN_MPIRUN_RANK_15=15 MPISPAWN_MPIRUN_RANK_16=16 MPISPAWN_MPIRUN_RANK_17=17 MPISPAWN_MPIRUN_RANK_18=18 MPISPAWN_MPIRUN_RANK_19=19 MPISPAWN_MPIRUN_RANK_20=20 MPISPAWN_MPIRUN_RANK_21=21 MPISPAWN_MPIRUN_RANK_22=22 MPISPAWN_MPIRUN_RANK_23=23 MPISPAWN_MPIRUN_RANK_24=24 MPISPAWN_MPIRUN_RANK_25=25 MPISPAWN_MPIRUN_RANK_26=26 MPISPAWN_MPIRUN_RANK_27=27 MPISPAWN_MPIRUN_RANK_28=28 MPISPAWN_MPIRUN_RANK_29=29 MPISPAWN_MPIRUN_RANK_30=30 MPISPAWN_MPIRUN_RANK_31=31 MPISPAWN_MPIRUN_RANK_32=32 MPISPAWN_MPIRUN_RANK_33=33 MPISPAWN_MPIRUN_RANK_34=34 MPISPAWN_MPIRUN_RANK_35=35 MPISPAWN_MPIRUN_RANK_36=36 MPISPAWN_MPIRUN_RANK_37=37 MPISPAWN_MPIRUN_RANK_38=38 MPISPAWN_MPIRUN_RANK_39=39 MPISPAWN_MPIRUN_RANK_40=40 MPISPAWN_MPIRUN_RANK_41=41 MPISPAWN_MPIRUN_RANK_42=42 MPISPAWN_MPIRUN_RANK_43=43 MPISPAWN_MPIRUN_RANK_44=44 MPISPAWN_MPIRUN_RANK_45=45 MPISPAWN_MPIRUN_RANK_46=46 MPISPAWN_MPIRUN_RANK_47=47 MPISPAWN_MPIRUN_RANK_48=48 MPISPAWN_MPIRUN_RANK_49=49 MPISPAWN_MPIRUN_RANK_50=50 MPISPAWN_MPIRUN_RANK_51=51 MPISPAWN_MPIRUN_RANK_52=52 MPISPAWN_MPIRUN_RANK_53=53 MPISPAWN_MPIRUN_RANK_54=54 MPISPAWN_MPIRUN_RANK_55=55 /opt/apps/gcc9_1/mvapich2-x/2.3/bin/mpispawn 0
 TACC:  MPI job exited with code: 1 
 TACC:  Shutdown complete. Exiting. 
-[c205-007.frontera.tacc.utexas.edu:mpispawn_0][report_error] connect() failed: Connection refused (111)
