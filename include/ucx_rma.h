@@ -29,15 +29,42 @@
 
 #include "dict.h"
 #include "io_queue.h"
+#include "ucx_rma_common.h"
 
+#define MAX_UCP_RKEY_SIZE (50)
+#define MAX_UCP_ADDR_LEN (250)
+
+typedef struct {
+    ucp_worker_h ucp_data_worker;
+    int nPut_Get, nPut_Get_Done;
+    int jobid, idx_queue;	// jobid and the index of queue that handles this jobid
+	int idx_JobRec, cuid, cgid, ctid, bTimeout, bServerReady;
+    // These are only needed between file servers. Not needed for the pairs with regular compute node (file server clients). 
+	uint64_t remote_addr_new_msg;	// the address of remote buffer to notify a new message
+	uint64_t remote_addr_heart_beat;	// the address of remote buffer to write heart beat time info.
+	uint64_t remote_addr_IO_CMD;	// the address of remote buffer to IO requests.
+
+    ucp_address_t *address_p = NULL;
+    size_t address_length       = 0;
+    ucp_ep_h  peer_ep;
+    ucp_rkey_h rkey;
+
+    unsigned long int	rem_addr;
+    pthread_mutex_t	qp_lock;
+    char szClientHostName[MAX_HOSTNAME_LEN];
+	char szClientExeName[MAX_EXENAME_LEN];
+
+}UCX_DATA, *PUCX_DATA;
 
 class SERVER_RDMA {
 public:
     ucp_context_h ucp_main_context;
     ucp_worker_h  ucp_main_worker;
     ucp_mem_h mr_rem, mr_loc, mr_shm_global = NULL;
-    void* rkey_buffer = NULL;
+    void* rkey_buffer;
     size_t rkey_buffer_size = 0;
+    // ucp_address_t *address_p = NULL;
+    // size_t address_length       = 0;
 
 
     int max_qp, nQP, IdxLastQP, IdxLastQP64, FirstAV_QP;	// IdxLastQP64 is 64 aligned for IdxLastQP
@@ -48,6 +75,7 @@ pthread_mutex_t process_lock;	// for this process
 	struct elt_Int *elt_list_socket_fd = NULL;
 	int *ht_table_socket_fd=NULL;
 
+    UCX_DATA *pUCX_Data = NULL;
     void *p_shm_Global = NULL;	// NewMsgFlag[], Time_HeartBeat[], IO_Msg[]
 	unsigned char *p_shm_NewMsgFlag = NULL;
 	time_t *p_shm_TimeHeartBeat = NULL;
@@ -61,15 +89,26 @@ pthread_mutex_t process_lock;	// for this process
 	JOB_OP_SEND *pJob_OP_Recv=NULL;	// only allocate memory on rank 0
 	JOB_OP_SEND *pJob_OP_Send=NULL;
 
+    ucp_worker_h ucp_data_worker[NUM_THREAD_IO_WORKER];
+
     unsigned char		*rem_buff = NULL;
 	int					rem_buff_size;
 
     SERVER_RDMA(void);
 	~SERVER_RDMA(void);
-    int Init_Context(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker);
-    int Init_Worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker);
     void Init_Server_Memory(int max_num_qp);
     ucs_status_t RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp_mem_h* memh);
+    void Init_Server_UCX_Env(int remote_buff_size);
+    ucs_status_t server_create_ep(ucp_worker_h data_worker,
+                                     ucp_address_t* peer_address,
+                                     ucp_ep_h *server_ep);
+    void AllocateUCPDataWorker(int idx); // IB_CreateQueuePair
+    void Server_Loop(); // Socket_Server_Loop
+private:
+    int Init_Context(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker);
+    int Init_Worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker);
+    int Get_IO_Worker_Index_from_UCX_Index(int idx_ucx);
+    
 };
 
 #endif

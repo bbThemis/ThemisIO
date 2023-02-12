@@ -23,10 +23,109 @@ SERVER_RDMA::SERVER_RDMA(void)
 SERVER_RDMA::~SERVER_RDMA(void)
 {
 	pthread_mutex_destroy(&process_lock);
-
+    free(rkey_buffer);
+    ucp_worker_destroy(ucp_main_worker);
     ucp_cleanup(ucp_main_context);
 }
 
+int SERVER_RDMA::Get_IO_Worker_Index_from_UCX_Index(int idx_ucx)
+{
+	int nNumQueuePerWorker, idx_Queue, nUCX_InterServer;
+
+	nUCX_InterServer = nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER;
+	if(idx_ucx < nUCX_InterServer)	return (idx_ucx % NUM_THREAD_IO_WORKER_INTER_SERVER);
+
+//	idx_Queue = ( ((idx_ucx-NUM_THREAD_IO_WORKER_INTER_SERVER)*NUM_QUEUE_PER_WORKER + (idx_ucx-NUM_THREAD_IO_WORKER_INTER_SERVER)*NUM_QUEUE_PER_WORKER/MAX_NUM_QUEUE_M1 ) % MAX_NUM_QUEUE_M1) + NUM_THREAD_IO_WORKER_INTER_SERVER;
+//	idx_Queue = ( ((idx_ucx-nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER)*NUM_QUEUE_PER_WORKER + (idx_ucx-nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER)*NUM_QUEUE_PER_WORKER/MAX_NUM_QUEUE_MX ) % MAX_NUM_QUEUE_MX) + nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER;
+	idx_Queue = ( ((idx_ucx - nUCX_InterServer)*NUM_QUEUE_PER_WORKER + (idx_ucx - nUCX_InterServer)*NUM_QUEUE_PER_WORKER/MAX_NUM_QUEUE_MX ) % MAX_NUM_QUEUE_MX) + NUM_THREAD_IO_WORKER_INTER_SERVER;
+
+	if( ( ( MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER ) % ( NUM_THREAD_IO_WORKER - NUM_THREAD_IO_WORKER_INTER_SERVER ) ) == 0 )	{
+		nNumQueuePerWorker = ( MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER ) / ( NUM_THREAD_IO_WORKER - NUM_THREAD_IO_WORKER_INTER_SERVER ) ;
+	}
+	else	{
+		nNumQueuePerWorker = ( MAX_NUM_QUEUE - NUM_THREAD_IO_WORKER_INTER_SERVER ) / ( NUM_THREAD_IO_WORKER - NUM_THREAD_IO_WORKER_INTER_SERVER ) + 1;
+	}
+
+//	if(idx_ucx < nUCX_InterServer)	{	// inter-server qp
+//		return pQP_Data[idx_ucx].idx_queue;
+//	}
+//	else	{
+		return (( (idx_Queue-NUM_THREAD_IO_WORKER_INTER_SERVER)/nNumQueuePerWorker ) + NUM_THREAD_IO_WORKER_INTER_SERVER);
+//	}
+}
+
+void SERVER_RDMA::Init_Server_UCX_Env(int remote_buff_size) {
+    ucp_main_context = NULL;
+    ucp_main_worker = NULL;
+    Init_Context(&ucp_main_context, &ucp_main_worker);
+    if(!ucp_main_context) {
+        fprintf(stderr, "SERVER_RDMA Failure: No HCA can use.\n");
+		exit(1);
+    }
+    pIO_Cmd_ToSend_Other_Server = (IO_CMD_MSG *)memalign(64, DATA_COPY_THRESHOLD_SIZE + 4096);
+	assert(pIO_Cmd_ToSend_Other_Server != NULL);
+	RegisterBuf_RW_Local_Remote(pIO_Cmd_ToSend_Other_Server, DATA_COPY_THRESHOLD_SIZE + 4096, &mr_loc);
+	assert(mr_loc != NULL);
+
+	for(int i=0; i<NUM_THREAD_IO_WORKER; i++)	{
+        Init_Worker(ucp_main_context, &ucp_data_worker[i]);
+		assert(ucp_data_worker[i] != NULL);
+	}
+    
+}
+
+ucs_status_t SERVER_RDMA::server_create_ep(ucp_worker_h data_worker,
+                                     ucp_address_t* peer_address,
+                                     ucp_ep_h *peer_ep) {
+    ucp_ep_params_t ep_params;
+    ucs_status_t    status;
+
+    /* Server creates an ep to the client on the data worker.
+     * This is not the worker the listener was created on.
+     * The client side should have initiated the connection, leading
+     * to this ep's creation */
+    ep_params.field_mask      = UCP_EP_PARAM_FIELD_ERR_HANDLER |
+                                UCP_EP_PARAM_FIELD_REMOTE_ADDRESS;
+    ep_params.address    = peer_address;
+    ep_params.err_handler.cb  = err_cb;
+    ep_params.err_handler.arg = NULL;
+
+    status = ucp_ep_create(data_worker, &ep_params, peer_ep);
+    if (status != UCS_OK) {
+        fprintf(stderr, "failed to create an endpoint on the server: (%s)\n",
+                ucs_status_string(status));
+    }
+
+    return status;
+}
+
+void SERVER_RDMA::Server_Loop() {
+    while(1) {}
+}
+
+void SERVER_RDMA::AllocateUCPDataWorker(int idx) {
+    UCX_DATA *pUCX;
+	int idx_io_worker;
+	
+	pUCX = &(pUCX_Data[idx]);
+    pUCX_Data[idx].bServerReady = 0;
+	idx_io_worker = Get_IO_Worker_Index_from_UCX_Index(idx);
+
+    pUCX->ucp_data_worker = ucp_data_worker[idx_io_worker];
+
+    if(pthread_mutex_init(&(pUCX->qp_lock), NULL) != 0) {
+		perror("pthread_mutex_init");
+		exit(1);
+	}
+
+    ucs_status_t status;
+    status = ucp_worker_get_address(pUCX->ucp_data_worker, &pUCX->address_p, &pUCX->address_length);
+    assert(pUCX->address_length <= MAX_UCP_ADDR_LEN);
+    if(status != UCS_OK) {
+        fprintf(stderr, "ucp_worker_get_address Failure: %s.\n", ucs_status_string(status));
+		exit(1);
+    }
+}
 
 int SERVER_RDMA::Init_Context(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker)
 {
@@ -86,6 +185,9 @@ void SERVER_RDMA::Init_Server_Memory(int max_num_qp) {
     max_qp = max_num_qp;
 	p_Hash_socket_fd = (CHASHTABLE_INT *)malloc(CHASHTABLE_INT::GetStorageSize(max_num_qp*2));
 	p_Hash_socket_fd->DictCreate(max_num_qp*2, &elt_list_socket_fd, &ht_table_socket_fd);	// init hash table
+
+    pUCX_Data = (UCX_DATA *)malloc(sizeof(UCX_DATA) * max_num_qp);
+    assert(pUCX_Data != NULL);
 
     nSizeofNewMsgFlag = sizeof(char)*max_qp;
 	nSizeofHeartBeat = sizeof(time_t)*max_qp;
@@ -147,6 +249,7 @@ void SERVER_RDMA::Init_Server_Memory(int max_num_qp) {
     rem_buff_size = nSizeshm_Global;
 	status = ucp_rkey_pack(ucp_main_context, mr_shm_global, &rkey_buffer, &rkey_buffer_size);
     assert(rkey_buffer != NULL);
+    assert(rkey_buffer_size <= MAX_UCP_RKEY_SIZE);
 }
 
 ucs_status_t SERVER_RDMA::RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp_mem_h* memh) {
@@ -158,3 +261,4 @@ ucs_status_t SERVER_RDMA::RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp
     ucs_status_t status = ucp_mem_map(ucp_main_context, &mem_map_params, memh);
     return status;
 }
+

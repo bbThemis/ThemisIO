@@ -25,6 +25,7 @@
 #include <mpi.h> 
 
 #include "qp.h"
+#include "ucx_rma.h"
 #include "myfs.h"
 #include "corebinding.h"
 #include "unique_thread.h"
@@ -56,6 +57,18 @@ typedef	struct	{
 	uint64_t addr_IO_Cmd_Msg;
 }QPAIR_DATA;
 
+typedef struct {
+	char peer_address[MAX_UCP_ADDR_LEN];
+	size_t peer_address_length = 0;
+	char rkey_buffer[MAX_UCP_RKEY_SIZE];
+    size_t rkey_buffer_size = 0;
+
+	uint64_t rem_addr;
+	uint64_t addr_NewMsgFlag;
+	uint64_t addr_TimeHeartBeat;
+	uint64_t addr_IO_Cmd_Msg;
+}UCX_RMA_SETUP_DATA;
+
 typedef	struct	{
 //	uint64_t remote_addr_new_msg;
 //	uint64_t remote_addr_heart_beat;	// the address of remote buffer to write heart beat time info.
@@ -72,18 +85,25 @@ typedef	struct	{
 
 
 int Server_Started=0;
+int Ucx_Server_Started = 0;
 FS_SEVER_INFO ThisNode;
 FS_SEVER_INFO AllFSNodes[MAX_FS_SERVER];
 QPAIR_DATA *pQPair_Inter_FS=NULL;
+UCX_RMA_SETUP_DATA *pUCX_RMA_Inter_FS=NULL;
 
 int mpi_rank, nFSServer=0;	// rank and size of MPI
 int nNUMAPerNode=1;	// number of numa nodes per compute node
 
 SERVER_QUEUEPAIR Server_qp;
+SERVER_RDMA Server_ucx;
 pthread_attr_t thread_attr;
 
 void Get_Local_Server_Info(void);
 void Setup_QP_Among_Servers(void);
+void Setup_UCX_Among_Servers(void);
+
+
+
 
 
 
@@ -168,6 +188,86 @@ void Setup_QP_Among_Servers(void)
 	printf("DBG> Rank = %d Finishing Setup_QP_Among_Servers().\n", mpi_rank);
 }
 
+void Setup_UCX_Among_Servers(void) {
+	int i, j, idx;
+
+	pUCX_RMA_Inter_FS = (UCX_RMA_SETUP_DATA *)malloc(sizeof(UCX_RMA_SETUP_DATA)*nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER);
+
+	Server_ucx.nQP = 0;	// the qp with other servers are always put at the beginning
+
+	for(i=0; i<nFSServer; i++)	{
+		if(i != mpi_rank)	{
+			idx = i*NUM_THREAD_IO_WORKER_INTER_SERVER;
+			for(j=0; j<NUM_THREAD_IO_WORKER_INTER_SERVER; j++)	{
+				Server_ucx.nQP++;
+				Server_ucx.AllocateUCPDataWorker(idx+j);
+				memcpy(pUCX_RMA_Inter_FS[idx+j].peer_address, Server_ucx.pUCX_Data[idx+j].address_p, Server_ucx.pUCX_Data[idx+j].address_length);
+				pUCX_RMA_Inter_FS[idx+j].peer_address_length = Server_ucx.pUCX_Data[idx+j].address_length;
+				memcpy(pUCX_RMA_Inter_FS[idx+j].rkey_buffer, Server_ucx.rkey_buffer, Server_ucx.rkey_buffer_size);
+				pUCX_RMA_Inter_FS[idx+j].rkey_buffer_size = Server_ucx.rkey_buffer_size;
+				pUCX_RMA_Inter_FS[idx+j].rem_addr = (uint64_t)Server_ucx.p_shm_IO_Result_Recv;
+
+				pUCX_RMA_Inter_FS[idx+j].addr_NewMsgFlag = (uint64_t)Server_ucx.p_shm_NewMsgFlag + sizeof(char)*(idx+j);
+				pUCX_RMA_Inter_FS[idx+j].addr_TimeHeartBeat = (uint64_t)Server_ucx.p_shm_TimeHeartBeat + sizeof(time_t)*(idx+j);
+				pUCX_RMA_Inter_FS[idx+j].addr_IO_Cmd_Msg = (uint64_t)Server_ucx.p_shm_IO_Cmd_Msg + sizeof(IO_CMD_MSG)*(idx+j);
+			}
+		}
+	}
+	Server_ucx.FirstAV_QP = nFSServer * NUM_THREAD_IO_WORKER_INTER_SERVER;
+	Server_ucx.IdxLastQP = nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER - 1;
+	Server_ucx.IdxLastQP64 = Align64_Int(Server_ucx.IdxLastQP+1);	// +1 is needed since IdxLastQP is included!
+
+	MPI_Alltoall(MPI_IN_PLACE, sizeof(UCX_RMA_SETUP_DATA)*NUM_THREAD_IO_WORKER_INTER_SERVER, MPI_CHAR, pUCX_RMA_Inter_FS, sizeof(UCX_RMA_SETUP_DATA)*NUM_THREAD_IO_WORKER_INTER_SERVER, MPI_CHAR, MPI_COMM_WORLD);
+
+	for(i=0; i<nFSServer; i++)	{
+		if(i != mpi_rank)	{
+			idx = i*NUM_THREAD_IO_WORKER_INTER_SERVER;
+			for(j=0; j<NUM_THREAD_IO_WORKER_INTER_SERVER; j++)	{
+
+				// Server_ucx.pUCX_Data[idx+j].peer_ep = pUCX_RMA_Inter_FS[idx+j].rem_key;
+				// Server_ucx.pUCX_Data[idx+j].rkey = pUCX_RMA_Inter_FS[idx+j].rem_key;
+				Server_ucx.server_create_ep(Server_ucx.pUCX_Data[idx+j].ucp_data_worker, (ucp_address_t*)pUCX_RMA_Inter_FS[idx+j].peer_address, &Server_ucx.pUCX_Data[idx+j].peer_ep);
+				ucp_ep_rkey_unpack(Server_ucx.pUCX_Data[idx+j].peer_ep, pUCX_RMA_Inter_FS[idx+j].rkey_buffer, &Server_ucx.pUCX_Data[idx+j].rkey);
+
+				Server_ucx.pUCX_Data[idx+j].rem_addr = (uint64_t)(pUCX_RMA_Inter_FS[idx+j].rem_addr);
+				
+				Server_ucx.pUCX_Data[idx+j].remote_addr_new_msg = pUCX_RMA_Inter_FS[idx+j].addr_NewMsgFlag;
+				Server_ucx.pUCX_Data[idx+j].remote_addr_heart_beat = pUCX_RMA_Inter_FS[idx+j].addr_TimeHeartBeat;
+				Server_ucx.pUCX_Data[idx+j].remote_addr_IO_CMD = pUCX_RMA_Inter_FS[idx+j].addr_IO_Cmd_Msg;
+
+				Server_ucx.pUCX_Data[idx+j].nPut_Get = 0;
+				Server_ucx.pUCX_Data[idx+j].nPut_Get_Done = 0;
+				
+
+				Server_ucx.pUCX_Data[idx+j].idx_queue = j;	// the first queue is reserved for inter-server communication
+			}
+		}
+	}
+	
+	free(pUCX_RMA_Inter_FS);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	static struct timeval tm;
+//	if(mpi_rank == 0)	{
+		gettimeofday(&tm, NULL);
+		Server_ucx.T_Start_us =  (tm.tv_sec + 15)*1000000 + tm.tv_usec;	// 9~10 s delay
+//		Server_qp.T_Start_us = Server_qp.T_Start_us - (Server_qp.T_Start_us % 1000000);
+//	}
+
+//	MPI_Bcast(&(Server_qp.T_Start_us), sizeof(long int), MPI_CHAR, 0, MPI_COMM_WORLD);
+
+	MPI_Bcast(&(Server_ucx.pJob_OP_Recv), sizeof(void*), MPI_CHAR, 0, MPI_COMM_WORLD);
+	printf("DBG> Server_ucx.pJob_OP_Recv = %p\n", Server_ucx.pJob_OP_Recv);
+	if(mpi_rank)	Server_ucx.pJob_OP_Recv += (mpi_rank);
+	printf("DBG> Server_ucx.pJob_OP_Recv = %p\n", Server_ucx.pJob_OP_Recv);
+	MPI_Bcast(&(Server_ucx.pJobScale_Remote), sizeof(void*), MPI_CHAR, 0, MPI_COMM_WORLD);
+
+	if(mpi_rank == 0)	Server_ucx.pJobScale_Remote->nActiveJob = 0;
+
+	printf("DBG> Rank = %d Finishing Setup_UCX_Among_Servers().\n", mpi_rank);
+}
+
 void Get_Local_Server_Info(void)
 {
 	int fd;
@@ -240,6 +340,28 @@ static void* Func_thread_Polling_New_Msg(void *pParam)
 	return NULL;
 }
 
+static void* Func_thread_ucx_server(void *pParam) {
+	SERVER_RDMA *pServer_ucx;
+	int i;
+	int IO_Worker_tid_List[NUM_THREAD_IO_WORKER];
+
+	pServer_ucx = (SERVER_RDMA *)pParam;
+	pServer_ucx->Init_Server_UCX_Env(DEFAULT_REM_BUFF_SIZE);
+	pServer_ucx->Init_Server_Memory(2048);
+	for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
+		IO_Worker_tid_List[i] = i;
+		if(pthread_create(&(pthread_IO_Worker[i]), NULL, Func_thread_IO_Worker, &(IO_Worker_tid_List[i]))) {
+			fprintf(stderr, "Error creating thread\n");
+			return 0;
+		}
+	}
+
+	Ucx_Server_Started = 1;	// active the flag: Server started running!!!
+	printf("Rank = %d. UCX Server is started.\n", mpi_rank);
+	pServer_ucx->Server_Loop();
+	
+	return 0;
+}
 
 static void* Func_thread_qp_server(void *pParam)
 {
@@ -379,7 +501,7 @@ int main(int argc, char **argv)
 {
 	int i;
 	FILE *fOut;
-	pthread_t thread_qp_server, thread_print_data, thread_polling_newmsg, thread_global_sharing;
+	pthread_t thread_qp_server, thread_print_data, thread_polling_newmsg, thread_global_sharing, thread_ucx_server;
 //	unsigned char *pNewMsg_ToSend=NULL;
 //	IO_CMD_MSG *pIO_Cmd_toSend;
 //	struct ibv_mr *mr_local;
@@ -453,14 +575,19 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Error creating thread\n");
 		return 1;
 	}
-
+	if(pthread_create(&(thread_ucx_server), NULL, Func_thread_ucx_server, &Server_ucx)) {
+		fprintf(stderr, "Error creating thread\n");
+		return 1;
+	}
 //	Setup_Signal_QueuePair();
 	while(1)	{
 		if(Server_Started)	break;
 	}
-
+	while(1)	{
+		if(Ucx_Server_Started)	break;
+	}
 	Setup_QP_Among_Servers();
-
+	Setup_UCX_Among_Servers();
 //	if(pthread_create(&(thread_global_sharing), NULL, Func_thread_Global_Fair_Sharing, &Server_qp)) {
 //		fprintf(stderr, "Error creating thread\n");
 //		return 1;
@@ -529,6 +656,12 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Error joining thread.\n");
 		return 2;
 	}
+
+	if(pthread_join(thread_ucx_server, NULL)) {
+		fprintf(stderr, "Error joining thread thread_ucx_server.\n");
+		return 2;
+	}
+
 
     MPI_Finalize();
 	
