@@ -1,0 +1,31 @@
+TACC:  Starting up job 5217008 
+TACC:  Starting parallel tasks... 
+DBG> Timeout. pid = 56284 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56317 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56320 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56303 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56327 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56286 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56289 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56319 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56332 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56302 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56307 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56331 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56313 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56308 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56285 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56288 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56306 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56301 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56323 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56329 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56282 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56283 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56326 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56298 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56314 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56321 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56324 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56292 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 56277 on c100-010.frontera.tacc.utexas.edu
