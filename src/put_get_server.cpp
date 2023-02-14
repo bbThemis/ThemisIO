@@ -211,6 +211,7 @@ void Setup_UCX_Among_Servers(void) {
 				pUCX_RMA_Inter_FS[idx+j].addr_NewMsgFlag = (uint64_t)Server_ucx.p_shm_NewMsgFlag + sizeof(char)*(idx+j);
 				pUCX_RMA_Inter_FS[idx+j].addr_TimeHeartBeat = (uint64_t)Server_ucx.p_shm_TimeHeartBeat + sizeof(time_t)*(idx+j);
 				pUCX_RMA_Inter_FS[idx+j].addr_IO_Cmd_Msg = (uint64_t)Server_ucx.p_shm_IO_Cmd_Msg + sizeof(IO_CMD_MSG)*(idx+j);
+				// fprintf(stdout, "mpi_rank %d: pUCX_RMA_Inter_FS[%d].addr_IO_Cmd_Msg = %p\n", mpi_rank, idx+j, (uint64_t)Server_ucx.p_shm_IO_Cmd_Msg + sizeof(IO_CMD_MSG)*(idx+j));
 			}
 		}
 	}
@@ -219,7 +220,7 @@ void Setup_UCX_Among_Servers(void) {
 	Server_ucx.IdxLastQP64 = Align64_Int(Server_ucx.IdxLastQP+1);	// +1 is needed since IdxLastQP is included!
 
 	MPI_Alltoall(MPI_IN_PLACE, sizeof(UCX_RMA_SETUP_DATA)*NUM_THREAD_IO_WORKER_INTER_SERVER, MPI_CHAR, pUCX_RMA_Inter_FS, sizeof(UCX_RMA_SETUP_DATA)*NUM_THREAD_IO_WORKER_INTER_SERVER, MPI_CHAR, MPI_COMM_WORLD);
-
+	ucs_status_t status;
 	for(i=0; i<nFSServer; i++)	{
 		if(i != mpi_rank)	{
 			idx = i*NUM_THREAD_IO_WORKER_INTER_SERVER;
@@ -228,8 +229,8 @@ void Setup_UCX_Among_Servers(void) {
 				// Server_ucx.pUCX_Data[idx+j].peer_ep = pUCX_RMA_Inter_FS[idx+j].rem_key;
 				// Server_ucx.pUCX_Data[idx+j].rkey = pUCX_RMA_Inter_FS[idx+j].rem_key;
 				Server_ucx.server_create_ep(Server_ucx.pUCX_Data[idx+j].ucp_data_worker, (ucp_address_t*)pUCX_RMA_Inter_FS[idx+j].peer_address, &Server_ucx.pUCX_Data[idx+j].peer_ep);
-				ucp_ep_rkey_unpack(Server_ucx.pUCX_Data[idx+j].peer_ep, pUCX_RMA_Inter_FS[idx+j].rkey_buffer, &Server_ucx.pUCX_Data[idx+j].rkey);
-
+				status = ucp_ep_rkey_unpack(Server_ucx.pUCX_Data[idx+j].peer_ep, pUCX_RMA_Inter_FS[idx+j].rkey_buffer, &Server_ucx.pUCX_Data[idx+j].rkey);
+				assert(status == UCS_OK);
 				Server_ucx.pUCX_Data[idx+j].rem_addr = (uint64_t)(pUCX_RMA_Inter_FS[idx+j].rem_addr);
 				
 				Server_ucx.pUCX_Data[idx+j].remote_addr_new_msg = pUCX_RMA_Inter_FS[idx+j].addr_NewMsgFlag;
@@ -241,6 +242,7 @@ void Setup_UCX_Among_Servers(void) {
 				Server_ucx.pUCX_Data[idx+j].bTimeout = 0;
 
 				Server_ucx.pUCX_Data[idx+j].idx_queue = j;	// the first queue is reserved for inter-server communication
+				// fprintf(stdout, "mpi_rank %d: Server_ucx.pUCX_Data[%d].remote_addr_IO_CMD = %p\n", mpi_rank, idx+j, Server_ucx.pUCX_Data[idx+j].remote_addr_IO_CMD);
 			}
 		}
 	}
@@ -318,24 +320,54 @@ static void* Func_thread_Print_Data(void *pParam)
 	return NULL;
 }
 
-#define Func_thread_UCX_Rma_Test_String "From%dto%dtimes%d\n"
-#define Func_thread_UCX_Rma_Test_String_Len 30
-static void* Func_thread_UCX_Rma_Test(void* pParam) {
+#define UCX_Rma_Test_String "From %d to %d times %d"
+#define UCX_Rma_Checkpass_String "From %d to %d times %d pass check\n"
+#define UCX_Rma_Checkfail_String "From %d to %d times %d fail check\n"
+#define UCX_Rma_Test_String_Len 30  
+static void* UCX_Rma_Test(void* pParam) {
 	SERVER_RDMA* pServer_RDMA;
 	pServer_RDMA = (SERVER_RDMA*)pParam;
-	size_t test_len = Func_thread_UCX_Rma_Test_String_Len;
+	size_t test_len = UCX_Rma_Test_String_Len;
+	fprintf(stdout, "mpi_rank: %d UCX_Rma_Test begin\n", mpi_rank);
 	for(int i=0; i<nFSServer; i++)	{
 		if(i != mpi_rank)	{
 			int idx = i*NUM_THREAD_IO_WORKER_INTER_SERVER;
 			for(int j=0; j<NUM_THREAD_IO_WORKER_INTER_SERVER; j++)	{
 				char* test_buff = (char*)malloc(test_len);
-				sprintf(test_buff, Func_thread_UCX_Rma_Test_String, mpi_rank, i, j);
-				pServer_RDMA->UCX_Put(idx + j, test_buff, (void*)pServer_RDMA->pUCX_Data[idx+j].remote_addr_IO_CMD, test_len);
+				// fprintf(stdout, "mpi_rank %d: UCX_Put From %d to %d times %d\n", mpi_rank,  mpi_rank, i, j);
+				sprintf(test_buff, UCX_Rma_Test_String, mpi_rank, i, j);
+				uint64_t rem_addr = pServer_RDMA->pUCX_Data[idx+j].remote_addr_IO_CMD;
+				pServer_RDMA->UCX_Put(idx + j, test_buff, (void*)rem_addr, test_len);
 				free(test_buff);
 			}
 		}
 	}
 
+}
+static void* UCX_Rma_Test_Check(void* pParam) {
+	fprintf(stdout, "mpi_rank: %d UCX_Rma_Test_Check begin\n", mpi_rank);
+	SERVER_RDMA* pServer_RDMA;
+	pServer_RDMA = (SERVER_RDMA*)pParam;
+	size_t test_len = UCX_Rma_Test_String_Len;
+	for(int i=0; i<nFSServer; i++)	{
+		if(i != mpi_rank)	{
+			int idx = i*NUM_THREAD_IO_WORKER_INTER_SERVER;
+			for(int j=0; j<NUM_THREAD_IO_WORKER_INTER_SERVER; j++)	{
+				char* check_buff = (char*)((uint64_t)Server_ucx.p_shm_IO_Cmd_Msg + sizeof(IO_CMD_MSG)*(idx+j));
+				char* correct_buff = (char*)malloc(test_len);
+				sprintf(correct_buff, UCX_Rma_Test_String, i, mpi_rank, j);
+				fprintf(stdout, "mpi_rank %d: UCX_Put Check From %d to %d times %d addr %p\n", mpi_rank, i, mpi_rank, j, check_buff);
+				if(strcmp(check_buff, correct_buff) == 0) {
+					fprintf(stdout, UCX_Rma_Checkpass_String, i, mpi_rank, j);
+				} else {
+					fprintf(stdout, UCX_Rma_Checkfail_String, i, mpi_rank, j);
+					fprintf(stdout, "Expected: %s\n", correct_buff);
+					fprintf(stdout, "Actual: %s\n", check_buff);
+				}
+				free(correct_buff);
+			}
+		}
+	}
 }
 
 static void* Func_thread_Polling_New_Msg(void *pParam)
@@ -524,6 +556,7 @@ int main(int argc, char **argv)
 	int i;
 	FILE *fOut;
 	pthread_t thread_qp_server, thread_print_data, thread_polling_newmsg, thread_global_sharing, thread_ucx_server;
+	pthread_t thread_ucx_test;
 //	unsigned char *pNewMsg_ToSend=NULL;
 //	IO_CMD_MSG *pIO_Cmd_toSend;
 //	struct ibv_mr *mr_local;
@@ -613,7 +646,34 @@ int main(int argc, char **argv)
 	while(1)	{
 		if(Ucx_Server_Started)	break;
 	}
+	MPI_Barrier(MPI_COMM_WORLD);
 	Setup_UCX_Among_Servers();
+	UCX_Rma_Test(&Server_ucx);
+	MPI_Barrier(MPI_COMM_WORLD);
+	UCX_Rma_Test_Check(&Server_ucx);
+	if(mpi_rank == 0) {
+		// int i = 1;
+		// int j = 0;
+		// int idx =  i*NUM_THREAD_IO_WORKER_INTER_SERVER;
+		// size_t test_len = UCX_Rma_Test_String_Len;
+		// char* test_buff = (char*)malloc(test_len);
+		// fprintf(stdout, "mpi_rank %d: UCX_Put From %d to %d times %d\n", mpi_rank,  mpi_rank, i, j);
+		// sprintf(test_buff, UCX_Rma_Test_String, mpi_rank, i, j);
+		// uint64_t rem_addr = Server_ucx.pUCX_Data[idx+j].remote_addr_IO_CMD;
+		// Server_ucx.UCX_Put(idx + j, test_buff, (void*)rem_addr, test_len);
+		// free(test_buff);
+
+		// if(pthread_create(&(thread_ucx_test), NULL, UCX_Rma_Test, &Server_ucx)) {
+		// 	fprintf(stderr, "Error creating thread\n");
+		// 	return 1;
+		// }
+		// if(pthread_join(thread_ucx_test, NULL)) {
+		// 	fprintf(stderr, "Error joining thread.\n");
+		// 	return 2;
+		// }
+		// UCX_Rma_Test_Check(&Server_ucx);
+	}
+	
 
 //	if(pthread_create(&(thread_global_sharing), NULL, Func_thread_Global_Fair_Sharing, &Server_qp)) {
 //		fprintf(stderr, "Error creating thread\n");

@@ -101,9 +101,12 @@ ucs_status_t SERVER_RDMA::server_create_ep(ucp_worker_h data_worker,
 
     status = ucp_ep_create(data_worker, &ep_params, peer_ep);
     if (status != UCS_OK) {
-        fprintf(stderr, "failed to create an endpoint on the server: (%s)\n",
+        fprintf(stderr, "mpi_rank %d failed to create an endpoint on the server: (%s)\n", mpi_rank,
                 ucs_status_string(status));
-    }
+    } /*else {
+        fprintf(stdout, "mpi_rank %d succeed to create an endpoint on the server: (%s)\n", mpi_rank,
+                ucs_status_string(status));
+    }*/
 
     return status;
 }
@@ -133,7 +136,10 @@ void SERVER_RDMA::AllocateUCPDataWorker(int idx) {
     if(status != UCS_OK) {
         fprintf(stderr, "ucp_worker_get_address Failure: %s.\n", ucs_status_string(status));
 		exit(1);
-    }
+    } 
+    // else {
+    //     fprintf(stderr, "ucp_worker_get_address Success: %s %d\n", pUCX->address_p, pUCX->address_length);
+    // }
 }
 
 int SERVER_RDMA::Init_Context(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker)
@@ -254,12 +260,14 @@ void SERVER_RDMA::Init_Server_Memory(int max_num_qp) {
     ucs_status_t status;
     status = RegisterBuf_RW_Local_Remote(p_shm_Global, nSizeshm_Global, &mr_shm_global);
 	assert(mr_shm_global != NULL);
+    assert(status == UCS_OK);
 
     rem_buff = (unsigned char*)p_shm_Global;
     rem_buff_size = nSizeshm_Global;
 	status = ucp_rkey_pack(ucp_main_context, mr_shm_global, &rkey_buffer, &rkey_buffer_size);
     assert(rkey_buffer != NULL);
     assert(rkey_buffer_size <= MAX_UCP_RKEY_SIZE);
+    assert(status == UCS_OK);
 }
 
 ucs_status_t SERVER_RDMA::RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp_mem_h* memh) {
@@ -272,7 +280,7 @@ ucs_status_t SERVER_RDMA::RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp
     return status;
 }
 
-void SERVER_RDMA::UCX_Put(int idx, void* loc_buff, void* rem_buf, size_t len) {
+void SERVER_RDMA::UCX_Put(int idx, void* loc_buf, void* rem_buf, size_t len) {
     long int t1_ms, t2_ms;
     struct timeval tm1, tm2;
     int bTimeOut=0;	// the flag of time out in PUT. 
@@ -286,10 +294,16 @@ void SERVER_RDMA::UCX_Put(int idx, void* loc_buff, void* rem_buf, size_t len) {
     ucp_worker_h ucp_data_worker = pUCX_Data[idx].ucp_data_worker;
 retry:
     ucp_request_param_t param;
+    memset(&param, 0, sizeof(ucp_request_param_t));
     param.op_attr_mask = 0;
-    ucs_status_ptr_t req = ucp_put_nbx(peer_ep, loc_buff, len, (uint64_t)rem_buff, rkey, &param);
+    ucs_status_ptr_t req = ucp_put_nbx(peer_ep, loc_buf, len, (uint64_t)rem_buf, rkey, &param);
     ucs_status_t status = ucp_request_check_status(req);
     if(UCS_PTR_IS_ERR(req)) {
+        if(bTimeOut) {
+            printf("ERROR> Rank = %d Put Timeout in UCX(%d) Put %zu bytes\n", 
+				mpi_rank, idx, len);
+            return;
+        }
         fprintf(stderr, "Error occured at %s:L%d. Failure: ucp_put_nbx in Put(). tid= %d nConnectionAccu = %d Server() Client(%s)\n", 
 			__FILE__, __LINE__, nConnectionAccu, pUCX_Data[idx].ctid, pUCX_Data[idx].szClientHostName, pUCX_Data[idx].szClientExeName);
 		exit(1);
@@ -299,12 +313,14 @@ retry:
         gettimeofday(&tm1, NULL);
 		t1_ms = (tm1.tv_sec * 1000) + (tm1.tv_usec / 1000);
         while(1) {
+            // fprintf(stdout, "ucp_worker_progress\n");
             ucp_worker_progress(ucp_data_worker);
             gettimeofday(&tm2, NULL);
 			t2_ms = (tm2.tv_sec * 1000) + (tm2.tv_usec / 1000);
             ucs_status_t status = ucp_request_check_status(req);
             if(status == UCS_OK) {
                 pUCX_Data[idx].nPut_Get_Done +=1;
+                break;
             }
             else if(status == UCS_INPROGRESS) {
                 if( (t2_ms - t1_ms) > UCX_PUT_TIMEOUT_MS )	{
@@ -322,7 +338,7 @@ retry:
     }
 }
 
-void SERVER_RDMA::UCX_Get(int idx, void* loc_buff, void* rem_buf, size_t len) {
+void SERVER_RDMA::UCX_Get(int idx, void* loc_buf, void* rem_buf, size_t len) {
     long int t1_ms, t2_ms;
     struct timeval tm1, tm2;
     int bTimeOut=0;	// the flag of time out in PUT. 
@@ -336,10 +352,16 @@ void SERVER_RDMA::UCX_Get(int idx, void* loc_buff, void* rem_buf, size_t len) {
     ucp_worker_h ucp_data_worker = pUCX_Data[idx].ucp_data_worker;
 retry:
     ucp_request_param_t param;
+    memset(&param, 0, sizeof(ucp_request_param_t));
     param.op_attr_mask = 0;
-    ucs_status_ptr_t req = ucp_get_nbx(peer_ep, loc_buff, len, (uint64_t)rem_buff, rkey, &param);
+    ucs_status_ptr_t req = ucp_get_nbx(peer_ep, loc_buf, len, (uint64_t)rem_buf, rkey, &param);
     ucs_status_t status = ucp_request_check_status(req);
     if(UCS_PTR_IS_ERR(req)) {
+        if(bTimeOut) {
+            printf("ERROR> Rank = %d Get Timeout in UCX(%d) Put %zu bytes\n", 
+				mpi_rank, idx, len);
+            return;
+        }
         fprintf(stderr, "Error occured at %s:L%d. Failure: ucp_get_nbx in Put(). tid= %d nConnectionAccu = %d Server() Client(%s)\n", 
 			__FILE__, __LINE__, nConnectionAccu, pUCX_Data[idx].ctid, pUCX_Data[idx].szClientHostName, pUCX_Data[idx].szClientExeName);
 		exit(1);
@@ -355,6 +377,7 @@ retry:
             ucs_status_t status = ucp_request_check_status(req);
             if(status == UCS_OK) {
                 pUCX_Data[idx].nPut_Get_Done +=1;
+                break;
             }
             else if(status == UCS_INPROGRESS) {
                 if( (t2_ms - t1_ms) > UCX_PUT_TIMEOUT_MS )	{
