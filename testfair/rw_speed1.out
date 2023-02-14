@@ -1,26 +1,5 @@
-TACC:  Starting up job 5217008 
+TACC:  Starting up job 5219244 
 TACC:  Starting parallel tasks... 
-DBG> Timeout. pid = 83435 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83533 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83572 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83549 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83550 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83442 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83454 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83576 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83446 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83554 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83568 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83434 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83484 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83441 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83443 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83447 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83455 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83466 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83489 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83528 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83564 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83569 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83571 on c100-009.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 83573 on c100-009.frontera.tacc.utexas.edu
+rw_speed time=2023-02-13:12:13:15 np=56 nn=1 sim_nn=1 rank0host=c100-009.frontera.tacc.utexas.edu -prefix=/myfs/rw_speed -iosize=1048576 -filesize=104857600 -time=60.0 -tag=job1
+rw_speed.job1 time=2023-02-13:12:14:15 nn=1 np=56 user=101 jobid=1001 mbps=19639.349 mbps_rank_stddev=21.809 mbps_1sec_time_slices=(6173.0,17403.0,18764.0,20249.0,21109.0,21520.0,22119.0,21736.0,20789.0,21613.0,21456.0,21309.0,21263.0,21980.0,21655.0,18465.0,15930.0,16411.0,16089.0,17105.0,17723.0,17648.0,18134.0,17889.0,18260.0,17590.0,18524.0,18042.0,18518.0,18694.0,18109.0,18188.0,18214.0,18256.0,18431.0,18258.0,18552.0,18556.0,18238.0,18484.0,18626.0,18599.0,18530.0,18635.0,18544.0,20696.0,21015.0,20741.0,21649.0,21972.0,22703.0,22720.0,22168.0,22382.0,22172.0,21994.0,21965.0,21521.0,21527.0,22131.0,56.0)
+TACC:  Shutdown complete. Exiting. 

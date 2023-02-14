@@ -34,6 +34,7 @@
 #define MAX_UCP_RKEY_SIZE (50)
 #define MAX_UCP_ADDR_LEN (250)
 
+#define UCX_QUEUE_SIZE	(1)
 typedef struct {
     ucp_worker_h ucp_data_worker;
     int nPut_Get, nPut_Get_Done;
@@ -66,7 +67,7 @@ public:
     // ucp_address_t *address_p = NULL;
     // size_t address_length       = 0;
 
-
+    int nConnectionAccu = 0;
     int max_qp, nQP, IdxLastQP, IdxLastQP64, FirstAV_QP;	// IdxLastQP64 is 64 aligned for IdxLastQP
     int nSizeshm_Global;
 pthread_mutex_t process_lock;	// for this process
@@ -97,13 +98,18 @@ pthread_mutex_t process_lock;	// for this process
     SERVER_RDMA(void);
 	~SERVER_RDMA(void);
     void Init_Server_Memory(int max_num_qp);
-    ucs_status_t RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp_mem_h* memh);
+    void Server_Loop(); // Socket_Server_Loop
+
     void Init_Server_UCX_Env(int remote_buff_size);
+    void Clean_UCX_Env(void);
+    void AllocateUCPDataWorker(int idx); // IB_CreateQueuePair
     ucs_status_t server_create_ep(ucp_worker_h data_worker,
                                      ucp_address_t* peer_address,
                                      ucp_ep_h *server_ep);
-    void AllocateUCPDataWorker(int idx); // IB_CreateQueuePair
-    void Server_Loop(); // Socket_Server_Loop
+    ucs_status_t RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp_mem_h* memh);
+    void UCX_Put(int idx, void* loc_buff, void* rem_buf, size_t len);
+    void UCX_Get(int idx, void* loc_buff, void* rem_buf, size_t len);
+    
 private:
     int Init_Context(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker);
     int Init_Worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker);

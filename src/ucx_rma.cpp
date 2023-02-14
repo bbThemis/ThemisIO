@@ -10,7 +10,7 @@
 
 extern CFIXEDSIZE_MEM_ALLOCATOR CFixedSizeMemAllcator;
 extern int mpi_rank, nFSServer;	// rank and size of MPI
-
+pthread_t pthread_IO_Worker_UCX[NUM_THREAD_IO_WORKER];
 
 SERVER_RDMA::SERVER_RDMA(void)
 {
@@ -72,6 +72,15 @@ void SERVER_RDMA::Init_Server_UCX_Env(int remote_buff_size) {
 		assert(ucp_data_worker[i] != NULL);
 	}
     
+}
+
+void SERVER_RDMA::Clean_UCX_Env(void) {
+    for(int i=0; i<NUM_THREAD_IO_WORKER; i++) {
+        if(ucp_data_worker[i]) {
+            ucp_worker_destroy(ucp_data_worker[i]);
+            ucp_data_worker[i] = NULL;
+        }
+    }
 }
 
 ucs_status_t SERVER_RDMA::server_create_ep(ucp_worker_h data_worker,
@@ -196,8 +205,9 @@ void SERVER_RDMA::Init_Server_Memory(int max_num_qp) {
 	nSizeofIOResult_Recv = sizeof(char)*IO_RESULT_BUFFER_SIZE;	// the size of buffer to recv results from other servers. 
 
 	nSizePerCallReturnBlock = (SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN) + 1*sizeof(int) + 64) & 0xFFFFFFC0;
-	nSizeofReturnBuffer = CFixedSizeMemAllcator.Query_MemSize(nSizePerCallReturnBlock, MAX_NUM_RETURN_BUFF);
-
+    // UCX_TEST
+	// nSizeofReturnBuffer = CFixedSizeMemAllcator.Query_MemSize(nSizePerCallReturnBlock, MAX_NUM_RETURN_BUFF);
+    nSizeofReturnBuffer = 0;
 	if(mpi_rank == 0)	{
 		nSizeshm_Global = nSizeofNewMsgFlag + nSizeofHeartBeat + nSizeofIOCmdMsg + nSizeofIOResult + nSizeofIOResult_Recv + nSizeofReturnBuffer 
 			+ sizeof(JOB_SCALE_LIST) + sizeof(JOB_OP_SEND)*nFSServer;
@@ -239,8 +249,8 @@ void SERVER_RDMA::Init_Server_Memory(int max_num_qp) {
 		pJobScale_Remote = pJobScale_Local;
 	}
 	// Other rank will get the value of pJobScale_Remote and pJob_OP_Recv with bcast!!!
-
-	CFixedSizeMemAllcator.Init_Memory_Pool(p_CallReturnBuff);
+    // UCX_TEST
+	// CFixedSizeMemAllcator.Init_Memory_Pool(p_CallReturnBuff);
     ucs_status_t status;
     status = RegisterBuf_RW_Local_Remote(p_shm_Global, nSizeshm_Global, &mr_shm_global);
 	assert(mr_shm_global != NULL);
@@ -262,3 +272,102 @@ ucs_status_t SERVER_RDMA::RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp
     return status;
 }
 
+void SERVER_RDMA::UCX_Put(int idx, void* loc_buff, void* rem_buf, size_t len) {
+    long int t1_ms, t2_ms;
+    struct timeval tm1, tm2;
+    int bTimeOut=0;	// the flag of time out in PUT. 
+    if(pUCX_Data[idx].bTimeout)	{	// Something wrong with this QP. Client may disconnect or die...
+		printf("WARNING> QP %d got timeout in previous Put(). Ignore all OPs for this QP. HostName = %s tid = %d\n", 
+			idx, pUCX_Data[idx].szClientHostName, pUCX_Data[idx].ctid);
+		return;
+	}
+    ucp_ep_h peer_ep = pUCX_Data[idx].peer_ep;
+    ucp_rkey_h rkey = pUCX_Data[idx].rkey;
+    ucp_worker_h ucp_data_worker = pUCX_Data[idx].ucp_data_worker;
+retry:
+    ucp_request_param_t param;
+    param.op_attr_mask = 0;
+    ucs_status_ptr_t req = ucp_put_nbx(peer_ep, loc_buff, len, (uint64_t)rem_buff, rkey, &param);
+    ucs_status_t status = ucp_request_check_status(req);
+    if(UCS_PTR_IS_ERR(req)) {
+        fprintf(stderr, "Error occured at %s:L%d. Failure: ucp_put_nbx in Put(). tid= %d nConnectionAccu = %d Server() Client(%s)\n", 
+			__FILE__, __LINE__, nConnectionAccu, pUCX_Data[idx].ctid, pUCX_Data[idx].szClientHostName, pUCX_Data[idx].szClientExeName);
+		exit(1);
+    }
+    pUCX_Data[idx].nPut_Get++;
+    if( (pUCX_Data[idx].nPut_Get - pUCX_Data[idx].nPut_Get_Done) >= UCX_QUEUE_SIZE ) {
+        gettimeofday(&tm1, NULL);
+		t1_ms = (tm1.tv_sec * 1000) + (tm1.tv_usec / 1000);
+        while(1) {
+            ucp_worker_progress(ucp_data_worker);
+            gettimeofday(&tm2, NULL);
+			t2_ms = (tm2.tv_sec * 1000) + (tm2.tv_usec / 1000);
+            ucs_status_t status = ucp_request_check_status(req);
+            if(status == UCS_OK) {
+                pUCX_Data[idx].nPut_Get_Done +=1;
+            }
+            else if(status == UCS_INPROGRESS) {
+                if( (t2_ms - t1_ms) > UCX_PUT_TIMEOUT_MS )	{
+					bTimeOut = 1;
+					goto retry;
+				}
+            }
+            else {
+                fprintf(stderr, "ucp_put_nbx failed %s\n", ucs_status_string(status));
+//				pthread_mutex_unlock(&(pUCX_Data[idx].qp_lock));
+				exit(1);
+				return;
+            }
+        }
+    }
+}
+
+void SERVER_RDMA::UCX_Get(int idx, void* loc_buff, void* rem_buf, size_t len) {
+    long int t1_ms, t2_ms;
+    struct timeval tm1, tm2;
+    int bTimeOut=0;	// the flag of time out in PUT. 
+    if(pUCX_Data[idx].bTimeout)	{	// Something wrong with this QP. Client may disconnect or die...
+		printf("WARNING> QP %d got timeout in previous Put(). Ignore all OPs for this QP. HostName = %s tid = %d\n", 
+			idx, pUCX_Data[idx].szClientHostName, pUCX_Data[idx].ctid);
+		return;
+	}
+    ucp_ep_h peer_ep = pUCX_Data[idx].peer_ep;
+    ucp_rkey_h rkey = pUCX_Data[idx].rkey;
+    ucp_worker_h ucp_data_worker = pUCX_Data[idx].ucp_data_worker;
+retry:
+    ucp_request_param_t param;
+    param.op_attr_mask = 0;
+    ucs_status_ptr_t req = ucp_get_nbx(peer_ep, loc_buff, len, (uint64_t)rem_buff, rkey, &param);
+    ucs_status_t status = ucp_request_check_status(req);
+    if(UCS_PTR_IS_ERR(req)) {
+        fprintf(stderr, "Error occured at %s:L%d. Failure: ucp_get_nbx in Put(). tid= %d nConnectionAccu = %d Server() Client(%s)\n", 
+			__FILE__, __LINE__, nConnectionAccu, pUCX_Data[idx].ctid, pUCX_Data[idx].szClientHostName, pUCX_Data[idx].szClientExeName);
+		exit(1);
+    }
+    pUCX_Data[idx].nPut_Get++;
+    if( (pUCX_Data[idx].nPut_Get - pUCX_Data[idx].nPut_Get_Done) >= UCX_QUEUE_SIZE ) {
+        gettimeofday(&tm1, NULL);
+		t1_ms = (tm1.tv_sec * 1000) + (tm1.tv_usec / 1000);
+        while(1) {
+            ucp_worker_progress(ucp_data_worker);
+            gettimeofday(&tm2, NULL);
+			t2_ms = (tm2.tv_sec * 1000) + (tm2.tv_usec / 1000);
+            ucs_status_t status = ucp_request_check_status(req);
+            if(status == UCS_OK) {
+                pUCX_Data[idx].nPut_Get_Done +=1;
+            }
+            else if(status == UCS_INPROGRESS) {
+                if( (t2_ms - t1_ms) > UCX_PUT_TIMEOUT_MS )	{
+					bTimeOut = 1;
+					goto retry;
+				}
+            }
+            else {
+                fprintf(stderr, "ucp_get_nbx failed %s\n", ucs_status_string(status));
+//				pthread_mutex_unlock(&(pQP_Data[idx].qp_lock));
+				exit(1);
+				return;
+            }
+        }
+    }
+}

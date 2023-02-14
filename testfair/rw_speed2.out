@@ -1,31 +1,5 @@
-TACC:  Starting up job 5217008 
+TACC:  Starting up job 5219244 
 TACC:  Starting parallel tasks... 
-DBG> Timeout. pid = 56284 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56317 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56320 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56303 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56327 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56286 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56289 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56319 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56332 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56302 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56307 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56331 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56313 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56308 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56285 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56288 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56306 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56301 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56323 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56329 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56282 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56283 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56326 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56298 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56314 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56321 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56324 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56292 on c100-010.frontera.tacc.utexas.edu
-DBG> Timeout. pid = 56277 on c100-010.frontera.tacc.utexas.edu
+rw_speed time=2023-02-13:12:13:30 np=56 nn=1 sim_nn=1 rank0host=c100-010.frontera.tacc.utexas.edu -prefix=/myfs/rw_speed -iosize=1048576 -filesize=104857600 -time=30.0 -tag=job2
+rw_speed.job2 time=2023-02-13:12:14:00 nn=1 np=56 user=102 jobid=1002 mbps=17570.396 mbps_rank_stddev=12.188 mbps_1sec_time_slices=(6133.0,14942.0,15926.0,16435.0,17270.0,17714.0,17357.0,17408.0,17488.0,17652.0,17900.0,18015.0,17879.0,17675.0,18019.0,18137.0,17977.0,17957.0,17706.0,17754.0,18111.0,17834.0,18121.0,18229.0,18253.0,18046.0,18168.0,18435.0,18356.0,18263.0,55.0)
+TACC:  Shutdown complete. Exiting. 

@@ -43,6 +43,7 @@ extern LISTJOBREC IdxJobRecList[MAX_NUM_ACTIVE_JOB];
 extern PARAM_PREALLOCATE_QP pParam_PreAllocate[N_THREAD_PREALLOCATE_QP];
 extern pthread_t pthread_preallocate[N_THREAD_PREALLOCATE_QP];
 extern pthread_t pthread_IO_Worker[NUM_THREAD_IO_WORKER];
+extern pthread_t pthread_IO_Worker_UCX[NUM_THREAD_IO_WORKER];
 extern CCreatedUniqueThread Unique_Thread;
 extern CIO_QUEUE IO_Queue_List[MAX_NUM_QUEUE];
 
@@ -237,7 +238,7 @@ void Setup_UCX_Among_Servers(void) {
 
 				Server_ucx.pUCX_Data[idx+j].nPut_Get = 0;
 				Server_ucx.pUCX_Data[idx+j].nPut_Get_Done = 0;
-				
+				Server_ucx.pUCX_Data[idx+j].bTimeout = 0;
 
 				Server_ucx.pUCX_Data[idx+j].idx_queue = j;	// the first queue is reserved for inter-server communication
 			}
@@ -317,6 +318,13 @@ static void* Func_thread_Print_Data(void *pParam)
 	return NULL;
 }
 
+
+static void* Func_thread_UCX_Rma_Test(void* pParam) {
+	SERVER_RDMA* pServer_RDMA;
+	pServer_RDMA = (SERVER_RDMA*)pParam;
+	
+}
+
 static void* Func_thread_Polling_New_Msg(void *pParam)
 {
 	SERVER_QUEUEPAIR *pServer_qp;
@@ -347,14 +355,15 @@ static void* Func_thread_ucx_server(void *pParam) {
 
 	pServer_ucx = (SERVER_RDMA *)pParam;
 	pServer_ucx->Init_Server_UCX_Env(DEFAULT_REM_BUFF_SIZE);
-	pServer_ucx->Init_Server_Memory(2048);
-	for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
-		IO_Worker_tid_List[i] = i;
-		if(pthread_create(&(pthread_IO_Worker[i]), NULL, Func_thread_IO_Worker, &(IO_Worker_tid_List[i]))) {
-			fprintf(stderr, "Error creating thread\n");
-			return 0;
-		}
-	}
+	pServer_ucx->Init_Server_Memory(512);
+	//UCX_TEST
+	// for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
+	// 	IO_Worker_tid_List[i] = i;
+	// 	if(pthread_create(&(pthread_IO_Worker_UCX[i]), NULL, Func_thread_IO_Worker, &(IO_Worker_tid_List[i]))) {
+	// 		fprintf(stderr, "Error creating thread\n");
+	// 		return 0;
+	// 	}
+	// }
 
 	Ucx_Server_Started = 1;	// active the flag: Server started running!!!
 	printf("Rank = %d. UCX Server is started.\n", mpi_rank);
@@ -575,19 +584,24 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Error creating thread\n");
 		return 1;
 	}
+	// UCX_TEST
 	if(pthread_create(&(thread_ucx_server), NULL, Func_thread_ucx_server, &Server_ucx)) {
 		fprintf(stderr, "Error creating thread\n");
 		return 1;
 	}
+
 //	Setup_Signal_QueuePair();
 	while(1)	{
 		if(Server_Started)	break;
 	}
+	
+	Setup_QP_Among_Servers();
+
 	while(1)	{
 		if(Ucx_Server_Started)	break;
 	}
-	Setup_QP_Among_Servers();
 	Setup_UCX_Among_Servers();
+
 //	if(pthread_create(&(thread_global_sharing), NULL, Func_thread_Global_Fair_Sharing, &Server_qp)) {
 //		fprintf(stderr, "Error creating thread\n");
 //		return 1;
