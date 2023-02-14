@@ -318,11 +318,24 @@ static void* Func_thread_Print_Data(void *pParam)
 	return NULL;
 }
 
-
+#define Func_thread_UCX_Rma_Test_String "From%dto%dtimes%d\n"
+#define Func_thread_UCX_Rma_Test_String_Len 30
 static void* Func_thread_UCX_Rma_Test(void* pParam) {
 	SERVER_RDMA* pServer_RDMA;
 	pServer_RDMA = (SERVER_RDMA*)pParam;
-	
+	size_t test_len = Func_thread_UCX_Rma_Test_String_Len;
+	for(int i=0; i<nFSServer; i++)	{
+		if(i != mpi_rank)	{
+			int idx = i*NUM_THREAD_IO_WORKER_INTER_SERVER;
+			for(int j=0; j<NUM_THREAD_IO_WORKER_INTER_SERVER; j++)	{
+				char* test_buff = (char*)malloc(test_len);
+				sprintf(test_buff, Func_thread_UCX_Rma_Test_String, mpi_rank, i, j);
+				pServer_RDMA->UCX_Put(idx + j, test_buff, (void*)pServer_RDMA->pUCX_Data[idx+j].remote_addr_IO_CMD, test_len);
+				free(test_buff);
+			}
+		}
+	}
+
 }
 
 static void* Func_thread_Polling_New_Msg(void *pParam)
