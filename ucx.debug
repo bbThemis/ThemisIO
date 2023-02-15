@@ -1,32 +1,32 @@
-TACC:  Starting up job 5223287 
+TACC:  Starting up job 5225034 
 TACC:  Starting parallel tasks... 
-[1676407308.448421] [c100-009:235651:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407308.473568] [c100-009:235651:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407308.482375] [c100-009:235651:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676407308.482375] [c100-009:235651:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676407309.630668] [c100-011:332075:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407309.707482] [c100-011:332075:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407309.716365] [c100-011:332075:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676407309.716365] [c100-011:332075:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-DBG> start_addr = 2b0803e03000  end_addr = 2b2803e03000
-DBG> start_addr = 2b822be03000  end_addr = 2ba22be03000
+[1676476814.806101] [c100-010:270687:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476814.830418] [c100-010:270687:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476814.839218] [c100-010:270687:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
+[1676476814.839218] [c100-010:270687:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1676476815.988698] [c100-011:49836:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476816.066961] [c100-011:49836:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476816.075900] [c100-011:49836:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
+[1676476816.075900] [c100-011:49836:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+DBG> start_addr = 2b1c6a802000  end_addr = 2b3c6a802000
+DBG> start_addr = 2b1e11602000  end_addr = 2b3e11602000
 INFO> Finished Init_Memory().
 INFO> Finished Init_Memory().
 INFO> There are 2 servers.
-     0 192.168.64.173 8888
+     0 192.168.64.174 8888
      1 192.168.64.175 8888
-[1676407311.586447] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.589099] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-Rank = 1. Server is started.
+[1676476817.992119] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476817.994861] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
 INFO> fairness policy: job-fair
 DBG> FairQueue thread_id 0 inter-server-queue 0
 DBG> FairQueue thread_id 1 inter-server-queue 1
 DBG> FairQueue thread_id 2 inter-server-queue 2
-DBG> FairQueue thread_id 3 inter-server-queue 3
-DBG> FairQueue thread_id 4 inter-server-queue 4
 DBG> FairQueue thread_id 5 inter-server-queue 5
 DBG> FairQueue thread_id 6 inter-server-queue 6
 DBG> FairQueue thread_id 7 inter-server-queue 7
+DBG> FairQueue thread_id 3 inter-server-queue 3
+DBG> FairQueue thread_id 4 inter-server-queue 4
+Rank = 1. Server is started.
 DBG> FairQueue rank 1 thread_id 8 queues 8..47 (count=40)
 DBG> FairQueue rank 1 thread_id 9 queues 48..87 (count=40)
 DBG> FairQueue rank 1 thread_id 10 queues 88..127 (count=40)
@@ -35,261 +35,237 @@ DBG> FairQueue rank 1 thread_id 12 queues 168..207 (count=40)
 DBG> FairQueue rank 1 thread_id 13 queues 208..247 (count=40)
 DBG> FairQueue rank 1 thread_id 14 queues 248..287 (count=40)
 DBG> FairQueue rank 1 thread_id 15 queues 288..327 (count=40)
-DBG> FairQueue rank 1 thread_id 16 queues 328..367 (count=40)
 DBG> FairQueue rank 1 thread_id 17 queues 368..407 (count=40)
+DBG> FairQueue rank 1 thread_id 16 queues 328..367 (count=40)
 DBG> FairQueue rank 1 thread_id 18 queues 408..447 (count=40)
 DBG> FairQueue rank 1 thread_id 19 queues 448..487 (count=40)
 DBG> FairQueue rank 1 thread_id 20 queues 488..527 (count=40)
 DBG> FairQueue rank 1 thread_id 21 queues 528..567 (count=40)
 DBG> FairQueue rank 1 thread_id 22 queues 568..607 (count=40)
 DBG> FairQueue rank 1 thread_id 23 queues 608..647 (count=40)
+Rank = 0. Server is started.
+DBG> FairQueue thread_id 1 inter-server-queue 1
 INFO> fairness policy: job-fair
 DBG> FairQueue thread_id 0 inter-server-queue 0
-DBG> FairQueue thread_id 4 inter-server-queue 4
 DBG> FairQueue thread_id 2 inter-server-queue 2
 DBG> FairQueue thread_id 3 inter-server-queue 3
-DBG> FairQueue thread_id 1 inter-server-queue 1
+DBG> FairQueue thread_id 4 inter-server-queue 4
 DBG> FairQueue thread_id 5 inter-server-queue 5
-DBG> FairQueue rank 0 thread_id 10 queues 88..127 (count=40)
-DBG> FairQueue thread_id 7 inter-server-queue 7
 DBG> FairQueue thread_id 6 inter-server-queue 6
-DBG> FairQueue rank 0 thread_id 11 queues 128..167 (count=40)
-DBG> FairQueue rank 0 thread_id 12 queues 168..207 (count=40)
+DBG> FairQueue thread_id 7 inter-server-queue 7
 DBG> FairQueue rank 0 thread_id 8 queues 8..47 (count=40)
 DBG> FairQueue rank 0 thread_id 9 queues 48..87 (count=40)
+DBG> FairQueue rank 0 thread_id 10 queues 88..127 (count=40)
+DBG> FairQueue rank 0 thread_id 11 queues 128..167 (count=40)
+DBG> FairQueue rank 0 thread_id 12 queues 168..207 (count=40)
 DBG> FairQueue rank 0 thread_id 13 queues 208..247 (count=40)
 DBG> FairQueue rank 0 thread_id 14 queues 248..287 (count=40)
 DBG> FairQueue rank 0 thread_id 15 queues 288..327 (count=40)
-Rank = 0. Server is started.
 DBG> FairQueue rank 0 thread_id 16 queues 328..367 (count=40)
-DBG> FairQueue rank 0 thread_id 17 queues 368..407 (count=40)
 DBG> FairQueue rank 0 thread_id 18 queues 408..447 (count=40)
+DBG> FairQueue rank 0 thread_id 17 queues 368..407 (count=40)
 DBG> FairQueue rank 0 thread_id 19 queues 448..487 (count=40)
 DBG> FairQueue rank 0 thread_id 20 queues 488..527 (count=40)
-DBG> FairQueue rank 0 thread_id 22 queues 568..607 (count=40)
 DBG> FairQueue rank 0 thread_id 21 queues 528..567 (count=40)
+DBG> FairQueue rank 0 thread_id 22 queues 568..607 (count=40)
 DBG> FairQueue rank 0 thread_id 23 queues 608..647 (count=40)
-DBG> Server_qp.pJob_OP_Recv = 0x2b327f2b7a00
-DBG> Server_qp.pJob_OP_Recv = 0x2b327f2b7a00
+DBG> Server_qp.pJob_OP_Recv = 0x2b4887ac1a00
+DBG> Server_qp.pJob_OP_Recv = 0x2b4887ac1a00
 DBG> Rank = 0 Finishing Setup_QP_Among_Servers().
-DBG> Server_qp.pJob_OP_Recv = 0x2b327f2b7a00
-DBG> Server_qp.pJob_OP_Recv = 0x2b327f2bba00
+DBG> Server_qp.pJob_OP_Recv = 0x2b4887ac1a00
+DBG> Server_qp.pJob_OP_Recv = 0x2b4887ac5a00
 DBG> Rank = 1 Finishing Setup_QP_Among_Servers().
-[1676407311.615423] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.615652] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.623834] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.624010] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.645343] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.647244] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.651903] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.666585] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.686055] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.689624] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.692341] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.695978] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.714678] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.719134] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.721730] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.725827] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.743405] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.750117] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.750880] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.757239] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.769171] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.776014] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.778006] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.785055] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.794912] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.801688] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.805605] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.812708] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.820632] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.834988] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.841438] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.843111] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.862130] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.864362] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.871197] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.876811] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.892515] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.897456] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.899256] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.903702] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.918265] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.925185] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.928391] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.934661] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.944165] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.950572] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.957840] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.964187] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.969451] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.975653] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.985029] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.991256] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407311.997549] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.004046] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.014216] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.020599] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.025791] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.033522] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.042117] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.048466] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.054151] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.060742] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.069223] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.075771] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.082635] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.088985] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.096181] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.102612] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.108002] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.114436] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.124527] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.130928] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.133534] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.139881] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.151761] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.158059] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.158808] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.165204] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.181117] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.184171] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.187440] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.206043] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.210501] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.216807] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.224985] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.231384] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.237679] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.253089] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.257489] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.263967] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.276358] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.283065] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.285735] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.292122] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.306706] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.311455] [c100-009:235651:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676407312.315806] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.019522] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.019783] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.027681] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.027841] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.047122] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.049353] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.055687] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.068432] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.088539] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.088386] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.094989] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.095106] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.114071] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.116146] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.120381] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.122550] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.140901] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.143069] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.147241] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.149453] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.169085] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.171268] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.175550] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.177700] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.198164] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.197304] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.204528] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.203733] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.222916] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.226479] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.232837] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.243314] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.253358] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.263731] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.270244] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.271827] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.290682] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.292595] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.297000] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.298857] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.316212] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.321916] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.322642] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.328380] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.344504] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.350842] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.354177] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.360916] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.372773] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.379105] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.384254] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.390541] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.399542] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.407583] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.413210] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.421701] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.427874] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.434242] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.443947] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.450307] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.453454] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.459972] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.471386] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.478000] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.479273] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.485593] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.501673] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.506210] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.507923] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.513775] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.531452] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.535825] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.537977] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.542186] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.559044] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.561422] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.565438] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.567766] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.588411] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.589545] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.595708] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.604974] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.618206] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.624551] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.625472] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.631841] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.647819] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.650922] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.657219] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.670156] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.676360] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.682741] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.690915] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.697231] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.701858] [c100-010:270687:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.721474] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
 Rank = 0. UCX Server is started.
-[1676407312.336915] [c100-011:332075:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.727868] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1676476818.750200] [c100-011:49836:1]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
 Rank = 1. UCX Server is started.
-DBG> Server_ucx.pJob_OP_Recv = 0x2b32d4226200
-DBG> Server_ucx.pJob_OP_Recv = 0x2b32d4226200
+DBG> Server_ucx.pJob_OP_Recv = 0x2b48e0226200
+DBG> Server_ucx.pJob_OP_Recv = 0x2b48e0226200
 DBG> Rank = 0 Finishing Setup_UCX_Among_Servers().
-mpi_rank: 0 UCX_Rma_Test begin
-DBG> Server_ucx.pJob_OP_Recv = 0x2b32d4226200
-DBG> Server_ucx.pJob_OP_Recv = 0x2b32d422a200
+mpi_rank: 0 UCX_Rma_Put_Test begin
+DBG> Server_ucx.pJob_OP_Recv = 0x2b48e0226200
+DBG> Server_ucx.pJob_OP_Recv = 0x2b48e022a200
 DBG> Rank = 1 Finishing Setup_UCX_Among_Servers().
-mpi_rank: 1 UCX_Rma_Test begin
-mpi_rank: 0 UCX_Rma_Test_Check begin
-mpi_rank 0: UCX_Put Check From 1 to 0 times 0 addr 0x2b32d1004a00
-From 1 to 0 times 0 pass check
-mpi_rank 0: UCX_Put Check From 1 to 0 times 1 addr 0x2b32d1004b00
-From 1 to 0 times 1 pass check
-mpi_rank 0: UCX_Put Check From 1 to 0 times 2 addr 0x2b32d1004c00
-From 1 to 0 times 2 pass check
-mpi_rank 0: UCX_Put Check From 1 to 0 times 3 addr 0x2b32d1004d00
-From 1 to 0 times 3 pass check
-mpi_rank 0: UCX_Put Check From 1 to 0 times 4 addr 0x2b32d1004e00
-From 1 to 0 times 4 pass check
-mpi_rank: 1 UCX_Rma_Test_Check begin
-mpi_rank 1: UCX_Put Check From 0 to 1 times 0 addr 0x2bacf6803200
-mpi_rank 0: UCX_Put Check From 1 to 0 times 5 addr 0x2b32d1004f00
-From 1 to 0 times 5 pass check
-mpi_rank 0: UCX_Put Check From 1 to 0 times 6 addr 0x2b32d1005000
-From 1 to 0 times 6 pass check
-mpi_rank 0: UCX_Put Check From 1 to 0 times 7 addr 0x2b32d1005100
-From 1 to 0 times 7 pass check
-From 0 to 1 times 0 pass check
-mpi_rank 1: UCX_Put Check From 0 to 1 times 1 addr 0x2bacf6803300
-From 0 to 1 times 1 pass check
-mpi_rank 1: UCX_Put Check From 0 to 1 times 2 addr 0x2bacf6803400
-From 0 to 1 times 2 pass check
-mpi_rank 1: UCX_Put Check From 0 to 1 times 3 addr 0x2bacf6803500
-From 0 to 1 times 3 pass check
-mpi_rank 1: UCX_Put Check From 0 to 1 times 4 addr 0x2bacf6803600
+mpi_rank: 1 UCX_Rma_Put_Test begin
+mpi_rank: 0 UCX_Rma_Put_Test_Check begin
+mpi_rank 0: UCX_Put Check From 1 to 0 times 0 addr 0x2b48dd004a00
+From 1 to 0 times 0 pass put check
+mpi_rank 0: UCX_Put Check From 1 to 0 times 1 addr 0x2b48dd004b00
+From 1 to 0 times 1 pass put check
+mpi_rank 0: UCX_Put Check From 1 to 0 times 2 addr 0x2b48dd004c00
+From 1 to 0 times 2 pass put check
+mpi_rank 0: UCX_Put Check From 1 to 0 times 3 addr 0x2b48dd004d00
+mpi_rank: 1 UCX_Rma_Put_Test_Check begin
+mpi_rank 1: UCX_Put Check From 0 to 1 times 0 addr 0x2b4736803200
+From 1 to 0 times 3 pass put check
+mpi_rank 0: UCX_Put Check From 1 to 0 times 4 addr 0x2b48dd004e00
+From 1 to 0 times 4 pass put check
+mpi_rank 0: UCX_Put Check From 1 to 0 times 5 addr 0x2b48dd004f00
+From 1 to 0 times 5 pass put check
+From 0 to 1 times 0 pass put check
+mpi_rank 1: UCX_Put Check From 0 to 1 times 1 addr 0x2b4736803300
+From 0 to 1 times 1 pass put check
+mpi_rank 1: UCX_Put Check From 0 to 1 times 2 addr 0x2b4736803400
+From 0 to 1 times 2 pass put check
+mpi_rank 1: UCX_Put Check From 0 to 1 times 3 addr 0x2b4736803500
+From 0 to 1 times 3 pass put check
+mpi_rank 1: UCX_Put Check From 0 to 1 times 4 addr 0x2b4736803600
+From 0 to 1 times 4 pass put check
+mpi_rank 0: UCX_Put Check From 1 to 0 times 6 addr 0x2b48dd005000
+From 1 to 0 times 6 pass put check
+mpi_rank 0: UCX_Put Check From 1 to 0 times 7 addr 0x2b48dd005100
+From 1 to 0 times 7 pass put check
+mpi_rank: 0 UCX_Rma_Get_Test begin
+mpi_rank 1: UCX_Put Check From 0 to 1 times 5 addr 0x2b4736803700
+From 0 to 1 times 5 pass put check
+mpi_rank 1: UCX_Put Check From 0 to 1 times 6 addr 0x2b4736803800
+From 0 to 1 times 6 pass put check
+mpi_rank 1: UCX_Put Check From 0 to 1 times 7 addr 0x2b4736803900
+From 0 to 1 times 7 pass put check
+mpi_rank: 1 UCX_Rma_Get_Test begin
+mpi_rank: 0 UCX_Rma_Get_Test_Check begin
+mpi_rank 0: UCX_Get Check From 0 to 1 times 0 addr 0xc84cc40
+From 0 to 1 times 0 pass get check
+mpi_rank 0: UCX_Get Check From 0 to 1 times 1 addr 0xc84cc5e
+From 0 to 1 times 1 pass get check
+mpi_rank 0: UCX_Get Check From 0 to 1 times 2 addr 0xc84cc7c
+From 0 to 1 times 2 pass get check
+mpi_rank 0: UCX_Get Check From 0 to 1 times 3 addr 0xc84cc9a
+From 0 to 1 times 3 pass get check
+mpi_rank: 1 UCX_Rma_Get_Test_Check begin
+mpi_rank 1: UCX_Get Check From 1 to 0 times 0 addr 0xbfc1960
+From 1 to 0 times 0 pass get check
+mpi_rank 0: UCX_Get Check From 0 to 1 times 4 addr 0xc84ccb8
+From 0 to 1 times 4 pass get check
+mpi_rank 0: UCX_Get Check From 0 to 1 times 5 addr 0xc84ccd6
+From 0 to 1 times 5 pass get check
+mpi_rank 0: UCX_Get Check From 0 to 1 times 6 addr 0xc84ccf4
+From 0 to 1 times 6 pass get check
+mpi_rank 1: UCX_Get Check From 1 to 0 times 1 addr 0xbfc197e
+From 1 to 0 times 1 pass get check
+mpi_rank 1: UCX_Get Check From 1 to 0 times 2 addr 0xbfc199c
+From 1 to 0 times 2 pass get check
+mpi_rank 1: UCX_Get Check From 1 to 0 times 3 addr 0xbfc19ba
+From 1 to 0 times 3 pass get check
+mpi_rank 1: UCX_Get Check From 1 to 0 times 4 addr 0xbfc19d8
+From 1 to 0 times 4 pass get check
+mpi_rank 0: UCX_Get Check From 0 to 1 times 7 addr 0xc84cd12
+From 0 to 1 times 7 pass get check
 DBG> Rank = 0,  started Func_thread_Polling_New_Msg().
-From 0 to 1 times 4 pass check
-mpi_rank 1: UCX_Put Check From 0 to 1 times 5 addr 0x2bacf6803700
-From 0 to 1 times 5 pass check
-mpi_rank 1: UCX_Put Check From 0 to 1 times 6 addr 0x2bacf6803800
-From 0 to 1 times 6 pass check
-mpi_rank 1: UCX_Put Check From 0 to 1 times 7 addr 0x2bacf6803900
-From 0 to 1 times 7 pass check
+mpi_rank 1: UCX_Get Check From 1 to 0 times 5 addr 0xbfc19f6
+From 1 to 0 times 5 pass get check
+mpi_rank 1: UCX_Get Check From 1 to 0 times 6 addr 0xbfc1a14
+From 1 to 0 times 6 pass get check
+mpi_rank 1: UCX_Get Check From 1 to 0 times 7 addr 0xbfc1a32
+From 1 to 0 times 7 pass get check
 DBG> Rank = 1,  started Func_thread_Polling_New_Msg().
-DBG> Rank = 0 result = 123457 nDataSize = 32
-INFO> On server 1 RW_Hello(): Hello from server 0.
 INFO> On server 0 RW_Hello(): Hello from client. idx_qp = 8.
 DBG> Rank = 1 result = 123456 nDataSize = 32
-[mpiexec@c100-009.frontera.tacc.utexas.edu] Sending Ctrl-C to processes as requested
-[mpiexec@c100-009.frontera.tacc.utexas.edu] Press Ctrl-C again to force abort
+DBG> Rank = 0 result = 123457 nDataSize = 32
+INFO> On server 1 RW_Hello(): Hello from server 0.
+[mpiexec@c100-010.frontera.tacc.utexas.edu] Sending Ctrl-C to processes as requested
+[mpiexec@c100-010.frontera.tacc.utexas.edu] Press Ctrl-C again to force abort
 Received sigint.
 Received sigint.
-[1676407329.684125] [c100-011:332075:0]          rcache.c:636  UCX  WARN  ucp_rcache: destroying inuse region 0x2baca85d6980 [0x2baca85fd040..0x2baca8650040] g- rw ref 1 md[0]=mlx5_0 md[1]=knem
-[c100-011:332075:0:332075]      rcache.c:363  Assertion `region->refcount == 0' failed: region 0x2baca85d6980 0x2baca85fd040..0x2baca8650040 of ucp_rcache
-[1676407329.684450] [c100-009:235651:0]          rcache.c:636  UCX  WARN  ucp_rcache: destroying inuse region 0x2b32785d6980 [0x2b32785fd040..0x2b3278650040] g- rw ref 1 md[0]=mlx5_0 md[1]=knem
-[c100-009:235651:0:235651]      rcache.c:363  Assertion `region->refcount == 0' failed: region 0x2b32785d6980 0x2b32785fd040..0x2b3278650040 of ucp_rcache
-
-/work2/08571/yhkan/frontera/ucx/src/ucs/memory/rcache.c: [ ucs_mem_region_destroy_internal() ]
-      ...
-      359 
-      360     ucs_rcache_region_trace(rcache, region, "destroy");
-      361 
-==>   362     ucs_assertv(region->refcount == 0, "region %p 0x%lx..0x%lx of %s", region,
-      363                 region->super.start, region->super.end, rcache->name);
-      364     ucs_assert(!(region->flags & UCS_RCACHE_REGION_FLAG_PGTABLE));
-      365 
-
-
-/work2/08571/yhkan/frontera/ucx/src/ucs/memory/rcache.c: [ ucs_mem_region_destroy_internal() ]
-      ...
-      359 
-      360     ucs_rcache_region_trace(rcache, region, "destroy");
-      361 
-==>   362     ucs_assertv(region->refcount == 0, "region %p 0x%lx..0x%lx of %s", region,
-      363                 region->super.start, region->super.end, rcache->name);
-      364     ucs_assert(!(region->flags & UCS_RCACHE_REGION_FLAG_PGTABLE));
-      365 
-
-==== backtrace (tid: 235651) ====
- 0 0x000000000006da4f ucs_mem_region_destroy_internal()  /work2/08571/yhkan/frontera/ucx/src/ucs/memory/rcache.c:362
- 1 0x000000000006e401 ucs_rcache_purge()  /work2/08571/yhkan/frontera/ucx/src/ucs/memory/rcache.c:638
- 2 0x000000000006e401 ucs_rcache_t_cleanup()  /work2/08571/yhkan/frontera/ucx/src/ucs/memory/rcache.c:1300
- 3 0x000000000007ff9e ucs_class_call_cleanup_chain()  /work2/08571/yhkan/frontera/ucx/src/ucs/type/class.c:56
- 4 0x0000000000070ad0 ucs_rcache_destroy()  /work2/08571/yhkan/frontera/ucx/src/ucs/memory/rcache.c:1324
- 5 0x0000000000058e11 ucp_mem_rcache_cleanup()  /work2/08571/yhkan/frontera/ucx/src/ucp/core/ucp_mm.c:1363
- 6 0x000000000002e6bb ucp_cleanup()  /work2/08571/yhkan/frontera/ucx/src/ucp/core/ucp_context.c:2103
- 7 0x000000000002e6bb ucp_cleanup()  /work2/08571/yhkan/frontera/ucx/src/ucp/core/ucp_context.c:2104
- 8 0x0000000000039ce9 __run_exit_handlers()  :0
- 9 0x0000000000039d37 __GI_exit()  :0
-10 0x00000000004064f6 sigint_handler()  /work2/08571/yhkan/frontera/ThemisIO/src/put_get_server.cpp:550
-11 0x0000000000009017 pthread_join()  ???:0
-12 0x00000000004069c1 main()  /work2/08571/yhkan/frontera/ThemisIO/src/put_get_server.cpp:732
-13 0x0000000000022555 __libc_start_main()  ???:0
-14 0x0000000000404d7b _start()  ???:0
-=================================
-Got signal 10
-[c100-009:235651:0:235651] Process frozen...
-==== backtrace (tid: 332075) ====
- 0 0x000000000006da4f ucs_mem_region_destroy_internal()  /work2/08571/yhkan/frontera/ucx/src/ucs/memory/rcache.c:362
- 1 0x000000000006e401 ucs_rcache_purge()  /work2/08571/yhkan/frontera/ucx/src/ucs/memory/rcache.c:638
- 2 0x000000000006e401 ucs_rcache_t_cleanup()  /work2/08571/yhkan/frontera/ucx/src/ucs/memory/rcache.c:1300
- 3 0x000000000007ff9e ucs_class_call_cleanup_chain()  /work2/08571/yhkan/frontera/ucx/src/ucs/type/class.c:56
- 4 0x0000000000070ad0 ucs_rcache_destroy()  /work2/08571/yhkan/frontera/ucx/src/ucs/memory/rcache.c:1324
- 5 0x0000000000058e11 ucp_mem_rcache_cleanup()  /work2/08571/yhkan/frontera/ucx/src/ucp/core/ucp_mm.c:1363
- 6 0x000000000002e6bb ucp_cleanup()  /work2/08571/yhkan/frontera/ucx/src/ucp/core/ucp_context.c:2103
- 7 0x000000000002e6bb ucp_cleanup()  /work2/08571/yhkan/frontera/ucx/src/ucp/core/ucp_context.c:2104
- 8 0x0000000000039ce9 __run_exit_handlers()  :0
- 9 0x0000000000039d37 __GI_exit()  :0
-10 0x00000000004064f6 sigint_handler()  /work2/08571/yhkan/frontera/ThemisIO/src/put_get_server.cpp:550
-11 0x0000000000009017 pthread_join()  ???:0
-12 0x00000000004069c1 main()  /work2/08571/yhkan/frontera/ThemisIO/src/put_get_server.cpp:732
-13 0x0000000000022555 __libc_start_main()  ???:0
-14 0x0000000000404d7b _start()  ???:0
-=================================
-Got signal 10
-[c100-011:332075:0:332075] Process frozen...
+[1676476897.990998] [c100-010:270687:0]          rcache.c:636  UCX  WARN  ucp_rcache: destroying inuse region 0x2b48905d6980 [0x2b48905fd040..0x2b4890650040] g- rw ref 1 md[0]=mlx5_0 md[1]=knem
+[c100-010:270687:0:270687]      rcache.c:363  Assertion `region->refcount == 0' failed: region 0x2b48905d6980 0x2b48905fd040..0x2b4890650040 of ucp_rcache
+[1676476897.992584] [c100-011:49836:0]          rcache.c:636  UCX  WARN  ucp_rcache: destroying inuse region 0x2b46e85d6980 [0x2b46e85fd040..0x2b46e8650040] g- rw ref 1 md[0]=mlx5_0 md[1]=knem
+[c100-011:49836:0:49836]      rcache.c:363  Assertion `region->refcount == 0' failed: region 0x2b46e85d6980 0x2b46e85fd040..0x2b46e8650040 of ucp_rcache
 TACC:  MPI job exited with code: 1 
 TACC:  Shutdown complete. Exiting. 

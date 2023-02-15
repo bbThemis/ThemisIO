@@ -320,22 +320,23 @@ static void* Func_thread_Print_Data(void *pParam)
 	return NULL;
 }
 
-#define UCX_Rma_Test_String "From %d to %d times %d"
-#define UCX_Rma_Checkpass_String "From %d to %d times %d pass check\n"
-#define UCX_Rma_Checkfail_String "From %d to %d times %d fail check\n"
-#define UCX_Rma_Test_String_Len 30  
-static void* UCX_Rma_Test(void* pParam) {
+#define UCX_Rma_Put_Test_String "From %d to %d times %d"
+#define UCX_Rma_Put_Checkpass_String "From %d to %d times %d pass put check\n"
+#define UCX_Rma_Put_Checkfail_String "From %d to %d times %d fail put check\n"
+#define UCX_Rma_Put_Test_String_Len 30  
+
+static void* UCX_Rma_Put_Test(void* pParam) {
 	SERVER_RDMA* pServer_RDMA;
 	pServer_RDMA = (SERVER_RDMA*)pParam;
-	size_t test_len = UCX_Rma_Test_String_Len;
-	fprintf(stdout, "mpi_rank: %d UCX_Rma_Test begin\n", mpi_rank);
+	size_t test_len = UCX_Rma_Put_Test_String_Len;
+	fprintf(stdout, "mpi_rank: %d UCX_Rma_Put_Test begin\n", mpi_rank);
 	for(int i=0; i<nFSServer; i++)	{
 		if(i != mpi_rank)	{
 			int idx = i*NUM_THREAD_IO_WORKER_INTER_SERVER;
 			for(int j=0; j<NUM_THREAD_IO_WORKER_INTER_SERVER; j++)	{
 				char* test_buff = (char*)malloc(test_len);
 				// fprintf(stdout, "mpi_rank %d: UCX_Put From %d to %d times %d\n", mpi_rank,  mpi_rank, i, j);
-				sprintf(test_buff, UCX_Rma_Test_String, mpi_rank, i, j);
+				sprintf(test_buff, UCX_Rma_Put_Test_String, mpi_rank, i, j);
 				uint64_t rem_addr = pServer_RDMA->pUCX_Data[idx+j].remote_addr_IO_CMD;
 				pServer_RDMA->UCX_Put(idx + j, test_buff, (void*)rem_addr, test_len);
 				free(test_buff);
@@ -344,23 +345,23 @@ static void* UCX_Rma_Test(void* pParam) {
 	}
 
 }
-static void* UCX_Rma_Test_Check(void* pParam) {
-	fprintf(stdout, "mpi_rank: %d UCX_Rma_Test_Check begin\n", mpi_rank);
+static void* UCX_Rma_Put_Test_Check(void* pParam) {
+	fprintf(stdout, "mpi_rank: %d UCX_Rma_Put_Test_Check begin\n", mpi_rank);
 	SERVER_RDMA* pServer_RDMA;
 	pServer_RDMA = (SERVER_RDMA*)pParam;
-	size_t test_len = UCX_Rma_Test_String_Len;
+	size_t test_len = UCX_Rma_Put_Test_String_Len;
 	for(int i=0; i<nFSServer; i++)	{
 		if(i != mpi_rank)	{
 			int idx = i*NUM_THREAD_IO_WORKER_INTER_SERVER;
 			for(int j=0; j<NUM_THREAD_IO_WORKER_INTER_SERVER; j++)	{
 				char* check_buff = (char*)((uint64_t)Server_ucx.p_shm_IO_Cmd_Msg + sizeof(IO_CMD_MSG)*(idx+j));
 				char* correct_buff = (char*)malloc(test_len);
-				sprintf(correct_buff, UCX_Rma_Test_String, i, mpi_rank, j);
+				sprintf(correct_buff, UCX_Rma_Put_Test_String, i, mpi_rank, j);
 				fprintf(stdout, "mpi_rank %d: UCX_Put Check From %d to %d times %d addr %p\n", mpi_rank, i, mpi_rank, j, check_buff);
 				if(strcmp(check_buff, correct_buff) == 0) {
-					fprintf(stdout, UCX_Rma_Checkpass_String, i, mpi_rank, j);
+					fprintf(stdout, UCX_Rma_Put_Checkpass_String, i, mpi_rank, j);
 				} else {
-					fprintf(stdout, UCX_Rma_Checkfail_String, i, mpi_rank, j);
+					fprintf(stdout, UCX_Rma_Put_Checkfail_String, i, mpi_rank, j);
 					fprintf(stdout, "Expected: %s\n", correct_buff);
 					fprintf(stdout, "Actual: %s\n", check_buff);
 				}
@@ -368,6 +369,56 @@ static void* UCX_Rma_Test_Check(void* pParam) {
 			}
 		}
 	}
+}
+
+#define UCX_Rma_Get_Test_String "From %d to %d times %d"
+#define UCX_Rma_Get_Checkpass_String "From %d to %d times %d pass get check\n"
+#define UCX_Rma_Get_Checkfail_String "From %d to %d times %d fail get check\n"
+#define UCX_Rma_Get_Test_String_Len 30  
+static void* UCX_Rma_Get_Test(void* pParam, void** loc_pptr) {
+	SERVER_RDMA* pServer_RDMA;
+	pServer_RDMA = (SERVER_RDMA*)pParam;
+	size_t test_len = UCX_Rma_Get_Test_String_Len;
+	*loc_pptr = malloc(nFSServer * NUM_THREAD_IO_WORKER_INTER_SERVER * UCX_Rma_Get_Test_String_Len);
+	memset(*loc_pptr, 0, nFSServer * NUM_THREAD_IO_WORKER_INTER_SERVER * UCX_Rma_Get_Test_String_Len);
+	fprintf(stdout, "mpi_rank: %d UCX_Rma_Get_Test begin\n", mpi_rank);
+	for(int i=0; i<nFSServer; i++)	{
+		if(i != mpi_rank)	{
+			int idx = i*NUM_THREAD_IO_WORKER_INTER_SERVER;
+			for(int j=0; j<NUM_THREAD_IO_WORKER_INTER_SERVER; j++)	{
+				uint64_t loc_buf = (uint64_t)(*loc_pptr) + (idx + j) * UCX_Rma_Get_Test_String_Len;
+				uint64_t rem_addr = pServer_RDMA->pUCX_Data[idx+j].remote_addr_IO_CMD;
+				pServer_RDMA->UCX_Get(idx + j, (void*)loc_buf, (void*)rem_addr, test_len);
+			}
+		}
+	}
+
+}
+static void* UCX_Rma_Get_Test_Check(void* pParam, void* loc_ptr) {
+	fprintf(stdout, "mpi_rank: %d UCX_Rma_Get_Test_Check begin\n", mpi_rank);
+	SERVER_RDMA* pServer_RDMA;
+	pServer_RDMA = (SERVER_RDMA*)pParam;
+	size_t test_len = UCX_Rma_Get_Test_String_Len;
+	for(int i=0; i<nFSServer; i++)	{
+		if(i != mpi_rank)	{
+			int idx = i*NUM_THREAD_IO_WORKER_INTER_SERVER;
+			for(int j=0; j<NUM_THREAD_IO_WORKER_INTER_SERVER; j++)	{
+				char* check_buff = (char*)((uint64_t)(loc_ptr) + (idx + j) * UCX_Rma_Get_Test_String_Len);
+				char* correct_buff = (char*)malloc(test_len);
+				sprintf(correct_buff, UCX_Rma_Get_Test_String, mpi_rank, i, j);
+				fprintf(stdout, "mpi_rank %d: UCX_Get Check From %d to %d times %d addr %p\n", mpi_rank, mpi_rank, i, j, check_buff);
+				if(strcmp(check_buff, correct_buff) == 0) {
+					fprintf(stdout, UCX_Rma_Get_Checkpass_String, mpi_rank, i, j);
+				} else {
+					fprintf(stdout, UCX_Rma_Get_Checkfail_String, mpi_rank, i, j);
+					fprintf(stdout, "Expected: %s\n", correct_buff);
+					fprintf(stdout, "Actual: %s\n", check_buff);
+				}
+				free(correct_buff);
+			}
+		}
+	}
+	free(loc_ptr);
 }
 
 static void* Func_thread_Polling_New_Msg(void *pParam)
@@ -648,32 +699,13 @@ int main(int argc, char **argv)
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 	Setup_UCX_Among_Servers();
-	UCX_Rma_Test(&Server_ucx);
+	UCX_Rma_Put_Test(&Server_ucx);
 	MPI_Barrier(MPI_COMM_WORLD);
-	UCX_Rma_Test_Check(&Server_ucx);
-	if(mpi_rank == 0) {
-		// int i = 1;
-		// int j = 0;
-		// int idx =  i*NUM_THREAD_IO_WORKER_INTER_SERVER;
-		// size_t test_len = UCX_Rma_Test_String_Len;
-		// char* test_buff = (char*)malloc(test_len);
-		// fprintf(stdout, "mpi_rank %d: UCX_Put From %d to %d times %d\n", mpi_rank,  mpi_rank, i, j);
-		// sprintf(test_buff, UCX_Rma_Test_String, mpi_rank, i, j);
-		// uint64_t rem_addr = Server_ucx.pUCX_Data[idx+j].remote_addr_IO_CMD;
-		// Server_ucx.UCX_Put(idx + j, test_buff, (void*)rem_addr, test_len);
-		// free(test_buff);
-
-		// if(pthread_create(&(thread_ucx_test), NULL, UCX_Rma_Test, &Server_ucx)) {
-		// 	fprintf(stderr, "Error creating thread\n");
-		// 	return 1;
-		// }
-		// if(pthread_join(thread_ucx_test, NULL)) {
-		// 	fprintf(stderr, "Error joining thread.\n");
-		// 	return 2;
-		// }
-		// UCX_Rma_Test_Check(&Server_ucx);
-	}
-	
+	UCX_Rma_Put_Test_Check(&Server_ucx);
+	void* ucx_rma_get_test_buff = NULL;
+	UCX_Rma_Get_Test(&Server_ucx, &ucx_rma_get_test_buff);
+	MPI_Barrier(MPI_COMM_WORLD);
+	UCX_Rma_Get_Test_Check(&Server_ucx, ucx_rma_get_test_buff);
 
 //	if(pthread_create(&(thread_global_sharing), NULL, Func_thread_Global_Fair_Sharing, &Server_qp)) {
 //		fprintf(stderr, "Error creating thread\n");
