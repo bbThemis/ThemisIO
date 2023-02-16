@@ -6,11 +6,31 @@
 
 #include "ucx_rma.h"
 #include "myfs.h"
+#include "utility.h"
 #include "fixed_mem_allocator.h"
+
+extern pthread_attr_t thread_attr;
 
 extern CFIXEDSIZE_MEM_ALLOCATOR CFixedSizeMemAllcator;
 extern int mpi_rank, nFSServer;	// rank and size of MPI
 pthread_t pthread_IO_Worker_UCX[NUM_THREAD_IO_WORKER];
+
+// pthread_mutex_t lock_Modify_ActiveJob_List;
+
+inline int Align64_Int(int a)
+{
+	// return ( (a & 0x3F) ? (64 + (a & 0xFFFFFFC0) ) : (a) );
+
+	// branch not needed
+	return (a + 63) & ~63;
+}
+
+typedef	struct	{
+	int fd;
+	int idx;	// idx of QP
+	SERVER_RDMA *pServer_UCX;
+	int nToken;	// for creating a unique thread
+}UCXPARAM, *PUCXPARAM;
 
 SERVER_RDMA::SERVER_RDMA(void)
 {
@@ -111,8 +131,433 @@ ucs_status_t SERVER_RDMA::server_create_ep(ucp_worker_h data_worker,
     return status;
 }
 
-void SERVER_RDMA::Server_Loop() {
-    while(1) {}
+void SERVER_RDMA::Socket_Server_Loop() {
+    int i, epoll_ret;
+	struct epoll_event ev;
+	struct signalfd_siginfo info;
+	// UCX_TODO
+	// CoreBinding.Bind_This_Thread();
+
+	// block all signals. we take signals synchronously via signalfd
+	sigset_t all;
+	// signals that we'll accept synchronously via signalfd */
+//	int sigs[] = {SIGIO,SIGHUP,SIGTERM,SIGINT,SIGQUIT,SIGALRM};
+	int sigs[] = {SIGIO,SIGHUP,SIGTERM,SIGINT,SIGQUIT,SIGUSR1};
+	
+	sigfillset(&all);
+	sigprocmask(SIG_SETMASK,&all,NULL);
+	
+	// a few signals we'll accept via our signalfd
+	sigset_t sw;
+	sigemptyset(&sw);
+	for(i=0; i < sizeof(sigs)/sizeof(*sigs); i++) sigaddset(&sw, sigs[i]);
+	
+	if (Setup_Listener()) goto done;
+	
+	/* create the signalfd for receiving signals */
+	sock_signal_fd = signalfd(-1, &sw, 0);
+	if (sock_signal_fd == -1) {
+		fprintf(stderr,"signalfd: %s\n", strerror(errno));
+		goto done;
+	}
+	
+	// set up the epoll instance
+	sock_epoll_fd = epoll_create(1); 
+	if (sock_epoll_fd == -1) {
+		fprintf(stderr,"epoll: %s\n", strerror(errno));
+		goto done;
+	}
+	
+	// add descriptors of interest
+	if (Add_Epoll(EPOLLIN, sock_fd))        goto done; // listening socket
+	if (Add_Epoll(EPOLLIN, sock_signal_fd)) goto done; // signal socket
+	
+	while ( 1 ) {
+		epoll_ret = epoll_wait(sock_epoll_fd, &ev, 1, -1);
+		if(epoll_ret <= 0)	{
+			if(errno == EINTR)	continue;
+			else break;
+		}
+
+		// if a signal was sent to us, read its signalfd_siginfo
+		if (ev.data.fd == sock_signal_fd) { 
+			if (read(sock_signal_fd, &info, sizeof(info)) != sizeof(info)) {
+				fprintf(stderr,"ERROR> ucx failed to read signal fd buffer\n");
+				continue;
+			}
+			else if(info.ssi_signo == SIGTERM)	{
+				fprintf(stderr,"Got signal %d (SIGTERM)\n", info.ssi_signo);
+			}
+			else	{
+				fprintf(stderr,"Got signal %d\n", info.ssi_signo);  
+			}
+			goto done;
+		}
+		
+		/* regular POLLIN. handle the particular descriptor that's ready */
+		assert(ev.events & EPOLLIN);
+//		fprintf(stderr,"INFO> handle POLLIN on fd %d\n", ev.data.fd);
+		if (ev.data.fd == sock_fd) Accept_Client();
+		else Drain_Client(ev.data.fd);
+	}
+	
+	fprintf(stderr, "epoll_wait: %s\n", strerror(errno));
+	
+done:   /* we get here if we got a signal like Ctrl-C */
+/*
+	for(i=0; i<p_Hash_socket_fd->size; i++)	{
+		if(elt_list_socket_fd[i].key >= 0)	{
+			close(elt_list_socket_fd[i].key);
+			Del_Epoll(elt_list_socket_fd[i].key);
+		}
+	}
+	if(p_Hash_socket_fd)	{
+		free((void*)p_Hash_socket_fd);
+		p_Hash_socket_fd = NULL;
+	}
+*/
+//	if(pQP_Data)	{
+//		free(pQP_Data);
+//		pQP_Data = NULL;
+//	}
+	
+	if (sock_epoll_fd != -1) close(sock_epoll_fd);
+	if (sock_signal_fd != -1) close(sock_signal_fd);
+}
+
+int SERVER_RDMA::FindFirstAvailableQP(void)
+{
+	int i, idx = -1, Done=0;
+
+	if(FirstAV_QP < 0)	{
+		return FirstAV_QP;
+	}
+	idx = FirstAV_QP;
+	FirstAV_QP = -1;
+
+	for(i = MAX(idx+1,nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER); i<max_qp; i++)	{
+		if(pUCX_Data[i].ucp_data_worker == NULL)	{
+			FirstAV_QP = i;
+			break;
+		}
+	}
+	if(FirstAV_QP < 0)	{
+		printf("WARNING> All ucp_data_workers are used.\n");
+	}
+
+	return idx;
+}
+
+void* Func_thread_Finish_UCX_Setup(void *pParam)
+{
+	int fd, idx, nBytes, idx_Queue, idx_JobRec;
+	UCXPARAM *pUCXParam;
+	SERVER_RDMA *pServer_UCX;
+	unsigned long long jobid_hash, jobid_cip_ctid_hash;	
+	UCX_GLOBAL_ADDR_DATA Global_Addr_Data;
+	UCX_DATA_SEND_BY_SERVER *pData_to_send=NULL;
+	UCX_DATA_SEND_BY_CLIENT *pData_to_recv=NULL;
+
+	pUCXParam = (UCXPARAM *)pParam;
+    //UCX_TODO
+	// if(Unique_Thread.Redeem_A_Token(pUCXParam->nToken) == 0)	return NULL;
+
+	fd = pUCXParam->fd;
+	idx = pUCXParam->idx;
+	pServer_UCX = pUCXParam->pServer_UCX;
+
+	pData_to_recv = (UCX_DATA_SEND_BY_CLIENT *)((char*)pParam + sizeof(UCXPARAM));
+	pData_to_send = (UCX_DATA_SEND_BY_SERVER *)((char*)pParam + sizeof(UCXPARAM) + sizeof(UCX_DATA_SEND_BY_CLIENT) );
+
+
+    // UCX_TODO
+	/*pthread_mutex_lock(&lock_Modify_ActiveJob_List);
+	idx_JobRec = pHT_ActiveJobs->DictSearch(pData_to_recv->JobInfo.jobid, &elt_list_ActiveJobs, &ht_table_ActiveJobs, &jobid_hash);
+	if(idx_JobRec < 0)	{	// Do not exist. Need to insert it into hash table. 
+		idx_JobRec = pHT_ActiveJobs->DictInsertAuto(pData_to_recv->JobInfo.jobid, &elt_list_ActiveJobs, &ht_table_ActiveJobs);
+		Init_NewActiveJobRecord(idx_JobRec, pData_to_recv->JobInfo.jobid, pData_to_recv->JobInfo.nnode, pData_to_recv->JobInfo.cuid);
+	}
+	else	{
+		fetch_and_add(&(ActiveJobList[idx_JobRec].nQP), 1);	// Increse the counter by 1
+	}
+	pthread_mutex_unlock(&lock_Modify_ActiveJob_List);*/
+
+  
+	
+//	idx_Queue = ( ((idx-nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER)*NUM_QUEUE_PER_WORKER + (idx-nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER)*NUM_QUEUE_PER_WORKER/MAX_NUM_QUEUE_MX ) % MAX_NUM_QUEUE_MX) + nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER;
+	idx_Queue = ( ((idx-nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER)*NUM_QUEUE_PER_WORKER + (idx-nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER)*NUM_QUEUE_PER_WORKER/MAX_NUM_QUEUE_MX ) % MAX_NUM_QUEUE_MX) + NUM_THREAD_IO_WORKER_INTER_SERVER;
+//	printf("DBG> idx_qp = %d idx_Queue = %d\n", idx, idx_Queue);
+	
+//	printf("INFO> jobid = %d nnode = %d cip = %u ctid = %d idx_queue = %d\n", pData_to_recv->JobInfo.jobid, pData_to_recv->JobInfo.nnode, pData_to_recv->JobInfo.cip, pData_to_recv->JobInfo.ctid, idx_Queue);
+	pServer_UCX->pUCX_Data[idx].idx_queue = idx_Queue;
+	pServer_UCX->pUCX_Data[idx].jobid = pData_to_recv->JobInfo.jobid;
+	pServer_UCX->pUCX_Data[idx].idx_JobRec = idx_JobRec;
+	pServer_UCX->pUCX_Data[idx].cuid = pData_to_recv->JobInfo.cuid;
+	pServer_UCX->pUCX_Data[idx].cgid = pData_to_recv->JobInfo.cgid;
+	pServer_UCX->pUCX_Data[idx].ctid = pData_to_recv->JobInfo.ctid;
+	memcpy(pServer_UCX->pUCX_Data[idx].szClientHostName, pData_to_recv->JobInfo.szClientHostName, MAX_HOSTNAME_LEN);
+	memcpy(pServer_UCX->pUCX_Data[idx].szClientExeName, pData_to_recv->JobInfo.szClientExeName, MAX_EXENAME_LEN);
+	pServer_UCX->pUCX_Data[idx].bTimeout = 0;
+	pServer_UCX->pUCX_Data[idx].bServerReady = 1;
+	
+	free(pParam);
+
+	return NULL;
+}
+
+int SERVER_RDMA::Accept_Client()
+{
+	int fd, nBytes, idx, idx_fd, one=1;
+	unsigned int *p_token;
+	struct sockaddr_in in;
+	socklen_t sz = sizeof(in);
+	char szBuff[128];
+	
+	fd = accept(sock_fd,(struct sockaddr*)&in, &sz);
+	if (fd == -1) {
+		printf("INFO> UCX accept: %s\n", strerror(errno)); 
+	}
+	else	{
+		if(setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one)) < 0)	perror("setsockopt(2) error");
+		if (sizeof(in) == sz) {
+//			printf("INFO> connection fd %d from %s:%d\n", fd, inet_ntoa(in.sin_addr), (int)ntohs(in.sin_port));
+		}
+		
+//		p_token = (unsigned int*)szBuff;
+//		nBytes = read(fd, szBuff, 4*sizeof(int));
+//		assert(p_token[0] == TAG_EXCH_QP_INFO);
+//		if( nBytes != 16 )	{	// 4 int
+//			printf("Error> nBytes = %d. Unexpected value.\n", nBytes);
+//		}
+		
+		nConnectionAccu++;
+		pthread_mutex_lock(&process_lock);
+		idx = FindFirstAvailableQP();
+		assert(idx >= 0);
+		nQP++;
+//		printf("DBG> QP is allocated at %d. nQP = %d\n", idx, nQP);
+		if(IdxLastQP < idx)	{
+			IdxLastQP = idx;
+			IdxLastQP64 = Align64_Int(IdxLastQP+1);	// +1 is needed since IdxLastQP is included!
+		}
+//		Get_A_PreAllocated_QueuePair(idx);
+		AllocateUCPDataWorker(idx);
+
+//		Rec_Add[nAdd] = (long int)(pQP_Data[idx].queue_pair);
+//		nAdd++;
+//		printf("DBG> New QP idx = %d nQP = %d FirstAV_QP = %d IdxLastQP = %d\n", idx, nQP, FirstAV_QP, IdxLastQP);
+		if( FirstAV_QP > (nQP+NUM_THREAD_IO_WORKER_INTER_SERVER) )	{
+			printf("DBG> UCX Something wrong!\n");
+		}
+
+		pthread_mutex_unlock(&process_lock);
+		idx_fd = p_Hash_socket_fd->DictInsert(fd, idx, &elt_list_socket_fd, &ht_table_socket_fd);
+
+		if(Add_Epoll(EPOLLIN, fd) == -1) {
+			close(fd);
+			fd = -1;
+		}
+	}
+
+	return fd;
+}
+
+void SERVER_RDMA::Drain_Client(const int fd)
+{
+	int rc, idx, nBytes;
+	char buf[3072];
+	UCXPARAM *pUCXParam=NULL;
+	UCX_DATA_SEND_BY_SERVER *pData_to_send=NULL;
+	UCX_DATA_SEND_BY_CLIENT *pData_to_recv=NULL;
+	pthread_t pthread_Setup_UCX;
+	
+	rc = read(fd, buf, sizeof(UCX_DATA_SEND_BY_CLIENT));
+	switch(rc) {
+        default:
+        {
+            idx = p_Hash_socket_fd->DictSearchOrg(fd, &elt_list_socket_fd, &ht_table_socket_fd);
+            assert(idx >= 0);
+            pUCXParam = (UCXPARAM*)malloc( sizeof(UCXPARAM) + sizeof(UCX_DATA_SEND_BY_CLIENT) + sizeof(UCX_DATA_SEND_BY_SERVER) );
+            assert(pUCXParam != NULL);
+            pData_to_recv = (UCX_DATA_SEND_BY_CLIENT *)((char*)pUCXParam + sizeof(UCXPARAM));
+            pData_to_send = (UCX_DATA_SEND_BY_SERVER *)((char*)pUCXParam + sizeof(UCXPARAM) + sizeof(UCX_DATA_SEND_BY_CLIENT) );
+            memcpy(pData_to_recv, buf, sizeof(UCX_DATA_SEND_BY_CLIENT));
+
+            server_create_ep(pUCX_Data[idx].ucp_data_worker, (ucp_address_t*)pData_to_recv->ucx.peer_address, &pUCX_Data[idx].peer_ep);
+            pUCX_Data[idx].nPut_Get = 0;
+            pUCX_Data[idx].nPut_Get_Done = 0;
+
+            ucs_status_t status = ucp_ep_rkey_unpack(pUCX_Data[idx].peer_ep, pData_to_recv->ib_mem.rkey_buffer, &pUCX_Data[idx].rkey);
+            assert(status == UCS_OK);
+            pUCX_Data[idx].rem_addr = pData_to_recv->ib_mem.addr;
+
+
+            pData_to_send->ucx.comm_tag = TAG_EXCH_UCX_INFO;
+            memcpy(pData_to_send->ucx.peer_address, pUCX_Data[idx].address_p, pUCX_Data[idx].address_length);
+            pData_to_send->ucx.peer_address_length = pUCX_Data[idx].address_length;
+
+            pData_to_send->ib_mem.comm_tag = TAG_EXCH_MEM_INFO;
+            memcpy(pData_to_send->ib_mem.rkey_buffer, rkey_buffer, rkey_buffer_size);
+            pData_to_send->ib_mem.rkey_buffer_size = rkey_buffer_size;
+            pData_to_send->ib_mem.addr = (uint64_t)(p_shm_Global);
+
+            pData_to_send->global_addr.comm_tag = TAG_GLOBAL_ADDR_INFO;
+            pData_to_send->global_addr.addr_NewMsgFlag = (uint64_t)p_shm_NewMsgFlag + sizeof(char)*idx;
+            pData_to_send->global_addr.addr_TimeHeartBeat = (uint64_t)p_shm_TimeHeartBeat + sizeof(time_t)*idx;
+            pData_to_send->global_addr.addr_IO_Cmd_Msg = (uint64_t)p_shm_IO_Cmd_Msg + sizeof(IO_CMD_MSG)*idx;
+
+            nBytes = write(fd, pData_to_send, sizeof(UCX_DATA_SEND_BY_SERVER));
+            assert(nBytes == sizeof(UCX_DATA_SEND_BY_SERVER));
+
+    //		nBytes = read(fd, pData_to_recv, sizeof(DATA_SEND_BY_CLIENT));
+    //		assert(nBytes == sizeof(DATA_SEND_BY_CLIENT));
+
+    //		IB_CreateQueuePair(idx);	// DBG> IB_CreateQueuePair() 3345 us. Slow process! We can do pre-allocation to save time. When the number of pre-allocated QP is 
+            // Get a queue pair from preallocated list of qps
+
+            // not large enough, start a thread and do pre-allocation! 
+    //		pQP_Data[idx].ib_pal_lid = p_token[1];
+    //		pQP_Data[idx].ib_pal_qpn = p_token[2];
+    //		pQP_Data[idx].ib_pal_psn = p_token[3];
+
+    //		pQP_Data[idx].jobid = pData_to_recv->JobInfo.jobid;
+
+
+            //		printf("INFO> Inserted a hash entry at %d\n", idx);
+    //		printf(" Pal token (%d, %d, %d) My token (%d, %d, %d)\n", pData_to_recv->qp.lid, pData_to_recv->qp.qp_n, pData_to_recv->qp.psn, pQP_Data[idx].ib_my_lid, pQP_Data[idx].ib_my_qpn, pQP_Data[idx].ib_my_psn);
+            
+    //		pQP_Data[idx].tag_ib_me = TAG_EXCH_QP_INFO;
+    //		write(fd, &(pQP_Data[idx].tag_ib_me), 4*sizeof(int));
+            //		write(fd, &(pQP_Data[idx].ib_my_lid), 4*sizeof(int));
+
+
+            pUCXParam->fd = fd;
+            pUCXParam->idx = idx;
+            pUCXParam->pServer_UCX = this;
+            // UCX_TODO
+            // pUCXParam->nToken = Unique_Thread.Apply_A_Token();
+
+            if(pthread_create(&pthread_Setup_UCX, &thread_attr, Func_thread_Finish_UCX_Setup, (void*)pUCXParam)) {
+                fprintf(stderr, "Error creating thread Func_thread_Finish_UCX_Setup().\n");
+                return;
+            }
+
+            break;
+        }
+        case 0: 
+        {
+            idx = p_Hash_socket_fd->DictSearchOrg(fd, &elt_list_socket_fd, &ht_table_socket_fd);
+            if(idx >= 0)	{
+                p_Hash_socket_fd->DictDelete(fd, &elt_list_socket_fd, &ht_table_socket_fd);	// !!!!!!!!!!!!!!!!!!!!!!!!!! only for test!!!!
+                Del_Epoll(fd);
+                close(fd);
+            }
+            else	{
+                printf("Error: ucx failed to find fd %d from hash table.\n", fd);
+            }
+            break;
+        }
+        case -1: 
+        {
+            printf("INFO> ucx recv: %s\n", strerror(errno));    break;  
+        }
+	}
+	
+	if (rc != 0) return;
+	
+// client closed. log it, tell epoll to forget it, close it.
+//	printf("INFO> client %d has closed\n", fd);
+//	Del_Epoll(fd);
+//	close(fd);
+	
+}
+
+int SERVER_RDMA::Add_Epoll(int events, int fd)
+{
+	int rc;
+	struct epoll_event ev;
+	
+	memset(&ev,0,sizeof(ev)); // placate valgrind
+	ev.events = events;
+	ev.data.fd= fd;
+//	printf("INFO> Adding fd %d to epoll\n", fd);
+	rc = epoll_ctl(sock_epoll_fd, EPOLL_CTL_ADD, fd, &ev);
+	if (rc == -1) {
+		fprintf(stderr, "ERROR> epoll_ctl: %s\n", strerror(errno));
+	}
+	return rc;
+}
+
+int SERVER_RDMA::Del_Epoll(int fd)
+{
+	int rc;
+	struct epoll_event ev;
+	rc = epoll_ctl(sock_epoll_fd, EPOLL_CTL_DEL, fd, &ev);
+	if (rc == -1) {
+		fprintf(stderr, "ERROR> epoll_ctl: %s\n", strerror(errno));
+	}
+	return rc;
+}
+
+int SERVER_RDMA::Setup_Listener(void) {
+    int rc = -1, one=1;
+	
+	int fd = socket(AF_INET, SOCK_STREAM, 0);
+	if (fd == -1) {
+		fprintf(stderr, "ERROR> socket: %s\n", strerror(errno));
+	}
+	else	{
+		// internet socket address structure: our address and port
+		struct sockaddr_in sin;
+		sin.sin_family = AF_INET;
+		sin.sin_addr.s_addr = sock_addr;
+		sin.sin_port = htons(sock_port);
+		
+		// bind socket to address and port 
+		setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+		if (bind(fd, (struct sockaddr*)&sin, sizeof(sin)) == -1) {
+			fprintf(stderr, "ERROR> bind: %s\n", strerror(errno));
+		}
+		else	{
+			// put socket into listening state
+			if (listen(fd,1600) == -1) {
+				fprintf(stderr, "listen: %s\n", strerror(errno));
+			}
+			else	{
+				sock_fd = fd;
+				rc=0;
+			}
+		}
+	}
+	
+	if ((rc < 0) && (fd != -1)) close(fd);
+	return rc;
+}
+
+ucs_status_t SERVER_RDMA::server_create_ep(ucp_worker_h data_worker,
+                                     ucp_conn_request_h conn_request,
+                                     ucp_ep_h *server_ep)
+{
+    ucp_ep_params_t ep_params;
+    ucs_status_t    status;
+
+    /* Server creates an ep to the client on the data worker.
+     * This is not the worker the listener was created on.
+     * The client side should have initiated the connection, leading
+     * to this ep's creation */
+    ep_params.field_mask      = UCP_EP_PARAM_FIELD_ERR_HANDLER |
+                                UCP_EP_PARAM_FIELD_CONN_REQUEST;
+    ep_params.conn_request    = conn_request;
+    ep_params.err_handler.cb  = err_cb;
+    ep_params.err_handler.arg = NULL;
+
+    status = ucp_ep_create(data_worker, &ep_params, server_ep);
+    if (status != UCS_OK) {
+        fprintf(stderr, "mpi_rank %d failed to create an endpoint on the server: (%s)\n", mpi_rank,
+                ucs_status_string(status));
+    }
+
+    return status;
 }
 
 void SERVER_RDMA::AllocateUCPDataWorker(int idx) {
@@ -192,10 +637,16 @@ int SERVER_RDMA::Init_Worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker
     return ret;
 }
 
-void SERVER_RDMA::Init_Server_Memory(int max_num_qp) {
+void SERVER_RDMA::Init_Server_Memory(int max_num_qp, int port) {
     int i, nSizeofNewMsgFlag, nSizeofHeartBeat, nSizeofIOCmdMsg, nSizeofIOResult, nSizeofIOResult_Recv, nSizePerCallReturnBlock, nSizeofReturnBuffer;
 	int offset;
 	char *p_CallReturnBuff;
+
+    sock_addr = INADDR_ANY;
+	sock_fd = -1;
+	sock_signal_fd = -1;
+	sock_epoll_fd = -1;
+	sock_port = port;
 
     max_qp = max_num_qp;
 	p_Hash_socket_fd = (CHASHTABLE_INT *)malloc(CHASHTABLE_INT::GetStorageSize(max_num_qp*2));
@@ -203,6 +654,9 @@ void SERVER_RDMA::Init_Server_Memory(int max_num_qp) {
 
     pUCX_Data = (UCX_DATA *)malloc(sizeof(UCX_DATA) * max_num_qp);
     assert(pUCX_Data != NULL);
+    for(i=0; i<max_qp; i++)	{
+		pUCX_Data[i].ucp_data_worker = NULL;
+	}
 
     nSizeofNewMsgFlag = sizeof(char)*max_qp;
 	nSizeofHeartBeat = sizeof(time_t)*max_qp;
@@ -211,7 +665,7 @@ void SERVER_RDMA::Init_Server_Memory(int max_num_qp) {
 	nSizeofIOResult_Recv = sizeof(char)*IO_RESULT_BUFFER_SIZE;	// the size of buffer to recv results from other servers. 
 
 	nSizePerCallReturnBlock = (SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN) + 1*sizeof(int) + 64) & 0xFFFFFFC0;
-    // UCX_TEST
+    // UCX_TODO
 	// nSizeofReturnBuffer = CFixedSizeMemAllcator.Query_MemSize(nSizePerCallReturnBlock, MAX_NUM_RETURN_BUFF);
     nSizeofReturnBuffer = 0;
 	if(mpi_rank == 0)	{
@@ -255,8 +709,14 @@ void SERVER_RDMA::Init_Server_Memory(int max_num_qp) {
 		pJobScale_Remote = pJobScale_Local;
 	}
 	// Other rank will get the value of pJobScale_Remote and pJob_OP_Recv with bcast!!!
-    // UCX_TEST
+    // UCX_TODO
 	// CFixedSizeMemAllcator.Init_Memory_Pool(p_CallReturnBuff);
+
+    FirstAV_QP = 0;
+	nQP = 0;
+	IdxLastQP = -1;
+	IdxLastQP64 = -1;
+
     ucs_status_t status;
     status = RegisterBuf_RW_Local_Remote(p_shm_Global, nSizeshm_Global, &mr_shm_global);
 	assert(mr_shm_global != NULL);

@@ -80,6 +80,7 @@ typedef	struct	{
 //	int remote_rkey;
 	struct in_addr sin_addr;
 	int port;
+	int ucx_port;
 	char szIP[16];
 }FS_SEVER_INFO;
 
@@ -284,6 +285,7 @@ void Get_Local_Server_Info(void)
 	ThisNode.sin_addr = ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr;
 	sprintf(ThisNode.szIP, "%s", inet_ntoa(ThisNode.sin_addr));
 	ThisNode.port = PORT + (mpi_rank % nNUMAPerNode);
+	ThisNode.ucx_port = PORT + (mpi_rank % nNUMAPerNode) + nNUMAPerNode;
 }
 //static struct timeval tm1, tm2;
 
@@ -451,7 +453,7 @@ static void* Func_thread_ucx_server(void *pParam) {
 
 	pServer_ucx = (SERVER_RDMA *)pParam;
 	pServer_ucx->Init_Server_UCX_Env(DEFAULT_REM_BUFF_SIZE);
-	pServer_ucx->Init_Server_Memory(512);
+	pServer_ucx->Init_Server_Memory(512, ThisNode.ucx_port);
 	//UCX_TEST
 	// for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
 	// 	IO_Worker_tid_List[i] = i;
@@ -463,7 +465,7 @@ static void* Func_thread_ucx_server(void *pParam) {
 
 	Ucx_Server_Started = 1;	// active the flag: Server started running!!!
 	printf("Rank = %d. UCX Server is started.\n", mpi_rank);
-	pServer_ucx->Server_Loop();
+	pServer_ucx->Socket_Server_Loop();
 	
 	return 0;
 }
@@ -675,6 +677,19 @@ int main(int argc, char **argv)
 			fprintf(fOut, "%s %d\n", AllFSNodes[i].szIP, AllFSNodes[i].port);
 		}
 		fclose(fOut);
+
+		printf("INFO> There are %d servers.\n", nFSServer);
+		fOut = fopen(UCX_FS_PARAM_FILE, "w");
+		if(fOut == NULL)	{
+			printf("ERROR> Fail to open file: %s\nQuit.\n", UCX_FS_PARAM_FILE);
+			exit(1);
+		}
+		fprintf(fOut, "%d %d\n", nFSServer, nNUMAPerNode);
+		for(i=0; i<nFSServer; i++)	{
+			printf("     %d %s %d\n", i, AllFSNodes[i].szIP, AllFSNodes[i].ucx_port);
+			fprintf(fOut, "%s %d\n", AllFSNodes[i].szIP, AllFSNodes[i].ucx_port);
+		}
+		fclose(fOut);
 	}
 
 	if(pthread_create(&(thread_qp_server), NULL, Func_thread_qp_server, &Server_qp)) {
@@ -699,13 +714,13 @@ int main(int argc, char **argv)
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 	Setup_UCX_Among_Servers();
-	UCX_Rma_Put_Test(&Server_ucx);
-	MPI_Barrier(MPI_COMM_WORLD);
-	UCX_Rma_Put_Test_Check(&Server_ucx);
-	void* ucx_rma_get_test_buff = NULL;
-	UCX_Rma_Get_Test(&Server_ucx, &ucx_rma_get_test_buff);
-	MPI_Barrier(MPI_COMM_WORLD);
-	UCX_Rma_Get_Test_Check(&Server_ucx, ucx_rma_get_test_buff);
+	// UCX_Rma_Put_Test(&Server_ucx);
+	// MPI_Barrier(MPI_COMM_WORLD);
+	// UCX_Rma_Put_Test_Check(&Server_ucx);
+	// void* ucx_rma_get_test_buff = NULL;
+	// UCX_Rma_Get_Test(&Server_ucx, &ucx_rma_get_test_buff);
+	// MPI_Barrier(MPI_COMM_WORLD);
+	// UCX_Rma_Get_Test_Check(&Server_ucx, ucx_rma_get_test_buff);
 
 //	if(pthread_create(&(thread_global_sharing), NULL, Func_thread_Global_Fair_Sharing, &Server_qp)) {
 //		fprintf(stderr, "Error creating thread\n");

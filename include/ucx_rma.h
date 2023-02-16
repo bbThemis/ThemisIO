@@ -31,10 +31,11 @@
 #include "io_queue.h"
 #include "ucx_rma_common.h"
 
-#define MAX_UCP_RKEY_SIZE (50)
-#define MAX_UCP_ADDR_LEN (250)
+
 
 #define UCX_QUEUE_SIZE	(1)
+
+
 typedef struct {
     ucp_worker_h ucp_data_worker;
     int nPut_Get, nPut_Get_Done;
@@ -47,6 +48,12 @@ typedef struct {
 
     ucp_address_t *address_p = NULL;
     size_t address_length       = 0;
+    
+    // char peer_address[MAX_UCP_ADDR_LEN];
+	// size_t peer_address_length = 0;
+	// char rkey_buffer[MAX_UCP_RKEY_SIZE];
+    // size_t rkey_buffer_size = 0;
+
     ucp_ep_h  peer_ep;
     ucp_rkey_h rkey;
 
@@ -61,6 +68,13 @@ class SERVER_RDMA {
 public:
     ucp_context_h ucp_main_context;
     ucp_worker_h  ucp_main_worker;
+
+	in_addr_t sock_addr;    // local IP or INADDR_ANY
+	int sock_port;          // local port to listen on
+	int sock_fd;            // listener descriptor
+	int sock_signal_fd;     // used to receive signals
+	int sock_epoll_fd;      // used for all notification
+
     ucp_mem_h mr_rem, mr_loc, mr_shm_global = NULL;
     void* rkey_buffer;
     size_t rkey_buffer_size = 0;
@@ -97,8 +111,13 @@ pthread_mutex_t process_lock;	// for this process
 
     SERVER_RDMA(void);
 	~SERVER_RDMA(void);
-    void Init_Server_Memory(int max_num_qp);
-    void Server_Loop(); // Socket_Server_Loop
+    void Init_Server_Memory(int max_num_qp, int port);
+    void Socket_Server_Loop(); // Socket_Server_Loop
+    int Add_Epoll(int events, int fd);
+	int Del_Epoll(int fd);
+	int Setup_Listener(void);
+	int Accept_Client();
+	void Drain_Client(const int fd);
 
     void Init_Server_UCX_Env(int remote_buff_size);
     void Clean_UCX_Env(void);
@@ -109,12 +128,16 @@ pthread_mutex_t process_lock;	// for this process
     ucs_status_t RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp_mem_h* memh);
     void UCX_Put(int idx, void* loc_buff, void* rem_buf, size_t len);
     void UCX_Get(int idx, void* loc_buff, void* rem_buf, size_t len);
+
+    int FindFirstAvailableQP(void);
     
 private:
     int Init_Context(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker);
     int Init_Worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker);
     int Get_IO_Worker_Index_from_UCX_Index(int idx_ucx);
-    
+    ucs_status_t server_create_ep(ucp_worker_h data_worker,
+                                     ucp_conn_request_h conn_request,
+                                     ucp_ep_h *server_ep);
 };
 
 #endif
