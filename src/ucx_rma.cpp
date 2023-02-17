@@ -295,8 +295,8 @@ void* Func_thread_Finish_UCX_Setup(void *pParam)
 	pServer_UCX->pUCX_Data[idx].cuid = pData_to_recv->JobInfo.cuid;
 	pServer_UCX->pUCX_Data[idx].cgid = pData_to_recv->JobInfo.cgid;
 	pServer_UCX->pUCX_Data[idx].ctid = pData_to_recv->JobInfo.ctid;
-	memcpy(pServer_UCX->pUCX_Data[idx].szClientHostName, pData_to_recv->JobInfo.szClientHostName, MAX_HOSTNAME_LEN);
-	memcpy(pServer_UCX->pUCX_Data[idx].szClientExeName, pData_to_recv->JobInfo.szClientExeName, MAX_EXENAME_LEN);
+	memcpy(pServer_UCX->pUCX_Data[idx].szClientHostName, pData_to_recv->JobInfo.szClientHostName, UCX_MAX_HOSTNAME_LEN);
+	memcpy(pServer_UCX->pUCX_Data[idx].szClientExeName, pData_to_recv->JobInfo.szClientExeName, UCX_MAX_EXENAME_LEN);
 	pServer_UCX->pUCX_Data[idx].bTimeout = 0;
 	pServer_UCX->pUCX_Data[idx].bServerReady = 1;
 	

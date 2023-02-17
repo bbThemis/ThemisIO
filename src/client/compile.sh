@@ -8,9 +8,10 @@ gcc -I../../include/ -O3 -fPIC -c ${PWD}/libudis86/syn-intel.c -o syn-intel.o
 gcc -I../../include/ -O3 -fPIC -c ${PWD}/libudis86/udis86.c -o udis86.o
 g++ -I../../include/ -fPIC -g -O2 -c ../dict.cpp
 g++ -I../../include/ -fPIC -g -O2 -c ../xxhash.cpp
+g++ -I../../include/ -g -O2 -c -fPIC ../ucx_rma_common.cpp
 
 g++ -I../../include/ -g -O2 -c -fPIC wrapper.cpp
-g++ -g -O2 -fPIC -shared -o ../../wrapper.so wrapper.o decode.o itab.o syn-att.o syn-intel.o syn.o udis86.o dict.o xxhash.o -libverbs -lrt
+g++ -g -O2 -fPIC -shared -o ../../wrapper.so wrapper.o decode.o itab.o syn-att.o syn-intel.o syn.o udis86.o dict.o xxhash.o ucx_rma_common.o -libverbs -lrt -lucp -lucm -lucs -luct
 sed -i "s/xstaT64/xstat64/g" ../../wrapper.so
 sed -i "s/openaT64/openat64/g" ../../wrapper.so
 sed -i "s/staTfs64/statfs64/g" ../../wrapper.so

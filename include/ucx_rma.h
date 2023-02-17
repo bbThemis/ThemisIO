@@ -33,7 +33,7 @@
 
 
 
-#define UCX_QUEUE_SIZE	(1)
+
 
 
 typedef struct {
@@ -59,8 +59,8 @@ typedef struct {
 
     unsigned long int	rem_addr;
     pthread_mutex_t	qp_lock;
-    char szClientHostName[MAX_HOSTNAME_LEN];
-	char szClientExeName[MAX_EXENAME_LEN];
+    char szClientHostName[UCX_MAX_HOSTNAME_LEN];
+	char szClientExeName[UCX_MAX_EXENAME_LEN];
 
 }UCX_DATA, *PUCX_DATA;
 

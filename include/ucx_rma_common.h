@@ -13,9 +13,14 @@
 #define TAG_GLOBAL_ADDR_INFO	(0x78780002)
 #define TAG_DONE			(0x78787878)
 
-#define MAX_HOSTNAME_LEN	(24)	// short name. 
-#define MAX_EXENAME_LEN		(16)	// short name. 
+#define UCX_MAX_HOSTNAME_LEN	(24)	// short name. 
+#define UCX_MAX_EXENAME_LEN		(16)	// short name. 
 #define UCX_PUT_TIMEOUT_MS	(3000)	// two seconds timeout
+
+#define MAX_FS_UCX_SERVER (128)
+#define MAX_UCX_PER_PROCESS	(512)	// 256. Assume half of 512 is used. 
+
+#define UCX_QUEUE_SIZE	(1)
 
 #define UCX_FS_PARAM_FILE "ucx_myfs.param"
 void err_cb(void *arg, ucp_ep_h ep, ucs_status_t status);
@@ -27,8 +32,8 @@ typedef	struct	{
 	uint32_t ctid;	// client thred id
 	uint32_t cuid;	// client user id
 	uint32_t cgid;	// client user group id
-	char szClientHostName[MAX_HOSTNAME_LEN];
-	char szClientExeName[MAX_EXENAME_LEN];
+	char szClientHostName[UCX_MAX_HOSTNAME_LEN];
+	char szClientExeName[UCX_MAX_EXENAME_LEN];
 }UCX_JOB_INFO_DATA;
 
 typedef	struct	{
@@ -36,6 +41,8 @@ typedef	struct	{
 	char rkey_buffer[MAX_UCP_RKEY_SIZE];
     size_t rkey_buffer_size = 0;
     unsigned long int addr;
+
+	ucp_rkey_h rkey; // only for pal_remote_mem on clients
 }UCX_IB_MEM_DATA, *PUCX_IB_MEM_DATA;
 
 typedef	struct	{

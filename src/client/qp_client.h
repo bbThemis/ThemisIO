@@ -37,6 +37,7 @@
 #include "dict.h"
 #include "qp_common.h"
 #include "io_ops_common.h"
+#include "client_common.h"
 
 
 #define PORT 8888
@@ -82,24 +83,6 @@ static __thread struct ibv_mr *mr_rem = NULL, *mr_loc = NULL;
 void Finalize_Client();
 
 // file server info is stored at /dev/shm/myfs. Use bcast_dir to share this file across nodes. 
-typedef	struct	{
-	char szIP[16];
-	int port;
-	int nQP;	// number of active queue pairs on this node
-	pthread_mutex_t fs_qp_lock;	// 40 bytes
-}FS_SEVER;
-
-typedef	struct	{
-	int Init_Start;
-	int Init_Done;
-	int nFSServer;
-	int nNUMAPerNode;
-	int myip;
-	int pad[3];
-	FS_SEVER FS_List[MAX_FS_SERVER];
-	pthread_mutex_t lock_IO_Redirect;
-}FSSERVERLIST;
-
 FSSERVERLIST *pFileServerList, FileServerListLocal;	// pFileServerList in shared memory
 
 
@@ -166,19 +149,6 @@ static CLIENT_QUEUEPAIR *pClient_qp_List[MAX_QP_PER_PROCESS];
 
 extern int mpi_rank;
 
-void Take_ShortName(char szHostName[])
-{
-	int i=0;
-	
-	while(szHostName[i])    {
-		if(szHostName[i] == '.')        {
-			szHostName[i] = 0;
-			if(i >= (MAX_HOSTNAME_LEN))	printf("ERROR> ClientHostName = %s is TOO long!\n", szHostName);
-			return;
-		}
-		i++;
-	}
-}
 
 void Get_Exe_Name(char szName[])
 {

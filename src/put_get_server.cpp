@@ -33,6 +33,7 @@
 
 #define T_FREQ_REPORT_RESULT (1)
 #define PORT 8888
+#define UCX_PORT 12589
 
 CORE_BINDING CoreBinding;
 
@@ -285,7 +286,7 @@ void Get_Local_Server_Info(void)
 	ThisNode.sin_addr = ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr;
 	sprintf(ThisNode.szIP, "%s", inet_ntoa(ThisNode.sin_addr));
 	ThisNode.port = PORT + (mpi_rank % nNUMAPerNode);
-	ThisNode.ucx_port = PORT + (mpi_rank % nNUMAPerNode) + nNUMAPerNode;
+	ThisNode.ucx_port = UCX_PORT + (mpi_rank % nNUMAPerNode);
 }
 //static struct timeval tm1, tm2;
 
