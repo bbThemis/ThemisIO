@@ -1,229 +1,263 @@
-TACC:  Starting up job 5229146 
+TACC:  Starting up job 5248697 
 TACC:  Starting parallel tasks... 
-[1676603287.767964] [c100-007:258690:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768091] [c100-007:258725:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768178] [c100-007:258715:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768173] [c100-007:258718:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768186] [c100-007:258721:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768209] [c100-007:258624:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768192] [c100-007:258628:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768195] [c100-007:258711:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768233] [c100-007:258590:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768236] [c100-007:258667:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768224] [c100-007:258727:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768258] [c100-007:258704:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768286] [c100-007:258591:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768300] [c100-007:258688:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768291] [c100-007:258689:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768303] [c100-007:258698:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768296] [c100-007:258722:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768330] [c100-007:258610:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768313] [c100-007:258587:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768336] [c100-007:258648:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768314] [c100-007:258717:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768318] [c100-007:258723:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768338] [c100-007:258726:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768348] [c100-007:258592:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768353] [c100-007:258719:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768371] [c100-007:258599:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768384] [c100-007:258639:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768373] [c100-007:258652:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768387] [c100-007:258714:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768380] [c100-007:258716:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768401] [c100-007:258597:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768392] [c100-007:258631:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768404] [c100-007:258681:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768407] [c100-007:258679:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768415] [c100-007:258588:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768422] [c100-007:258607:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768430] [c100-007:258691:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768439] [c100-007:258720:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768435] [c100-007:258729:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768459] [c100-007:258604:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768471] [c100-007:258605:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768466] [c100-007:258623:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768461] [c100-007:258638:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768463] [c100-007:258646:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768457] [c100-007:258650:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768453] [c100-007:258703:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768455] [c100-007:258713:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768448] [c100-007:258724:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768468] [c100-007:258728:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768471] [c100-007:258586:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768469] [c100-007:258589:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768474] [c100-007:258595:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768473] [c100-007:258622:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768482] [c100-007:258647:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768479] [c100-007:258656:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.768477] [c100-007:258692:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.970214] [c100-007:258704:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.976927] [c100-007:258604:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.977240] [c100-007:258650:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.977501] [c100-007:258722:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.977525] [c100-007:258717:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.977643] [c100-007:258688:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.977689] [c100-007:258667:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.977709] [c100-007:258692:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.979177] [c100-007:258591:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.979820] [c100-007:258719:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.979921] [c100-007:258624:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.980115] [c100-007:258599:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.980203] [c100-007:258690:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.980418] [c100-007:258589:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.980575] [c100-007:258724:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.981096] [c100-007:258648:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.981239] [c100-007:258725:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.981328] [c100-007:258607:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.981379] [c100-007:258623:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.981487] [c100-007:258588:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.981525] [c100-007:258720:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.981568] [c100-007:258716:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.981634] [c100-007:258597:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.981683] [c100-007:258714:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.981724] [c100-007:258726:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.981778] [c100-007:258587:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.981846] [c100-007:258721:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.981867] [c100-007:258590:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.981915] [c100-007:258652:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.981960] [c100-007:258723:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982006] [c100-007:258718:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982054] [c100-007:258689:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982099] [c100-007:258715:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982152] [c100-007:258727:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982202] [c100-007:258586:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982268] [c100-007:258595:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982315] [c100-007:258622:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982357] [c100-007:258639:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982381] [c100-007:258592:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982429] [c100-007:258703:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982477] [c100-007:258691:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982524] [c100-007:258605:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982568] [c100-007:258728:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982653] [c100-007:258711:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982704] [c100-007:258610:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982734] [c100-007:258729:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982777] [c100-007:258656:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982804] [c100-007:258713:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982846] [c100-007:258631:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982904] [c100-007:258646:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.982957] [c100-007:258698:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.983000] [c100-007:258681:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.983054] [c100-007:258679:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.983136] [c100-007:258638:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.983293] [c100-007:258647:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603287.983425] [c100-007:258628:0]        rc_iface.c:523  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1676603288.140058] [c100-007:258692:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140058] [c100-007:258692:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140222] [c100-007:258713:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140222] [c100-007:258713:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140241] [c100-007:258591:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140241] [c100-007:258591:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140241] [c100-007:258691:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140241] [c100-007:258691:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140248] [c100-007:258711:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140248] [c100-007:258711:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140247] [c100-007:258720:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140247] [c100-007:258720:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140253] [c100-007:258725:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140253] [c100-007:258725:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140265] [c100-007:258610:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140265] [c100-007:258610:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140262] [c100-007:258595:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140262] [c100-007:258595:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140277] [c100-007:258622:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140277] [c100-007:258622:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140261] [c100-007:258638:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140261] [c100-007:258638:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140272] [c100-007:258656:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140272] [c100-007:258656:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140278] [c100-007:258690:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140278] [c100-007:258690:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140280] [c100-007:258716:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140280] [c100-007:258716:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140274] [c100-007:258719:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140274] [c100-007:258719:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140264] [c100-007:258723:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140264] [c100-007:258723:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140278] [c100-007:258727:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140278] [c100-007:258727:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140295] [c100-007:258587:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140295] [c100-007:258587:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140314] [c100-007:258588:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140314] [c100-007:258588:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140317] [c100-007:258592:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140317] [c100-007:258592:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140305] [c100-007:258623:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140305] [c100-007:258623:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140314] [c100-007:258624:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140314] [c100-007:258624:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140316] [c100-007:258639:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140316] [c100-007:258639:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140294] [c100-007:258647:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140294] [c100-007:258647:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140293] [c100-007:258652:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140293] [c100-007:258652:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140309] [c100-007:258688:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140309] [c100-007:258688:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140313] [c100-007:258703:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140313] [c100-007:258703:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140282] [c100-007:258721:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140282] [c100-007:258721:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140298] [c100-007:258728:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140298] [c100-007:258728:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140323] [c100-007:258729:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140323] [c100-007:258729:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140323] [c100-007:258589:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140323] [c100-007:258589:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140334] [c100-007:258607:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140334] [c100-007:258607:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140361] [c100-007:258597:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140361] [c100-007:258597:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140343] [c100-007:258646:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140343] [c100-007:258646:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140359] [c100-007:258648:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140359] [c100-007:258648:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140374] [c100-007:258717:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140374] [c100-007:258717:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140370] [c100-007:258718:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140370] [c100-007:258718:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140327] [c100-007:258726:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140327] [c100-007:258726:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140391] [c100-007:258586:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140391] [c100-007:258586:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140377] [c100-007:258605:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140377] [c100-007:258605:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140394] [c100-007:258628:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140394] [c100-007:258628:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140399] [c100-007:258631:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140399] [c100-007:258631:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140396] [c100-007:258650:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140396] [c100-007:258650:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140378] [c100-007:258679:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140378] [c100-007:258679:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140408] [c100-007:258689:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140408] [c100-007:258689:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140398] [c100-007:258698:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140398] [c100-007:258698:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140405] [c100-007:258704:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140405] [c100-007:258704:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140392] [c100-007:258714:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140392] [c100-007:258714:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140396] [c100-007:258715:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140396] [c100-007:258715:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140392] [c100-007:258722:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140392] [c100-007:258722:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140398] [c100-007:258724:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140398] [c100-007:258724:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140418] [c100-007:258590:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140418] [c100-007:258590:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140410] [c100-007:258604:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140410] [c100-007:258604:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140418] [c100-007:258599:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140418] [c100-007:258599:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140415] [c100-007:258667:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140415] [c100-007:258667:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1676603288.140422] [c100-007:258681:0]          parser.c:1996 UCX  WARN  unused environment variables: UCX_INCLUDE_DIRECTORY; UCX_LIB_DIRECTORY; UCX_WARN_UNUSED_ENV_VARS (maybe: UCX_WARN_UNUSED_ENV_VARS?); UCX_LOG_LEVEL (maybe: UCX_LOG_LEVEL?)
-[1676603288.140422] [c100-007:258681:0]          parser.c:1996 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-rw_speed time=2023-02-16:21:08:10 np=56 nn=1 sim_nn=1 rank0host=c100-007.frontera.tacc.utexas.edu -prefix=/myfs/rw_speed -iosize=1048576 -filesize=104857600 -time=60.0 -tag=job1
-rw_speed.job1 time=2023-02-16:21:09:08 nn=1 np=56 user=101 jobid=1001 mbps=19256.446 mbps_rank_stddev=25.791 mbps_1sec_time_slices=(0.0,3741.0,15246.0,17232.0,18725.0,18365.0,17980.0,18903.0,18921.0,20094.0,21096.0,21946.0,21985.0,20943.0,21000.0,7146.0,14064.0,15865.0,16658.0,16950.0,16968.0,17596.0,17103.0,17446.0,17655.0,17492.0,17710.0,18238.0,18092.0,17746.0,17994.0,18564.0,18701.0,18601.0,18369.0,17839.0,18185.0,18356.0,18301.0,17892.0,17884.0,17601.0,18460.0,19376.0,21064.0,23002.0,23002.0,22777.0,23191.0,23398.0,23434.0,23477.0,23467.0,23494.0,23522.0,23473.0,23471.0,23393.0,23386.0,23404.0,56.0)
-TACC:  Shutdown complete. Exiting. 
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+DBG> Begin Init_UCX_Client()
+[1677045931.787510] [c100-010:93619:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.797860] [c100-010:93619:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.808738] [c100-010:93622:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.820609] [c100-010:93568:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.821235] [c100-010:93622:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.829883] [c100-010:93568:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.838278] [c100-010:93618:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.846226] [c100-010:93618:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.846912] [c100-010:93616:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.852793] [c100-010:93522:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.858253] [c100-010:93616:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.864428] [c100-010:93522:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.865492] [c100-010:93614:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.866492] [c100-010:93463:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.872569] [c100-010:93613:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.873563] [c100-010:93510:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.876730] [c100-010:93507:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.877356] [c100-010:93614:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.880498] [c100-010:93509:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.881686] [c100-010:93613:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.883032] [c100-010:93510:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.884497] [c100-010:93563:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.885016] [c100-010:93463:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.891768] [c100-010:93509:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.893379] [c100-010:93507:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.896154] [c100-010:93619:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045931.896400] [c100-010:93563:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.899631] [c100-010:93610:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.913348] [c100-010:93601:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.914473] [c100-010:93622:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045931.914916] [c100-010:93610:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.921969] [c100-010:93601:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.923361] [c100-010:93600:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.927522] [c100-010:93568:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045931.927889] [c100-010:93465:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.933631] [c100-010:93600:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.936503] [c100-010:93465:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.938221] [c100-010:93611:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.942496] [c100-010:93479:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.949526] [c100-010:93473:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.950075] [c100-010:93616:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045931.952775] [c100-010:93611:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.957665] [c100-010:93612:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.962135] [c100-010:93473:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.962849] [c100-010:93607:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.963380] [c100-010:93618:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045931.964424] [c100-010:93479:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.970053] [c100-010:93612:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.971680] [c100-010:93607:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.974317] [c100-010:93617:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.975183] [c100-010:93614:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045931.976145] [c100-010:93522:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045931.976329] [c100-010:93615:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.977869] [c100-010:93510:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045931.978014] [c100-010:93496:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.978075] [c100-010:93613:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045931.978374] [c100-010:93507:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045931.978432] [c100-010:93537:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.979782] [c100-010:93576:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.980675] [c100-010:93463:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045931.980739] [c100-010:93617:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.982380] [c100-010:93615:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.984291] [c100-010:93537:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.985002] [c100-010:93496:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.986089] [c100-010:93576:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.986297] [c100-010:93495:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.988904] [c100-010:93625:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.989525] [c100-010:93525:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.990341] [c100-010:93495:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.992893] [c100-010:93625:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.993429] [c100-010:93621:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.993702] [c100-010:93533:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.993781] [c100-010:93525:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.994152] [c100-010:93567:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.994273] [c100-010:93509:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045931.994316] [c100-010:93599:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.998268] [c100-010:93621:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.998772] [c100-010:93567:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.998922] [c100-010:93599:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045931.999496] [c100-010:93610:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.000390] [c100-010:93533:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.000933] [c100-010:93623:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.002012] [c100-010:93624:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.002900] [c100-010:93487:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.003016] [c100-010:93516:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.004310] [c100-010:93555:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.005126] [c100-010:93623:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.005780] [c100-010:93624:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.006995] [c100-010:93516:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.007316] [c100-010:93487:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.008421] [c100-010:93453:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.009886] [c100-010:93466:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.010653] [c100-010:93601:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.011405] [c100-010:93513:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.013655] [c100-010:93453:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.014166] [c100-010:93563:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.014210] [c100-010:93606:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.014598] [c100-010:93513:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.014777] [c100-010:93602:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.015119] [c100-010:93466:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.015467] [c100-010:93455:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.015579] [c100-010:93611:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.017481] [c100-010:93537:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.017543] [c100-010:93606:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.017832] [c100-010:93548:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.017837] [c100-010:93555:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.018028] [c100-010:93602:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.018063] [c100-010:93600:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.019638] [c100-010:93536:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.020058] [c100-010:93455:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.020293] [c100-010:93620:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.021493] [c100-010:93553:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.022676] [c100-010:93548:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.025641] [c100-010:93605:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.025887] [c100-010:93617:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.025981] [c100-010:93553:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.026755] [c100-010:93576:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.028574] [c100-010:93546:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.028914] [c100-010:93605:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.029657] [c100-010:93473:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.029829] [c100-010:93625:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.030364] [c100-010:93564:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.031319] [c100-010:93536:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.032239] [c100-010:93546:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.034889] [c100-010:93467:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.035051] [c100-010:93564:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.036102] [c100-010:93607:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.036704] [c100-010:93620:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.040353] [c100-010:93467:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.042330] [c100-010:93612:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.043213] [c100-010:93516:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.045540] [c100-010:93525:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.045572] [c100-010:93599:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.045636] [c100-010:93465:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.045862] [c100-010:93567:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.046489] [c100-010:93623:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.047842] [c100-010:93624:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.048296] [c100-010:93495:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.048383] [c100-010:93615:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.048515] [c100-010:93533:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.048730] [c100-010:93479:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.049055] [c100-010:93453:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.049461] [c100-010:93555:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.050108] [c100-010:93466:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.050190] [c100-010:93487:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.050624] [c100-010:93454:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.053990] [c100-010:93606:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.054217] [c100-010:93513:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.056380] [c100-010:93621:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.056585] [c100-010:93454:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.057123] [c100-010:93468:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.060009] [c100-010:93605:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.060252] [c100-010:93468:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.060663] [c100-010:93536:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.060792] [c100-010:93553:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.061503] [c100-010:93602:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.061998] [c100-010:93548:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.062791] [c100-010:93478:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.063503] [c100-010:93546:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.063734] [c100-010:93455:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.066311] [c100-010:93478:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677045932.067552] [c100-010:93620:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.068121] [c100-010:93467:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.068264] [c100-010:93564:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.079539] [c100-010:93496:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.082535] [c100-010:93454:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.085162] [c100-010:93468:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677045932.087427] [c100-010:93478:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+DBG> Timeout. pid = 93513 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93546 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93612 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93619 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93522 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93602 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93600 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93463 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93610 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93613 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93454 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93479 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93487 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93465 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93466 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93478 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93563 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93455 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93468 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93510 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93509 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93516 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93536 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93555 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93576 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93599 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93601 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93607 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93606 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93611 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93616 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93625 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93620 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93621 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93467 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93615 on c100-010.frontera.tacc.utexas.edu
+DBG> Timeout. pid = 93507 on c100-010.frontera.tacc.utexas.edu

@@ -375,7 +375,8 @@ void SERVER_RDMA::Drain_Client(const int fd)
 	switch(rc) {
         default:
         {
-            idx = p_Hash_socket_fd->DictSearchOrg(fd, &elt_list_socket_fd, &ht_table_socket_fd);
+            fprintf(stdout, "DBG> SERVER_RDMA Drain Client\n");
+			idx = p_Hash_socket_fd->DictSearchOrg(fd, &elt_list_socket_fd, &ht_table_socket_fd);
             assert(idx >= 0);
             pUCXParam = (UCXPARAM*)malloc( sizeof(UCXPARAM) + sizeof(UCX_DATA_SEND_BY_CLIENT) + sizeof(UCX_DATA_SEND_BY_SERVER) );
             assert(pUCXParam != NULL);

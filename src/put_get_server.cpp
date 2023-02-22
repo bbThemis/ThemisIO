@@ -454,7 +454,7 @@ static void* Func_thread_ucx_server(void *pParam) {
 
 	pServer_ucx = (SERVER_RDMA *)pParam;
 	pServer_ucx->Init_Server_UCX_Env(DEFAULT_REM_BUFF_SIZE);
-	pServer_ucx->Init_Server_Memory(512, ThisNode.ucx_port);
+	pServer_ucx->Init_Server_Memory(2048, ThisNode.ucx_port);
 	//UCX_TEST
 	// for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
 	// 	IO_Worker_tid_List[i] = i;
@@ -479,7 +479,7 @@ static void* Func_thread_qp_server(void *pParam)
 
 	pServer_qp = (SERVER_QUEUEPAIR *)pParam;
 	pServer_qp->Init_Server_IB_Env(DEFAULT_REM_BUFF_SIZE);
-	pServer_qp->Init_Server_Socket(2048, ThisNode.port);
+	pServer_qp->Init_Server_Socket(512, ThisNode.port);
 
 	Init_ActiveJobList();
 	Init_QueueList();

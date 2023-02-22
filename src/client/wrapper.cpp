@@ -40,8 +40,9 @@ All rights are reserved.
 
 #include <stddef.h>
 
-#include "qp_client.h"
 #include "ucx_client.h"
+#include "qp_client.h"
+
 #include "io_ops_common.h"
 #include "xxhash.h"
 
@@ -4781,12 +4782,14 @@ __attribute__((constructor)) void Init_FS_Client()
 	if( (strstr(szExeName, "ssh")) || (strstr(szExeName, "pmi_proxy")) )	{
 		return;
 	}
-
+	Init_UCX_Client();
 	Init_Client();
+	
 
 //	if(p_sigaction==NULL)	p_sigaction = (org_sigaction)dlsym(RTLD_NEXT,"sigaction");
 
 	Setup_Signal_QueuePair();
+	
 
 	// Establish the first QP
 //	memset(pClient_qp, 0, sizeof(CLIENT_QUEUEPAIR *)*MAX_FS_SERVER);

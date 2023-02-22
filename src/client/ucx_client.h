@@ -49,6 +49,12 @@ static CHASHTABLE_INT *pHT_ucx=NULL;
 static struct elt_Int *elt_list_ucx = NULL;
 static int *ht_table_ucx=NULL;
 
+CHASHTABLE_INT *pHT_IO_Redirect_UCX=NULL;
+struct elt_Int *elt_list_IO_Redirect_UCX = NULL;
+int *ht_table_IO_Redirect_UCX=NULL;
+IO_REDIRECT_REC *pIO_Redirect_List_UCX=NULL;
+
+
 #define UCX_PORT 12589
 
 static __thread unsigned char *ucx_rem_buff=NULL, *ucx_loc_buff=NULL; 
@@ -258,7 +264,7 @@ void CLIENT_UCX::Init_UCX_Env() {
 		fprintf(stderr, "CLIENT_UCX Failure: No HCA can use.\n");
 		exit(1);
 	}
-	pthread_mutex_unlock(&process_lock);
+	pthread_mutex_unlock(&ucx_process_lock);
 }
 
 void CLIENT_UCX::Setup_UCP_Connection(int IdxServer, char loc_buff[], size_t size_loc_buff, char rem_buff[], size_t size_rem_buff) {
@@ -290,6 +296,7 @@ void CLIENT_UCX::Setup_UCP_Connection(int IdxServer, char loc_buff[], size_t siz
     }
 	ucx_put_get_locked = 0;
 	Setup_Socket(UCXFileServerListLocal.FS_List[IdxServer].szIP);
+
 	AllocateUCPDataWorker();
 	const char *fake_user_id = 0;
 	gethostname(szHostName, 63);
@@ -297,7 +304,7 @@ void CLIENT_UCX::Setup_UCP_Connection(int IdxServer, char loc_buff[], size_t siz
 	data_to_send.JobInfo.comm_tag = TAG_SUBMIT_JOB_INFO;
 	data_to_send.JobInfo.nnode = nnode_this_job;
 	data_to_send.JobInfo.jobid = jobid;
-	data_to_send.JobInfo.cip = pFileServerList->myip;
+	data_to_send.JobInfo.cip = pUCXFileServerList->myip;
 	data_to_send.JobInfo.ctid = tid;
 	data_to_send.JobInfo.cuid = getuid();
 	fake_user_id = getenv("THEMIS_FAKE_USERID");
@@ -451,6 +458,199 @@ int CLIENT_UCX::UCX_Get(void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t le
 	pthread_mutex_unlock(&ucx_put_get_lock);
 
 	return 0;
+}
+
+void CLIENT_UCX::CloseUCPDataWorker() {
+	int IdxServer;
+	struct timeval tm1, tm2;
+	unsigned long long t;
+
+	IdxServer = Idx_fs;
+	pthread_mutex_lock(&(pUCXFileServerList->FS_List[IdxServer].fs_qp_lock));
+	pUCXFileServerList->FS_List[IdxServer].nQP --;
+	pthread_mutex_unlock(&(pUCXFileServerList->FS_List[IdxServer].fs_qp_lock));
+	if(ucp_worker != NULL) {
+		ucp_worker_destroy(ucp_worker);
+	}
+
+	if(ucx_mr_rem != NULL) {
+		ucx_mr_rem = ucx_mr_loc = NULL;
+		ucp_mem_unmap(ucp_main_context, mr_rem_thread);
+		ucp_mem_unmap(ucp_main_context, mr_loc_thread);
+	}
+	ucp_mem_unmap(ucp_main_context, mr_loc_ucx_Obj);
+}
+
+static void Read_UCX_FS_Param(void) {
+	char szFileName[128], *szServerConf=NULL;
+	FILE *fIn;
+	int i, j, nItems;
+	printf("DBG> Read_UCX_FS_Param\n");
+	sprintf(szFileName, "/dev/shm/%s", UCX_FS_PARAM_FILE);
+	fIn = fopen(szFileName, "r");
+	if(fIn == NULL)	{
+		szServerConf = getenv("UCX_MYFS_CONF");
+		if(szServerConf == NULL)	{
+			printf("ERROR> Failed to open file %s and get env UCX_MYFS_CONF\nQuit\n", szFileName);
+			exit(1);
+		}
+		else	{
+			fIn = fopen(szServerConf, "r");
+			if(fIn == NULL)	{
+				printf("ERROR> Failed to open file %s and file %s\nQuit\n", szFileName, szServerConf);
+				exit(1);
+			}
+		}
+	}
+	nItems = fscanf(fIn, "%d%d", &(pUCXFileServerList->nFSServer), &(pUCXFileServerList->nNUMAPerNode));
+	if(nItems != 2)	{
+		printf("ERROR> Failed to read nFSServer and nNUMAPerNode for UCX.\n");
+		fclose(fIn);
+		exit(1);
+	}
+
+	for(i=0; i<pUCXFileServerList->nFSServer; i++)	{
+		nItems = fscanf(fIn, "%s%d", pUCXFileServerList->FS_List[i].szIP, &(pUCXFileServerList->FS_List[i].port));
+		if(nItems != 2)	{
+			printf("ERROR> Failed to read ip port information of ucx file server.\nQuit\n");
+			fclose(fIn);
+			exit(1);
+		}
+		if (pthread_mutex_init(&(pUCXFileServerList->FS_List[i].fs_qp_lock), NULL) != 0) { 
+			printf("\n pUCXFileServerList mutex init failed\n"); 
+			exit(1);
+		}
+		pUCXFileServerList->FS_List[i].nQP = 0;
+	}
+	
+	fclose(fIn);
+}
+
+void Init_UCX_Client() 
+{
+	printf("DBG> Begin Init_UCX_Client()\n");
+	int i, shm_fd, To_Init=0, nSizeHT_IO_Redirect, nSizeofShm;
+	char mutex_name[]="shm_ucx_myfs_paramhhh";
+	void *p_shm;
+	char *szEnvJobID=NULL, *szEnvNNode=NULL, *szEnvDebug=NULL;
+	CLIENT_UCX::Init_UCX_Env();
+	pHT_ucx = (CHASHTABLE_INT *)malloc(CHASHTABLE_INT::GetStorageSize(MAX_UCX_PER_PROCESS));
+	pHT_ucx->DictCreate(MAX_UCX_PER_PROCESS,  &elt_list_ucx, &ht_table_ucx);
+	for(i=0; i<MAX_UCX_PER_PROCESS; i++)	{
+		pClient_ucx_List[i] = NULL;
+	}
+	for(i=0; i<MAX_FS_UCX_SERVER; i++)	{
+		pClient_ucx[i] = NULL;
+	}
+	
+	if (pthread_mutex_init(&ht_ucx_lock, NULL) != 0) { 
+        printf("\n mutex ht_ucx_lock init failed\n"); 
+        exit(1);
+    }
+    if(pthread_mutex_init(&ucx_process_lock, NULL) != 0) { 
+        printf("\n mutex ucx_process_lock init failed\n"); 
+        exit(1);
+    }
+	nSizeHT_IO_Redirect = CHASHTABLE_INT::GetStorageSize(SIZE_IO_REDIRECT_HT);
+	nSizeofShm = sizeof(FSSERVERLIST) + nSizeHT_IO_Redirect + sizeof(IO_REDIRECT_REC)*SIZE_IO_REDIRECT_HT;
+	
+	shm_fd = shm_open(mutex_name, O_RDWR, 0664);
+	
+	if(shm_fd < 0) {	// failed
+		shm_fd = shm_open(mutex_name, O_RDWR | O_CREAT | O_EXCL, 0664);	// create 
+		
+		if(shm_fd == -1)	{
+			if(errno == EEXIST)	{	// file exists
+				shm_fd = shm_open(mutex_name, O_RDWR, 0664); // try openning file again
+				if(shm_fd == -1)    {
+					printf("Fail to create file %S with shm_open().\n", mutex_name);
+					exit(1);
+				}
+			}
+			else	{
+				printf("DBG> Unexpected error in Init_UCX_Client()!\nerrno = %d\n\n", errno);
+			}
+			Take_a_Short_Nap(300);
+		}
+		else {
+			if (ftruncate(shm_fd, nSizeofShm) != 0) {
+				perror("ftruncate");
+			}
+			To_Init = 1;
+			printf("UCX_CLIENT TO_Init = 1\n");
+		}
+	}
+	else	{
+		Take_a_Short_Nap(300);
+	}
+	
+	p_shm = mmap(NULL, nSizeofShm, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+	if (p_shm == MAP_FAILED) {
+		perror("mmap");
+	}
+	pUCXFileServerList = (FSSERVERLIST *)p_shm;
+	pHT_IO_Redirect_UCX = (CHASHTABLE_INT *)((char*)p_shm + sizeof(FSSERVERLIST));
+	pIO_Redirect_List_UCX = (IO_REDIRECT_REC *)((char*)p_shm + sizeof(FSSERVERLIST) + nSizeHT_IO_Redirect);
+	
+	if(To_Init == 0)	{
+		while(1)	{
+			if(pUCXFileServerList->Init_Done == 1)	{
+				break;
+			}
+			Take_a_Short_Nap(500);
+			 
+		}
+		memcpy(&UCXFileServerListLocal, pUCXFileServerList, sizeof(int)*8);
+		memcpy(&(UCXFileServerListLocal.FS_List), &(pUCXFileServerList->FS_List), sizeof(FS_SEVER)*pUCXFileServerList->nFSServer);
+		pHT_IO_Redirect_UCX->DictCreate(0, &elt_list_IO_Redirect_UCX, &ht_table_IO_Redirect_UCX);	// init hash table
+	}
+	else {
+		memset(p_shm, 0, sizeof(FSSERVERLIST));
+		pUCXFileServerList->Init_Start = 1;
+		Read_UCX_FS_Param();
+		memcpy(&UCXFileServerListLocal, pUCXFileServerList, sizeof(int)*8);
+		memcpy(&(UCXFileServerListLocal.FS_List), &(pUCXFileServerList->FS_List), sizeof(FS_SEVER)*pUCXFileServerList->nFSServer);
+		pUCXFileServerList->myip = QueryLocalIP();
+
+		if(pthread_mutex_init(&(pUCXFileServerList->lock_IO_Redirect), NULL) != 0) { 
+			printf("\n mutex pUCXFileServerList->lock_IO_Redirect init failed\n"); 
+			exit(1);
+		}
+		pHT_IO_Redirect_UCX->DictCreate(SIZE_IO_REDIRECT_HT, &elt_list_IO_Redirect_UCX, &ht_table_IO_Redirect_UCX);	// init hash table
+		memset(pIO_Redirect_List_UCX, 0, sizeof(IO_REDIRECT_REC)*SIZE_IO_REDIRECT_HT);
+		
+		pUCXFileServerList->Init_Done = 1;
+	}
+	
+	if(jobid == 0)	{
+		szEnvJobID = getenv("THEMIS_FAKE_JOBID");
+		if (!szEnvJobID)
+			szEnvJobID = getenv("SLURM_JOBID");
+		if(szEnvJobID == NULL)	{
+			printf("Waring: Fail to call getenv(\"SLURM_JOBID\")\n");
+		}
+		else	{
+			jobid = atoi(szEnvJobID);
+		}
+	}
+	if(nnode_this_job == 0)	{
+		szEnvNNode = getenv("THEMIS_FAKE_NNODES");
+		if (!szEnvNNode)
+			szEnvNNode = getenv("SLURM_NNODES");
+		if(szEnvNNode == NULL)	{
+			printf("Waring: Fail to call getenv(\"SLURM_NNODES\")\n");
+		}
+		else	{
+			nnode_this_job = atoi(szEnvNNode);
+		}
+	}
+//	printf("DBG> JobID = %d NNode = %d\n", jobid, nnode_this_job);
+	
+	szEnvDebug = getenv("UCX_MYFS_DEBUG");
+	if(szEnvDebug)	{
+		if(atoi(szEnvDebug) == 1)	bDebug = 1;
+	}
+	
 }
 
 #endif

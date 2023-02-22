@@ -74,6 +74,25 @@ function setMyfsConf() {
   echo $SCRIPT: Failed to find myfs.param
 }
 
+function setMyUCXfsConf() {
+  if [ -n "$UCX_MYFS_CONF" ]
+  then
+    # MYFS_CONF already set
+    return
+  fi
+
+  for dir in . .. $SCRIPT_DIR $SCRIPT_DIR/..
+  do
+    ucx_myfs=$dir/ucx_myfs.param
+    if [ -f $ucx_myfs ]
+    then
+      # echo FOUND $myfs
+      export UCX_MYFS_CONF=$ucx_myfs
+      return
+    fi
+  done
+  echo $SCRIPT: Failed to find ucx_myfs.param
+}
 
 while getopts ":hj:n:u:s:" option
 do
@@ -95,7 +114,7 @@ shift $(($OPTIND - 1))
 
 setPreload
 setMyfsConf
-
+setMyUCXfsConf
 # run the client program
 
 if [ -z "$*" ]
@@ -105,3 +124,5 @@ then
 fi
 
 "$@"
+
+

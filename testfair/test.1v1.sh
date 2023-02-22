@@ -5,11 +5,11 @@ iosize=1m
 
 IBRUN_TASKS_PER_NODE=$ppn ibrun -n $(($ppn * 1)) -o $(($ppn * 2)) \
    ../tests/themis_client.sh -u 101 -j 1001 -n 1 \
-   ./rw_speed -time=60 -iosize=$iosize -filesize=100m -tag=job1 &> rw_speed1.out &
+   ./rw_speed -time=15 -iosize=$iosize -filesize=100m -tag=job1 &> rw_speed1.out &
 
 IBRUN_TASKS_PER_NODE=$ppn ibrun -n $(($ppn * 1)) -o $(($ppn * 3)) \
-   ../tests/themis_client.sh -u 102 -j 1002 -n 1 -s 15 \
-   ./rw_speed -time=30 -iosize=$iosize -filesize=100m -tag=job2 &> rw_speed2.out &
+   ../tests/themis_client.sh -u 102 -j 1002 -n 1 -s 5 \
+   ./rw_speed -time=5 -iosize=$iosize -filesize=100m -tag=job2 &> rw_speed2.out &
 
 wait
 cat rw_speed1.out
