@@ -644,6 +644,14 @@ inline void Setup_QP_if_Needed(int idx_fs)
 	}
 }
 
+inline void Setup_UCX_if_Needed(int idx_fs) {
+	if(pClient_ucx[idx_fs] == NULL)	{	// Must be in a new thread. Need to establish a new QP. 
+		pClient_ucx[idx_fs] = (CLIENT_UCX *)malloc(sizeof(CLIENT_UCX));
+		pClient_ucx[idx_fs]->Setup_UCP_Connection(idx_fs, (char*)ucx_loc_buff, IO_RESULT_BUFFER_SIZE + 4096, (char*)ucx_rem_buff, IO_RESULT_BUFFER_SIZE + 4096);	// !!!!!!!!!!!!!! idx_server need to be changed!!!!
+		fetch_and_add(&nQp, 1);	// atomically add the counter
+	}
+}
+
 extern "C" int my_open(const char *pathname, int oflags, ...)
 {
 	int mode = 0, two_args=1, fd, idx_fs, idx_fd;
@@ -712,6 +720,7 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 			pIO_Cmd->parent_dir_hash = 0;
 		}
 		Setup_QP_if_Needed(idx_fs);
+		Setup_UCX_if_Needed(idx_fs);
 //		printf("DBG> open(%s) idx_fs = %d bCreate = %d\n", szFullPath, idx_fs, oflags & O_CREAT);
 		
 		pResult = (RW_FUNC_RETURN *)rem_buff;
