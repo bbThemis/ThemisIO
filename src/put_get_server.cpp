@@ -424,6 +424,28 @@ static void* UCX_Rma_Get_Test_Check(void* pParam, void* loc_ptr) {
 	free(loc_ptr);
 }
 
+static void* Func_thread_Test_UCX_Client_Serv_Polling_New_Msg(void *pParam)
+{
+	SERVER_RDMA *pServer_ucx;
+	
+
+	pServer_ucx = (SERVER_RDMA *)pParam;
+	while(1)	{
+		sleep(1);
+		if(pServer_ucx->pUCX_Data)	{
+			break;
+		}
+	}
+
+	sleep(1);
+
+	while(1)	{
+		pServer_ucx->ScanNewMsg();
+	}
+
+	return NULL;
+}
+
 static void* Func_thread_Polling_New_Msg(void *pParam)
 {
 	SERVER_QUEUEPAIR *pServer_qp;
@@ -610,7 +632,7 @@ int main(int argc, char **argv)
 	int i;
 	FILE *fOut;
 	pthread_t thread_qp_server, thread_print_data, thread_polling_newmsg, thread_global_sharing, thread_ucx_server;
-	pthread_t thread_ucx_test;
+	pthread_t thread_ucx_test, thread_ucx_polling_newmsg;
 //	unsigned char *pNewMsg_ToSend=NULL;
 //	IO_CMD_MSG *pIO_Cmd_toSend;
 //	struct ibv_mr *mr_local;
@@ -738,6 +760,12 @@ int main(int argc, char **argv)
 		return 1;
 	}
 	printf("DBG> Rank = %d,  started Func_thread_Polling_New_Msg().\n", mpi_rank);
+
+	if(pthread_create(&(thread_ucx_polling_newmsg), NULL, Func_thread_Test_UCX_Client_Serv_Polling_New_Msg, &Server_ucx)) {
+		fprintf(stderr, "Error creating thread thread_ucx_polling_newmsg\n");
+		return 1;
+	}
+	printf("DBG> Rank = %d,  started Func_thread_Test_UCX_Client_Serv_Polling_New_Msg().\n", mpi_rank);
 
 	signal(SIGALRM, sigalarm_handler); // Register signal handler
 	alarm(T_FREQ_REPORT_RESULT);

@@ -35,7 +35,7 @@
 
 
 
-
+#define MAX_UCX_NEW_MSG	(1024*16)
 typedef struct {
     ucp_worker_h ucp_data_worker;
     int nPut_Get, nPut_Get_Done;
@@ -130,7 +130,7 @@ pthread_mutex_t process_lock;	// for this process
     void UCX_Get(int idx, void* loc_buff, void* rem_buf, size_t len);
 
     int FindFirstAvailableQP(void);
-    
+    void ScanNewMsg();
 private:
     int Init_Context(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker);
     int Init_Worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker);
@@ -138,6 +138,7 @@ private:
     ucs_status_t server_create_ep(ucp_worker_h data_worker,
                                      ucp_conn_request_h conn_request,
                                      ucp_ep_h *server_ep);
+    
 };
 
 #endif

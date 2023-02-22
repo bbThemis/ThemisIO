@@ -385,7 +385,7 @@ ucs_status_t CLIENT_UCX::RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp_
 
 int CLIENT_UCX::UCX_Put(void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t len) {
 	int ne, ret;
-	
+	fprintf(stdout, "DBG> UCX_Put loc_buf %p\n", loc_buf);
 	if(ucp_worker == NULL)	return 1;
 	pthread_mutex_lock(&ucx_put_get_lock);
 	ucx_put_get_locked = 1;
@@ -401,6 +401,12 @@ int CLIENT_UCX::UCX_Put(void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t le
 	if( (nPut - nPut_Done) >= UCX_QUEUE_SIZE ) {
         while(1) {
             ucp_worker_progress(ucp_worker);
+			// fprintf(stdout, "DBG> UCX_Put ucs_status_ptr_t %p\n", req);
+			if(req == NULL) {
+				fprintf(stdout, "DBG> UCX_Put ucs_status_ptr_t is nil\n");
+				nPut_Done +=1;
+				break;
+			}
             ucs_status_t status = ucp_request_check_status(req);
             if(status == UCS_OK) {
                 nPut_Done +=1;

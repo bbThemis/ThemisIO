@@ -500,6 +500,16 @@ inline int Get_Fd_Redirected(int fd)
 	return fd;
 }
 
+inline void Test_UCX_Put(int idx_fs) 
+{
+	fprintf(stdout, "Test_UCX_Put started\n");
+	sprintf((char*)ucx_loc_buff, "Test_UCX_Put%d", idx_fs);
+	pClient_ucx[idx_fs]->UCX_Put(ucx_loc_buff, (void*)(pClient_ucx[idx_fs]->remote_addr_IO_CMD), pClient_ucx[idx_fs]->pal_remote_mem.rkey, IO_Msg_Size_op);
+	ucx_loc_buff[0] = TAG_NEW_REQUEST;
+	pClient_ucx[idx_fs]->UCX_Put(ucx_loc_buff, (void*)(pClient_ucx[idx_fs]->remote_addr_new_msg), pClient_ucx[idx_fs]->pal_remote_mem.rkey, 1);
+	fprintf(stdout, "Test_UCX_Put finished\n");
+}
+
 inline void Send_IO_Request(int idx_fs)
 {
 	IO_CMD_MSG *pIO_Cmd = (IO_CMD_MSG *)loc_buff;
@@ -734,7 +744,7 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_OPEN;
 //		pIO_Cmd->nTokenNeeded = 0;
 		Send_IO_Request(idx_fs);
-		
+		Test_UCX_Put(idx_fs);
 		fd = (pResult->ret_value) & 0xFFFFFFFF;
 		if(fd < 0)	{
 			errno = pResult->myerrno;
@@ -4797,7 +4807,7 @@ __attribute__((constructor)) void Init_FS_Client()
 
 //	if(p_sigaction==NULL)	p_sigaction = (org_sigaction)dlsym(RTLD_NEXT,"sigaction");
 
-	Setup_Signal_QueuePair();
+	// Setup_Signal_QueuePair();
 	
 
 	// Establish the first QP

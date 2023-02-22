@@ -3,6 +3,7 @@
 #include <netinet/tcp.h>
 #include <string.h>
 #include <errno.h>
+#include <vector>
 
 #include "ucx_rma.h"
 #include "myfs.h"
@@ -16,7 +17,7 @@ extern int mpi_rank, nFSServer;	// rank and size of MPI
 pthread_t pthread_IO_Worker_UCX[NUM_THREAD_IO_WORKER];
 
 // pthread_mutex_t lock_Modify_ActiveJob_List;
-
+int nTestNewMsg, TestNewMsgList[MAX_UCX_NEW_MSG];
 inline int Align64_Int(int a)
 {
 	// return ( (a & 0x3F) ? (64 + (a & 0xFFFFFFC0) ) : (a) );
@@ -360,6 +361,108 @@ int SERVER_RDMA::Accept_Client()
 	}
 
 	return fd;
+}
+
+
+void SERVER_RDMA::ScanNewMsg() {
+	int i, k, LastQPLocal, idx_queue, idx_qp, nQP_Server;
+	__m512i Data;
+	unsigned long int cmpMask, T_Queued;
+	struct timeval tm;
+
+	nTestNewMsg = 0;
+	if(p_shm_NewMsgFlag == NULL)	return;
+	LastQPLocal = IdxLastQP + 1;
+	nQP_Server = NUM_THREAD_IO_WORKER_INTER_SERVER * nFSServer;
+	for(i=0; i<nQP_Server; i++)	{	// alway scan new msg from other servers first!!!
+		if(p_shm_NewMsgFlag[i])	{
+			TestNewMsgList[nTestNewMsg] = i;
+			nTestNewMsg++;
+			p_shm_NewMsgFlag[i] = 0;
+		}
+	}
+	gettimeofday(&tm, NULL);
+	T_Queued = tm.tv_sec * 1000000 + tm.tv_usec;
+	std::vector<IO_CMD_MSG*> tmpV;
+	for(i=0; i<nTestNewMsg; i++)	{
+		idx_qp = TestNewMsgList[i];
+		// idx_queue = pUCX_Data[idx_qp].idx_queue;
+		// p_shm_IO_Cmd_Msg[idx_qp].idx_qp = idx_qp;	// set index of qp. Needed for communication!
+		// p_shm_IO_Cmd_Msg[idx_qp].idx_JobRec = pUCX_Data[idx_qp].idx_JobRec;
+		// p_shm_IO_Cmd_Msg[idx_qp].T_Queued = T_Queued;
+		tmpV.push_back(&(p_shm_IO_Cmd_Msg[idx_qp]));
+	}
+	nTestNewMsg = 0;
+
+	if(IdxLastQP64 <=192)	{	// simple version
+		for(i=0; i<LastQPLocal; i++)	{
+			if(p_shm_NewMsgFlag[i])	{
+				if(pUCX_Data[i].bServerReady)	{
+					TestNewMsgList[nTestNewMsg] = i;
+	//				printf("DBG> Rank = %d. Found new msg for qp %d.\n", mpi_rank, i);
+					nTestNewMsg++;
+					p_shm_NewMsgFlag[i] = 0;
+				}
+			}
+		}
+	}
+	else	{	// AVX512 version
+        for(i=0; i< (IdxLastQP64-64); i+=64)        {
+			Data = *( volatile __m512i *)(& p_shm_NewMsgFlag[i]);
+			cmpMask = _mm512_movepi8_mask(Data);
+			
+			if ( cmpMask != 0 ) {
+				for(k=0; k<64; k++)	{
+					if(cmpMask & 1LL)	{
+						if(pUCX_Data[i+k].bServerReady)	{
+							TestNewMsgList[nTestNewMsg] = i + k;
+	//						printf("DBG> Rank = %d. Found new msg for qp %d.\n", mpi_rank, i+k);
+							nTestNewMsg++;
+							p_shm_NewMsgFlag[i+k] = 0;
+						}
+					}
+					cmpMask = cmpMask >> 1;
+				}
+			}
+		}
+        for(; i< IdxLastQP64; i+=64)        {	// residue
+			Data = *( volatile __m512i *)(& p_shm_NewMsgFlag[i]);
+			cmpMask = _mm512_movepi8_mask(Data);
+			
+			if ( cmpMask != 0 ) {
+				for(k=0; k<64; k++)	{
+					if(cmpMask & 1LL)	{
+						if( (i + k) >= LastQPLocal )	{	// reached the end
+							break;
+						}
+						if(pUCX_Data[i+k].bServerReady)	{
+							TestNewMsgList[nTestNewMsg] = i + k;
+	//						printf("DBG> Rank = %d. Found new msg for qp %d.\n", mpi_rank, i+k);
+							nTestNewMsg++;
+							p_shm_NewMsgFlag[i+k] = 0;
+						}
+					}
+					cmpMask = cmpMask >> 1;
+				}
+			}
+		}
+	}
+
+	gettimeofday(&tm, NULL);
+	T_Queued = tm.tv_sec * 1000000 + tm.tv_usec;
+	for(i=0; i<nTestNewMsg; i++)	{
+		idx_qp = TestNewMsgList[i];
+		// idx_queue = pUCX_Data[idx_qp].idx_queue;
+		// p_shm_IO_Cmd_Msg[idx_qp].idx_qp = idx_qp;	// set index of qp. Needed for communication!
+		// p_shm_IO_Cmd_Msg[idx_qp].idx_JobRec = pQP_Data[idx_qp].idx_JobRec;
+		// p_shm_IO_Cmd_Msg[idx_qp].T_Queued = T_Queued;
+		tmpV.push_back(&(p_shm_IO_Cmd_Msg[idx_qp]));
+	}
+	while(!tmpV.empty()) {
+		IO_CMD_MSG* cur = tmpV.back();
+		tmpV.pop_back();
+		printf("DBG> mpi_rank:%d ScanNewMsg:%s\n", mpi_rank, (char*)cur);
+	}
 }
 
 void SERVER_RDMA::Drain_Client(const int fd)
