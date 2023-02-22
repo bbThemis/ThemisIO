@@ -502,12 +502,12 @@ inline int Get_Fd_Redirected(int fd)
 
 inline void Test_UCX_Put(int idx_fs) 
 {
-	fprintf(stdout, "Test_UCX_Put started\n");
+	// fprintf(stdout, "Test_UCX_Put started\n");
 	sprintf((char*)ucx_loc_buff, "Test_UCX_Put%d", idx_fs);
 	pClient_ucx[idx_fs]->UCX_Put(ucx_loc_buff, (void*)(pClient_ucx[idx_fs]->remote_addr_IO_CMD), pClient_ucx[idx_fs]->pal_remote_mem.rkey, IO_Msg_Size_op);
 	ucx_loc_buff[0] = TAG_NEW_REQUEST;
 	pClient_ucx[idx_fs]->UCX_Put(ucx_loc_buff, (void*)(pClient_ucx[idx_fs]->remote_addr_new_msg), pClient_ucx[idx_fs]->pal_remote_mem.rkey, 1);
-	fprintf(stdout, "Test_UCX_Put finished\n");
+	// fprintf(stdout, "Test_UCX_Put finished\n");
 }
 
 inline void Send_IO_Request(int idx_fs)
@@ -730,7 +730,7 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 			pIO_Cmd->parent_dir_hash = 0;
 		}
 		Setup_QP_if_Needed(idx_fs);
-		Setup_UCX_if_Needed(idx_fs);
+		// Setup_UCX_if_Needed(idx_fs);
 //		printf("DBG> open(%s) idx_fs = %d bCreate = %d\n", szFullPath, idx_fs, oflags & O_CREAT);
 		
 		pResult = (RW_FUNC_RETURN *)rem_buff;
@@ -744,7 +744,7 @@ extern "C" int my_open(const char *pathname, int oflags, ...)
 		pIO_Cmd->op = IO_OP_MAGIC | RF_RW_OP_OPEN;
 //		pIO_Cmd->nTokenNeeded = 0;
 		Send_IO_Request(idx_fs);
-		Test_UCX_Put(idx_fs);
+		// Test_UCX_Put(idx_fs);
 		fd = (pResult->ret_value) & 0xFFFFFFFF;
 		if(fd < 0)	{
 			errno = pResult->myerrno;

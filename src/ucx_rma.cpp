@@ -461,7 +461,7 @@ void SERVER_RDMA::ScanNewMsg() {
 	while(!tmpV.empty()) {
 		IO_CMD_MSG* cur = tmpV.back();
 		tmpV.pop_back();
-		printf("DBG> mpi_rank:%d ScanNewMsg:%s\n", mpi_rank, (char*)cur);
+		// printf("DBG> mpi_rank:%d ScanNewMsg:%s\n", mpi_rank, (char*)cur);
 	}
 }
 
@@ -478,7 +478,6 @@ void SERVER_RDMA::Drain_Client(const int fd)
 	switch(rc) {
         default:
         {
-            fprintf(stdout, "DBG> SERVER_RDMA Drain Client\n");
 			idx = p_Hash_socket_fd->DictSearchOrg(fd, &elt_list_socket_fd, &ht_table_socket_fd);
             assert(idx >= 0);
             pUCXParam = (UCXPARAM*)malloc( sizeof(UCXPARAM) + sizeof(UCX_DATA_SEND_BY_CLIENT) + sizeof(UCX_DATA_SEND_BY_SERVER) );
@@ -509,7 +508,7 @@ void SERVER_RDMA::Drain_Client(const int fd)
             pData_to_send->global_addr.addr_NewMsgFlag = (uint64_t)p_shm_NewMsgFlag + sizeof(char)*idx;
             pData_to_send->global_addr.addr_TimeHeartBeat = (uint64_t)p_shm_TimeHeartBeat + sizeof(time_t)*idx;
             pData_to_send->global_addr.addr_IO_Cmd_Msg = (uint64_t)p_shm_IO_Cmd_Msg + sizeof(IO_CMD_MSG)*idx;
-
+			// fprintf(stdout, "DBG> SERVER_RDMA Drain Client %d ucx_idx %d addr_IO_Cmd_Msg %p\n", fd, idx, pData_to_send->global_addr.addr_IO_Cmd_Msg);
             nBytes = write(fd, pData_to_send, sizeof(UCX_DATA_SEND_BY_SERVER));
             assert(nBytes == sizeof(UCX_DATA_SEND_BY_SERVER));
 

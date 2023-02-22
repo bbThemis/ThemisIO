@@ -501,7 +501,7 @@ static void* Func_thread_qp_server(void *pParam)
 
 	pServer_qp = (SERVER_QUEUEPAIR *)pParam;
 	pServer_qp->Init_Server_IB_Env(DEFAULT_REM_BUFF_SIZE);
-	pServer_qp->Init_Server_Socket(512, ThisNode.port);
+	pServer_qp->Init_Server_Socket(2048, ThisNode.port);
 
 	Init_ActiveJobList();
 	Init_QueueList();
@@ -761,11 +761,11 @@ int main(int argc, char **argv)
 	}
 	printf("DBG> Rank = %d,  started Func_thread_Polling_New_Msg().\n", mpi_rank);
 
-	if(pthread_create(&(thread_ucx_polling_newmsg), NULL, Func_thread_Test_UCX_Client_Serv_Polling_New_Msg, &Server_ucx)) {
-		fprintf(stderr, "Error creating thread thread_ucx_polling_newmsg\n");
-		return 1;
-	}
-	printf("DBG> Rank = %d,  started Func_thread_Test_UCX_Client_Serv_Polling_New_Msg().\n", mpi_rank);
+	// if(pthread_create(&(thread_ucx_polling_newmsg), NULL, Func_thread_Test_UCX_Client_Serv_Polling_New_Msg, &Server_ucx)) {
+	// 	fprintf(stderr, "Error creating thread thread_ucx_polling_newmsg\n");
+	// 	return 1;
+	// }
+	// printf("DBG> Rank = %d,  started Func_thread_Test_UCX_Client_Serv_Polling_New_Msg().\n", mpi_rank);
 
 	signal(SIGALRM, sigalarm_handler); // Register signal handler
 	alarm(T_FREQ_REPORT_RESULT);
