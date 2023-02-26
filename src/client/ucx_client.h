@@ -60,6 +60,7 @@ IO_REDIRECT_REC *pIO_Redirect_List_UCX=NULL;
 static __thread unsigned char *ucx_rem_buff=NULL, *ucx_loc_buff=NULL; 
 static __thread ucp_mem_h ucx_mr_rem = NULL, ucx_mr_loc = NULL;
 
+
 // file server info is stored at /dev/shm/ucx_myfs. Use bcast_dir to share this file across nodes. 
 FSSERVERLIST *pUCXFileServerList, UCXFileServerListLocal;	// pUCXFileServerList in shared memory
 
@@ -88,6 +89,8 @@ public:
 	UCX_IB_MEM_DATA pal_remote_mem;
 
 	ucp_mem_h mr_rem_thread = NULL, mr_loc_thread = NULL;
+	void* mr_rem_thread_addr = NULL, * mr_loc_thread_addr = NULL;
+
 	ucp_mem_h mr_loc_ucx_Obj = NULL;
 	ucp_worker_h  ucp_worker = NULL;
 
@@ -104,6 +107,8 @@ public:
 	static ucs_status_t RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp_mem_h* memh);
 	int UCX_Put(void* loc_buff, void* rem_buf, ucp_rkey_h rkey, size_t len);
     int UCX_Get(void* loc_buff, void* rem_buf, ucp_rkey_h rkey, size_t len);
+
+	static void UCX_Pack_Rkey(ucp_mem_h memh, void *rkey_buffer);
 };
 
 static __thread CLIENT_UCX *pClient_ucx[MAX_FS_UCX_SERVER];
@@ -127,9 +132,26 @@ inline void Allocate_ucx_loc_rem_buff(void)
 			if(pClient_ucx[i])	{
 				pClient_ucx[i]->mr_loc_thread = ucx_mr_loc;
 				pClient_ucx[i]->mr_rem_thread = ucx_mr_rem;
+
+				pClient_ucx[i]->mr_loc_thread_addr = ucx_loc_buff;
+				pClient_ucx[i]->mr_rem_thread_addr = ucx_rem_buff;
 			}
 		}
 	}
+}
+
+
+void CLIENT_UCX::UCX_Pack_Rkey(ucp_mem_h memh, void *rkey_buffer) {
+	void* tmp_rkey_buffer;
+	size_t rkey_buffer_size;
+	ucs_status_t status = ucp_rkey_pack(ucp_main_context, memh, &tmp_rkey_buffer, &rkey_buffer_size);
+	if(status != UCS_OK) {
+		fprintf(stderr, "Error occured at %s:L%d. Failure: ucp_rkey_pack in UCX_Unpack_Rkey(). \n", 
+			__FILE__, __LINE__);
+		exit(1);
+	}
+	memcpy(rkey_buffer, tmp_rkey_buffer, rkey_buffer_size);
+	ucp_rkey_buffer_release(tmp_rkey_buffer);
 }
 
 void CLIENT_UCX::server_create_ep() {
@@ -479,6 +501,7 @@ void CLIENT_UCX::CloseUCPDataWorker() {
 	pthread_mutex_lock(&(pUCXFileServerList->FS_List[IdxServer].fs_qp_lock));
 	pUCXFileServerList->FS_List[IdxServer].nQP --;
 	pthread_mutex_unlock(&(pUCXFileServerList->FS_List[IdxServer].fs_qp_lock));
+	ucp_rkey_destroy(pal_remote_mem.rkey);
 	if(ucp_worker != NULL) {
 		ucp_worker_destroy(ucp_worker);
 	}

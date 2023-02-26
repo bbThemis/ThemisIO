@@ -30,7 +30,7 @@
 char szExeName[128];
 #define SIZE_IO_REDIRECT_HT	(4096)
 static int jobid = 0, nnode_this_job=0;
-
+int fd_stdin=-1, fd_stdout=-1, fd_stderr=-1, Is_in_shell=0;
 static int bDebug=0;
 
 typedef	struct	{

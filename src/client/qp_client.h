@@ -71,7 +71,7 @@ IO_REDIRECT_REC *pIO_Redirect_List=NULL;
 //char szStdin[256]="";
 //char szStdout[256]="";
 //char szStderr[256]="";
-int fd_stdin=-1, fd_stdout=-1, fd_stderr=-1, Is_in_shell=0;
+
 
 
 //atic __thread unsigned char __attribute__((aligned(16))) rem_buff[DATA_COPY_THRESHOLD_SIZE + 4096], loc_buff[DATA_COPY_THRESHOLD_SIZE + 4096]; 
