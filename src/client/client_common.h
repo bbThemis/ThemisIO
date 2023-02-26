@@ -24,7 +24,8 @@
 #include <sys/time.h>
 #include <malloc.h>
 #include <netinet/tcp.h>
-#include "qp_common.h"
+#include "ucx_qp_common.h"
+#include "ucx_rma_common.h"
 
 
 char szExeName[128];
@@ -51,7 +52,7 @@ typedef	struct	{
 	int nNUMAPerNode;
 	int myip;
 	int pad[3];
-	FS_SEVER FS_List[MAX_FS_SERVER];
+	FS_SEVER FS_List[MAX_FS_UCX_SERVER];
 	pthread_mutex_t lock_IO_Redirect;
 }FSSERVERLIST;
 void Take_ShortName(char szHostName[])
@@ -61,7 +62,7 @@ void Take_ShortName(char szHostName[])
 	while(szHostName[i])    {
 		if(szHostName[i] == '.')        {
 			szHostName[i] = 0;
-			if(i >= (MAX_HOSTNAME_LEN))	printf("ERROR> ClientHostName = %s is TOO long!\n", szHostName);
+			if(i >= (UCX_MAX_HOSTNAME_LEN))	printf("ERROR> ClientHostName = %s is TOO long!\n", szHostName);
 			return;
 		}
 		i++;
@@ -97,7 +98,7 @@ void Get_Exe_Name(char szName[])
 	}
 	strcpy(szName, szPath + i + 1);
 
-	szName[MAX_EXENAME_LEN-1] = 0;
+	szName[UCX_MAX_EXENAME_LEN-1] = 0;
 }
 static struct timespec tim1, tim2;
 static void Take_a_Short_Nap(int nsec)

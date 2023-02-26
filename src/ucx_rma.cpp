@@ -35,13 +35,13 @@ pthread_t pthread_IO_Worker_UCX[NUM_THREAD_IO_WORKER];
 pthread_mutex_t lock_UCX_Modify_ActiveJob_List;
 int nUCXNewMsg, UCXNewMsgList[MAX_UCX_NEW_MSG];
 
-inline int Align64_Int(int a)
-{
-	// return ( (a & 0x3F) ? (64 + (a & 0xFFFFFFC0) ) : (a) );
+// inline int Align64_Int(int a)
+// {
+// 	// return ( (a & 0x3F) ? (64 + (a & 0xFFFFFFC0) ) : (a) );
 
-	// branch not needed
-	return (a + 63) & ~63;
-}
+// 	// branch not needed
+// 	return (a + 63) & ~63;
+// }
 
 typedef	struct	{
 	int fd;
@@ -927,6 +927,7 @@ void SERVER_RDMA::UCX_Put(int idx, void* loc_buff, void* rem_buf, void* rkey_buf
 		exit(1);
 	}
 	UCX_Put(idx, loc_buff, rem_buff, rkey, len);
+	ucp_rkey_destroy(rkey);
 }
 void SERVER_RDMA::UCX_Get(int idx, void* loc_buff, void* rem_buf, void* rkey_buffer, size_t len) {
 	ucp_rkey_h rkey;
@@ -937,6 +938,7 @@ void SERVER_RDMA::UCX_Get(int idx, void* loc_buff, void* rem_buf, void* rkey_buf
 		exit(1);
 	}
 	UCX_Get(idx, loc_buff, rem_buff, rkey, len);
+	ucp_rkey_destroy(rkey);
 }
 
 void SERVER_RDMA::UCX_Put(int idx, void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t len) {
@@ -1075,7 +1077,7 @@ void SERVER_RDMA::Destroy_A_UCPWorker(int idx) {
 	}
 	fetch_and_add(&(ActiveJobList[pUCX_Data[idx].idx_JobRec].nQP), -1);	// Decrese the counter by 1
 	pUCX_Data[idx].bServerReady = 0;
-
+	ucp_rkey_destroy(pUCX_Data[idx].rkey);
 	// to update the first available entry!!!
 	if(idx < FirstAV_QP)	{
 		FirstAV_QP = idx;

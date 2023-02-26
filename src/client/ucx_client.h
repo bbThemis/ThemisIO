@@ -37,10 +37,11 @@
 #include <ucp/api/ucp_def.h>
 #include <uct/api/uct.h>
 
-#include "client_common.h"
 #include "utility.h"
 #include "dict.h"
 #include "ucx_rma_common.h"
+#include "ucx_qp_common.h"
+#include "client_common.h"
 #include "io_ops_common.h"
 
 static pthread_mutex_t ucx_process_lock; // for this process

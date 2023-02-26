@@ -24,7 +24,7 @@
 
 #include <mpi.h> 
 
-#include "qp.h"
+// #include "qp.h"
 #include "ucx_rma.h"
 #include "myfs.h"
 #include "corebinding.h"
@@ -41,8 +41,8 @@ extern int nActiveJob;
 extern JOBREC ActiveJobList[MAX_NUM_ACTIVE_JOB];
 extern LISTJOBREC IdxJobRecList[MAX_NUM_ACTIVE_JOB];
 
-extern PARAM_PREALLOCATE_QP pParam_PreAllocate[N_THREAD_PREALLOCATE_QP];
-extern pthread_t pthread_preallocate[N_THREAD_PREALLOCATE_QP];
+// extern PARAM_PREALLOCATE_QP pParam_PreAllocate[N_THREAD_PREALLOCATE_QP];
+// extern pthread_t pthread_preallocate[N_THREAD_PREALLOCATE_QP];
 extern pthread_t pthread_IO_Worker[NUM_THREAD_IO_WORKER];
 extern pthread_t pthread_IO_Worker_UCX[NUM_THREAD_IO_WORKER];
 extern CCreatedUniqueThread Unique_Thread;
@@ -90,7 +90,7 @@ typedef	struct	{
 int Server_Started=0;
 int Ucx_Server_Started = 0;
 FS_SEVER_INFO ThisNode;
-FS_SEVER_INFO AllFSNodes[MAX_FS_SERVER];
+FS_SEVER_INFO AllFSNodes[MAX_FS_UCX_SERVER];
 QPAIR_DATA *pQPair_Inter_FS=NULL;
 UCX_RMA_SETUP_DATA *pUCX_RMA_Inter_FS=NULL;
 
@@ -451,7 +451,7 @@ static void* Func_thread_UCX_Polling_New_Msg(void *pParam)
 
 static void* Func_thread_Polling_New_Msg(void *pParam)
 {
-	SERVER_QUEUEPAIR *pServer_qp;
+	/*SERVER_QUEUEPAIR *pServer_qp;
 	
 	CoreBinding.Bind_This_Thread();
 
@@ -469,7 +469,7 @@ static void* Func_thread_Polling_New_Msg(void *pParam)
 		pServer_qp->ScanNewMsg();
 	}
 
-	return NULL;
+	return NULL;*/
 }
 
 static void* Func_thread_ucx_server(void *pParam) {
@@ -498,49 +498,49 @@ static void* Func_thread_ucx_server(void *pParam) {
 
 static void* Func_thread_qp_server(void *pParam)
 {
-	SERVER_QUEUEPAIR *pServer_qp;
-	int i;
-	int IO_Worker_tid_List[NUM_THREAD_IO_WORKER];
+// 	SERVER_QUEUEPAIR *pServer_qp;
+// 	int i;
+// 	int IO_Worker_tid_List[NUM_THREAD_IO_WORKER];
 
-	pServer_qp = (SERVER_QUEUEPAIR *)pParam;
-	pServer_qp->Init_Server_IB_Env(DEFAULT_REM_BUFF_SIZE);
-	pServer_qp->Init_Server_Socket(2048, ThisNode.port);
+// 	pServer_qp = (SERVER_QUEUEPAIR *)pParam;
+// 	pServer_qp->Init_Server_IB_Env(DEFAULT_REM_BUFF_SIZE);
+// 	pServer_qp->Init_Server_Socket(2048, ThisNode.port);
 
-	Init_ActiveJobList();
-	Init_QueueList();
-/*
-	Init_PreAllocated_QueuePair_List();
+// 	Init_ActiveJobList();
+// 	Init_QueueList();
+// /*
+// 	Init_PreAllocated_QueuePair_List();
 
-	for(i=0; i<N_THREAD_PREALLOCATE_QP; i++)	{
-		pParam_PreAllocate[i].pServer_qp = pServer_qp;
-		pParam_PreAllocate[i].t_rank = i;
-		pParam_PreAllocate[i].nthread = N_THREAD_PREALLOCATE_QP;
-		pParam_PreAllocate[i].nToken = Unique_Thread.Apply_A_Token();
-		if(pthread_create(&(pthread_preallocate[i]), NULL, Func_thread_PreAllocate_QueuePair, &(pParam_PreAllocate[i]))) {
-			fprintf(stderr, "Error creating thread\n");
-			return 0;
-		}
-	}
-	for(i=0; i<N_THREAD_PREALLOCATE_QP; i++)	{
-		if(pthread_join(pthread_preallocate[i], NULL)) {
-			fprintf(stderr, "Error joining thread.\n");
-			return 0;
-		}
-	}
-*/
-	for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
-		IO_Worker_tid_List[i] = i;
-		if(pthread_create(&(pthread_IO_Worker[i]), NULL, Func_thread_IO_Worker, &(IO_Worker_tid_List[i]))) {
-			fprintf(stderr, "Error creating thread\n");
-			return 0;
-		}
-	}
+// 	for(i=0; i<N_THREAD_PREALLOCATE_QP; i++)	{
+// 		pParam_PreAllocate[i].pServer_qp = pServer_qp;
+// 		pParam_PreAllocate[i].t_rank = i;
+// 		pParam_PreAllocate[i].nthread = N_THREAD_PREALLOCATE_QP;
+// 		pParam_PreAllocate[i].nToken = Unique_Thread.Apply_A_Token();
+// 		if(pthread_create(&(pthread_preallocate[i]), NULL, Func_thread_PreAllocate_QueuePair, &(pParam_PreAllocate[i]))) {
+// 			fprintf(stderr, "Error creating thread\n");
+// 			return 0;
+// 		}
+// 	}
+// 	for(i=0; i<N_THREAD_PREALLOCATE_QP; i++)	{
+// 		if(pthread_join(pthread_preallocate[i], NULL)) {
+// 			fprintf(stderr, "Error joining thread.\n");
+// 			return 0;
+// 		}
+// 	}
+// */
+// 	for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
+// 		IO_Worker_tid_List[i] = i;
+// 		if(pthread_create(&(pthread_IO_Worker[i]), NULL, Func_thread_IO_Worker, &(IO_Worker_tid_List[i]))) {
+// 			fprintf(stderr, "Error creating thread\n");
+// 			return 0;
+// 		}
+// 	}
 
-	Server_Started = 1;	// active the flag: Server started running!!!
-	printf("Rank = %d. Server is started.\n", mpi_rank);
-	pServer_qp->Socket_Server_Loop();
+// 	Server_Started = 1;	// active the flag: Server started running!!!
+// 	printf("Rank = %d. Server is started.\n", mpi_rank);
+// 	pServer_qp->Socket_Server_Loop();
 	
-	return 0;
+// 	return 0;
 }
 
 extern long int nOPs_Done[NUM_THREAD_IO_WORKER];
@@ -692,7 +692,7 @@ int main(int argc, char **argv)
 	MPI_Allgather(&ThisNode, sizeof(FS_SEVER_INFO), MPI_CHAR, AllFSNodes, sizeof(FS_SEVER_INFO), MPI_CHAR, MPI_COMM_WORLD);
 
 	if(mpi_rank == 0)	{
-		printf("INFO> There are %d servers.\n", nFSServer);
+		/*printf("INFO> There are %d servers.\n", nFSServer);
 		fOut = fopen(FS_PARAM_FILE, "w");
 		if(fOut == NULL)	{
 			printf("ERROR> Fail to open file: %s\nQuit.\n", FS_PARAM_FILE);
@@ -703,7 +703,7 @@ int main(int argc, char **argv)
 			printf("     %d %s %d\n", i, AllFSNodes[i].szIP, AllFSNodes[i].port);
 			fprintf(fOut, "%s %d\n", AllFSNodes[i].szIP, AllFSNodes[i].port);
 		}
-		fclose(fOut);
+		fclose(fOut);*/
 
 		printf("INFO> There are %d servers.\n", nFSServer);
 		fOut = fopen(UCX_FS_PARAM_FILE, "w");

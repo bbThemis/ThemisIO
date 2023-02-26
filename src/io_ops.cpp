@@ -77,9 +77,9 @@ void RW_Open(IO_CMD_MSG *pRF_Op_Msg)
 //	pResult->Tag_End = (pResult->Tag_Ini) ^ tag_magic;
 	pTag_End = (int*)( (char*)pResult + pResult->nDataSize - sizeof(int) );
 	*pTag_End = (pResult->Tag_Ini) ^ tag_magic;
-	Server_ucx.UCX_Unpack_Rkey(idx_ucx, rkey_buffer, &rkey);
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, pResult->nDataSize);
+	ucp_rkey_destroy(rkey);
 }
 
 void RW_Close(IO_CMD_MSG *pRF_Op_Msg)
@@ -113,6 +113,7 @@ void RW_Close(IO_CMD_MSG *pRF_Op_Msg)
 
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, sizeof(RW_FUNC_RETURN));
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, sizeof(RW_FUNC_RETURN));
+	ucp_rkey_destroy(rkey);
 }
 
 void RW_Stat(IO_CMD_MSG *pRF_Op_Msg)
@@ -153,6 +154,7 @@ void RW_Stat(IO_CMD_MSG *pRF_Op_Msg)
 
 	// Server_qp.IB_Put(idx_ucx, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, pResult->nDataSize);
+	ucp_rkey_destroy(rkey);
 }
 
 void RW_Opendir(IO_CMD_MSG *pRF_Op_Msg)
@@ -211,6 +213,7 @@ void RW_Opendir(IO_CMD_MSG *pRF_Op_Msg)
 		ucp_mem_unmap(Server_ucx.ucp_main_context, pResult_Ext->mr_tmp);
 		ncx_slab_free(sp_OpenDirEntryBuff, (void*)(pResult_Ext->addr));
 	}
+	ucp_rkey_destroy(rkey);
 }
 
 void RW_Read_Dir_Entries(IO_CMD_MSG *pRF_Op_Msg)
@@ -278,6 +281,7 @@ void RW_Read_Dir_Entries(IO_CMD_MSG *pRF_Op_Msg)
 		ucp_mem_unmap(Server_ucx.ucp_main_context, pResult_Ext->mr_tmp);
 		ncx_slab_free(sp_OpenDirEntryBuff, (void*)(pResult_Ext->addr));
 	}
+	ucp_rkey_destroy(rkey);
 }
 
 void RW_Read(IO_CMD_MSG *pRF_Op_Msg)
@@ -342,6 +346,7 @@ void RW_Read(IO_CMD_MSG *pRF_Op_Msg)
 		// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].rem_addr), Server_qp.pQP_Data[idx_qp].rem_key, pResult->nDataSize);
 		Server_ucx.UCX_Put(idx_ucx, (void*)pResult, (void*)(Server_ucx.pUCX_Data[idx_ucx].rem_addr), Server_ucx.pUCX_Data[idx_ucx].rkey, pResult->nDataSize);
 	}
+	ucp_rkey_destroy(rkey);
 }
 
 
@@ -386,6 +391,7 @@ void RW_Write(IO_CMD_MSG *pRF_Op_Msg)
 	
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].rem_addr), Server_qp.pQP_Data[idx_qp].rem_key, pResult->nDataSize);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, (void*)(Server_ucx.pUCX_Data[idx_ucx].rem_addr), Server_ucx.pUCX_Data[idx_ucx].rkey, pResult->nDataSize);
+	ucp_rkey_destroy(rkey);
 }
 
 //void RW_PRead(IO_CMD_MSG *pRF_Op_Msg)
@@ -455,6 +461,7 @@ void RW_FStat(IO_CMD_MSG *pRF_Op_Msg)
 
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, pResult->nDataSize);
+	ucp_rkey_destroy(rkey);
 }
 
 void RW_Dir_Exist(IO_CMD_MSG *pRF_Op_Msg)
@@ -498,6 +505,7 @@ void RW_Dir_Exist(IO_CMD_MSG *pRF_Op_Msg)
 
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, pResult->nDataSize);
+	ucp_rkey_destroy(rkey);
 }
 
 void RW_Unlink(IO_CMD_MSG *pRF_Op_Msg)
@@ -547,6 +555,7 @@ void RW_Unlink(IO_CMD_MSG *pRF_Op_Msg)
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, pResult->nDataSize);
 	// Let the client keep going. Server needs to send requests to other server to release stripe storage if necessary. 
+	ucp_rkey_destroy(rkey);
 }
 
 void RW_Free_Stripe_Data(IO_CMD_MSG *pRF_Op_Msg)
@@ -588,6 +597,7 @@ void RW_Remove_Dir(IO_CMD_MSG *pRF_Op_Msg)
 
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, pResult->nDataSize);
+	ucp_rkey_destroy(rkey);
 }
 
 void RW_Truncate(IO_CMD_MSG *pRF_Op_Msg)
@@ -629,6 +639,7 @@ void RW_Truncate(IO_CMD_MSG *pRF_Op_Msg)
 
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, pResult->nDataSize);
+	ucp_rkey_destroy(rkey);
 }
 
 void RW_Ftruncate(IO_CMD_MSG *pRF_Op_Msg)
@@ -665,6 +676,7 @@ void RW_Ftruncate(IO_CMD_MSG *pRF_Op_Msg)
 
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, pResult->nDataSize);
+	ucp_rkey_destroy(rkey);
 }
 
 void RW_Utimes(IO_CMD_MSG *pRF_Op_Msg)
@@ -714,6 +726,7 @@ void RW_Utimes(IO_CMD_MSG *pRF_Op_Msg)
 
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, pResult->nDataSize);
+	ucp_rkey_destroy(rkey);
 }
 
 void RW_Futimens(IO_CMD_MSG *pRF_Op_Msg)
@@ -763,6 +776,7 @@ void RW_Futimens(IO_CMD_MSG *pRF_Op_Msg)
 
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, pResult->nDataSize);
+	ucp_rkey_destroy(rkey);
 }
 
 void RW_Mkdir(IO_CMD_MSG *pRF_Op_Msg)
@@ -797,6 +811,7 @@ void RW_Mkdir(IO_CMD_MSG *pRF_Op_Msg)
 
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, pResult->nDataSize);
+	ucp_rkey_destroy(rkey);
 }
 
 //void sigusr1_handler(int signum)
@@ -879,6 +894,7 @@ void RW_Hello(IO_CMD_MSG *pRF_Op_Msg)
 
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, sizeof(RW_FUNC_RETURN));
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, sizeof(RW_FUNC_RETURN));
+	ucp_rkey_destroy(rkey);
 }
 
 void RW_StatFS(IO_CMD_MSG *pRF_Op_Msg)
@@ -914,6 +930,7 @@ void RW_StatFS(IO_CMD_MSG *pRF_Op_Msg)
 
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, pResult->nDataSize);
+	ucp_rkey_destroy(rkey);
 }
 
 void RW_File_AddEntry_ParentDir(IO_CMD_MSG *pRF_Op_Msg)
@@ -946,6 +963,7 @@ void RW_File_AddEntry_ParentDir(IO_CMD_MSG *pRF_Op_Msg)
 
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, pResult->nDataSize);
+	ucp_rkey_destroy(rkey);
 }
 
 void RW_File_RemoveEntry_ParentDir(IO_CMD_MSG *pRF_Op_Msg)
@@ -980,6 +998,7 @@ void RW_File_RemoveEntry_ParentDir(IO_CMD_MSG *pRF_Op_Msg)
 
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, pResult->nDataSize);
+	ucp_rkey_destroy(rkey);
 }
 /*
 void RW_File_UpdateEntry_ParentDir_EntryIdx(IO_CMD_MSG *pRF_Op_Msg)

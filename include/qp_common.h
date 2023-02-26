@@ -1,7 +1,7 @@
 #ifndef __COMMON_PARAM
 #define __COMMON_PARAM
 
-#define IB_DEVICE	"ib0"
+
 #define FS_PARAM_FILE	"myfs.param"
 
 //#define MAX_FS_SERVER	(2)
