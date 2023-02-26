@@ -332,7 +332,7 @@ void CLIENT_UCX::Setup_UCP_Connection(int IdxServer, char loc_buff[], size_t siz
     assert(status == UCS_OK);
 	memcpy(my_remote_mem.rkey_buffer, rkey_buffer, rkey_buffer_size);
 	my_remote_mem.rkey_buffer_size = rkey_buffer_size;
-	
+	ucp_rkey_buffer_release(rkey_buffer);
 	data_to_send.ib_mem.comm_tag = TAG_EXCH_MEM_INFO;
 	data_to_send.ib_mem.addr = my_remote_mem.addr;
 	memcpy(data_to_send.ib_mem.rkey_buffer, my_remote_mem.rkey_buffer, rkey_buffer_size);

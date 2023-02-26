@@ -2,6 +2,13 @@
 #define __MYFS_H__
 
 #include <sys/types.h>
+
+
+#include <ucp/api/ucp.h>
+#include <ucp/api/ucp_def.h>
+#include <uct/api/uct.h>
+
+
 #include "io_ops_common.h"
 #include "dict.h"
 
@@ -144,10 +151,10 @@ int my_close(int fd, META_DATA_ON_CLOSE *pMetaData_OnClose);
 //size_t my_write_RDMA(int fd, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset);
 
 size_t my_write_stripe(int fd, const char *szFileName, int server_shift, const void *buf, size_t count, off_t offset);
-size_t my_write_stripe_RDMA(int fd, const char *szFileName, int server_shift, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset);
+size_t my_write_stripe_RDMA(int fd, const char *szFileName, int server_shift, int idx_ucx, void *loc_buf, void *rem_buf, ucp_rkey_h rkey, size_t count, off_t offset);
 
 size_t my_read_stripe(int fd, const char *szFileName, int server_shift, void *buf, size_t count, off_t offset);
-size_t my_read_stripe_RDMA(int fd, const char *szFileName, int server_shift, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset);
+size_t my_read_stripe_RDMA(int fd, const char *szFileName, int server_shift, int idx_ucx, void *loc_buf, void *rem_buf, ucp_rkey_h rkey, size_t count, off_t offset);
 
 int Find_First_Available_FD(void);
 int Truncate_File(int file_idx, size_t size);

@@ -7,6 +7,8 @@
 #define MAX_UCP_RKEY_SIZE (50)
 #define MAX_UCP_ADDR_LEN (250)
 
+#define T_FREQ_ALARM_HB			(1500000)	// update every 15 seconds
+
 #define TAG_SUBMIT_JOB_INFO	(0x78000000)
 #define TAG_EXCH_UCX_INFO	(0x78780000)
 #define TAG_EXCH_MEM_INFO	(0x78780001)
@@ -16,6 +18,7 @@
 #define UCX_MAX_HOSTNAME_LEN	(24)	// short name. 
 #define UCX_MAX_EXENAME_LEN		(16)	// short name. 
 #define UCX_PUT_TIMEOUT_MS	(3000)	// two seconds timeout
+#define UCX_WAIT_RESULT_TIMEOUT_MS	(3500)	// one second timeout
 
 #define MAX_FS_UCX_SERVER (128)
 #define MAX_UCX_PER_PROCESS	(512)	// 256. Assume half of 512 is used. 

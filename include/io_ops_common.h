@@ -116,10 +116,11 @@ typedef struct	{
 	int op;		// operation tag. Containing a magic tag at the end!
 }IO_CMD_MSG, *PIO_CMD_MSG;
 */
-
+#include "ucx_rma_common.h"
 typedef struct	{
 	int fd;				// fd valid only on the host holding the file
-	unsigned int rkey;				// remote key for RDMA
+	// unsigned int rkey;				// remote key for RDMA 
+	char rkey_buffer[MAX_UCP_RKEY_SIZE];
 	void *rem_buff;// the buffer for remote memory access. For return code, errno and results sent back!
 	char szName[160];	// May need to be increased later!
 
@@ -168,9 +169,14 @@ typedef struct {
 	int Tag_Ini;	// Tag_End and Tag_Ini need to be consistent. Tag_Ini xor const = Tag_End 
 	int nDataSize;	// the number of bytes of this data buffer
 	int pad[2];
-	struct ibv_mr *mr_tmp;
+	// struct ibv_mr *mr_tmp;
+	ucp_mem_h mr_tmp;
+	void* mr_tmp_addr;
+	size_t mr_tmp_length;
 	long int addr;
-	int rkey, nEntry;
+	char rkey_buffer[MAX_UCP_RKEY_SIZE];
+	int nEntry;
+	// int rkey, nEntry;
 	int Tag_End;		// END		tag. Check this tag to make sure data transfer is DONE! Disabled here since a length undetermined buffer before this variable. 
 }RW_FUNC_RETURN_EXT, *PRW_FUNC_RETURN_EXT;
 

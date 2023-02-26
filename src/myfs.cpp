@@ -27,15 +27,19 @@
 #include "queue_free_mem.h"
 #include "fixed_mem_allocator.h"
 
+#include "ucx_rma.h"
+
 #define MIN_BATCH_SIZE_FREE_EX_POINTER	(128*1024)
 
-extern long int nSizeReg;
+// extern long int nSizeReg;
+extern long int nSizeUCXReg;
 extern __thread uint64_t rseed[2];
-extern __thread int idx_qp_server;
+extern __thread int idx_ucx_server;
 
 //#define MAX_DIR_FD	(65536)
 //#define MAX_DIR_FD_M1	((MAX_DIR_FD) - 1)
-extern SERVER_QUEUEPAIR Server_qp;
+// extern SERVER_QUEUEPAIR Server_qp;
+extern SERVER_RDMA Server_ucx;
 extern CQUEUE_FREE_MEM CQueue_Free_Mem;
 
 
@@ -105,7 +109,7 @@ int nActiveFd=0, First_Av_Fd=0, IdxLastFd=-1;
 void Init_Memory(void)
 {
 	ULongInt Offset;
-	int i, nQP_Server;
+	int i, nUCX_Server;
 	char szNameShm_Full[128];
 
         // Make sure the parameters are consistent
@@ -240,9 +244,9 @@ void Init_Memory(void)
 		exit(1);
 	}
 
-	nQP_Server = nFSServer * NUM_THREAD_IO_WORKER_INTER_SERVER;
-	pAccess_qp0_lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t) * nQP_Server);
-	for(i=0; i<nQP_Server; i++)	{
+	nUCX_Server = nFSServer * NUM_THREAD_IO_WORKER_INTER_SERVER;
+	pAccess_qp0_lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t) * nUCX_Server);
+	for(i=0; i<nUCX_Server; i++)	{
 		if(pthread_mutex_init(&(pAccess_qp0_lock[i]), NULL) != 0) { 
 			printf("\n mutex pAccess_qp0_lock[%d] init failed\n", i); 
 			exit(1);
@@ -389,7 +393,7 @@ inline int Wait_For_IO_Request_Result(int Tag_Magic, RW_FUNC_RETURN *pIO_Result)
 
 		gettimeofday(&tm2, NULL);
 		t2_ms = (tm2.tv_sec * 1000) + (tm2.tv_usec / 1000);
-		if( (t2_ms - t1_ms) > QP_WAIT_RESULT_TIMEOUT_MS )	{
+		if( (t2_ms - t1_ms) > UCX_WAIT_RESULT_TIMEOUT_MS )	{
 			return 1;	// time out
 		}
 	}
@@ -401,7 +405,7 @@ inline int Wait_For_IO_Request_Result(int Tag_Magic, RW_FUNC_RETURN *pIO_Result)
 
 		gettimeofday(&tm2, NULL);
 		t2_ms = (tm2.tv_sec * 1000) + (tm2.tv_usec / 1000);
-		if( (t2_ms - t1_ms) > QP_WAIT_RESULT_TIMEOUT_MS )	{
+		if( (t2_ms - t1_ms) > UCX_WAIT_RESULT_TIMEOUT_MS )	{
 			return 1;	// time out
 		}
 	}
@@ -414,16 +418,17 @@ void Query_Other_Server(int idx_server)
 	RW_FUNC_RETURN *pResult;
 	IO_CMD_MSG *pIO_Cmd_ToSend_Other_Server;
 	char *pNewMsg_ToSend, *pMemAlloc;
-	int idx_qp;
+	int idx_ucx;
 
-	idx_qp = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_qp_server;
+	idx_ucx = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_ucx_server;
 
 	pMemAlloc = CFixedSizeMemAllcator.Allocate_a_Block();	
 //	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN));
 	pNewMsg_ToSend = (char*)pMemAlloc;
 	pIO_Cmd_ToSend_Other_Server = (IO_CMD_MSG *)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG);
 
-	pIO_Cmd_ToSend_Other_Server->rkey = Server_qp.mr_shm_global->rkey;
+	// pIO_Cmd_ToSend_Other_Server->rkey = Server_qp.mr_shm_global->rkey;
+	memcpy(pIO_Cmd_ToSend_Other_Server->rkey_buffer, Server_ucx.rkey_buffer, Server_ucx.rkey_buffer_size);
 	pIO_Cmd_ToSend_Other_Server->rem_buff = (void*)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG));
 	pIO_Cmd_ToSend_Other_Server->tag_magic = (int)(next(rseed) & 0xFFFFFFFF);
 	pIO_Cmd_ToSend_Other_Server->op = IO_OP_MAGIC | RF_RW_OP_HELLO;
@@ -431,18 +436,17 @@ void Query_Other_Server(int idx_server)
 	pResult = (RW_FUNC_RETURN *)pIO_Cmd_ToSend_Other_Server->rem_buff;
 	pResult->nDataSize = 0; // init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data.
 
-	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
 		perror("pthread_mutex_lock");
 		exit(2);
 	}
-
-	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, IO_Msg_Size_op);
-//	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, sizeof(IO_CMD_MSG));
+	Server_ucx.UCX_Put(idx_ucx, (void*)pIO_Cmd_ToSend_Other_Server, (void*)(Server_ucx.pUCX_Data[idx_ucx].remote_addr_IO_CMD), Server_ucx.pUCX_Data[idx_ucx].rkey, IO_Msg_Size_op);
+	// Server_qp.IB_Put(idx_ucx, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_ucx].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_ucx].rem_key, IO_Msg_Size_op);
 	pNewMsg_ToSend[0] = TAG_NEW_REQUEST;	// new msg!
-	Server_qp.IB_Put(idx_qp, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_new_msg), Server_qp.pQP_Data[idx_qp].rem_key, 1);
-
+	// Server_qp.IB_Put(idx_ucx, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_ucx].remote_addr_new_msg), Server_qp.pQP_Data[idx_ucx].rem_key, 1);
+	Server_ucx.UCX_Put(idx_ucx, (void*)pNewMsg_ToSend, (void*)(Server_ucx.pUCX_Data[idx_ucx].remote_addr_new_msg), Server_ucx.pUCX_Data[idx_ucx].rkey, 1);
 	Wait_For_IO_Request_Result(pIO_Cmd_ToSend_Other_Server->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_ToSend_Other_Server->rem_buff));
-	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
 		perror("pthread_mutex_unlock");
 		exit(2);
 	}
@@ -459,15 +463,16 @@ int Request_Is_ParentDIr_Existing(int idx_server, char szPath[], int *pIdx_Paren
 	IO_CMD_MSG *pIO_Cmd_ToSend_Other_Server;
 	char *pNewMsg_ToSend, *pMemAlloc;
 	PARENTDIR_FUNC_RETURN *pReturnResult_Dir_Exist;
-	int idx_qp;
+	int idx_ucx;
 
-	idx_qp = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_qp_server;
+	idx_ucx = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_ucx_server;
         pMemAlloc = CFixedSizeMemAllcator.Allocate_a_Block();
 //	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN) + 1*sizeof(int));
 	pNewMsg_ToSend = (char*)pMemAlloc;
 	pIO_Cmd_ToSend_Other_Server = (IO_CMD_MSG *)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG);
 
-	pIO_Cmd_ToSend_Other_Server->rkey = Server_qp.mr_shm_global->rkey;
+	// pIO_Cmd_ToSend_Other_Server->rkey = Server_qp.mr_shm_global->rkey;
+	memcpy(pIO_Cmd_ToSend_Other_Server->rkey_buffer, Server_ucx.rkey_buffer, Server_ucx.rkey_buffer_size);
 	pIO_Cmd_ToSend_Other_Server->rem_buff = (void*)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG));
 	strcpy(pIO_Cmd_ToSend_Other_Server->szName, szPath);
 	pIO_Cmd_ToSend_Other_Server->tag_magic = (int)(next(rseed) & 0xFFFFFFFF);
@@ -476,17 +481,18 @@ int Request_Is_ParentDIr_Existing(int idx_server, char szPath[], int *pIdx_Paren
 	pResult = (RW_FUNC_RETURN *)pIO_Cmd_ToSend_Other_Server->rem_buff;
 	pResult->nDataSize = 0; // init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data.
 
-	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
 		perror("pthread_mutex_lock");
 		exit(2);
 	}
 //	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, sizeof(IO_CMD_MSG));
-	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, IO_Msg_Size_op);
+	// Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, IO_Msg_Size_op);
+	Server_ucx.UCX_Put(idx_ucx, (void*)pIO_Cmd_ToSend_Other_Server, (void*)(Server_ucx.pUCX_Data[idx_ucx].remote_addr_IO_CMD), Server_ucx.pUCX_Data[idx_ucx].rkey, IO_Msg_Size_op);
 	pNewMsg_ToSend[0] = TAG_NEW_REQUEST;	// new msg!
-	Server_qp.IB_Put(idx_qp, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_new_msg), Server_qp.pQP_Data[idx_qp].rem_key, 1);
-
+	//Server_qp.IB_Put(idx_qp, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_new_msg), Server_qp.pQP_Data[idx_qp].rem_key, 1);
+	Server_ucx.UCX_Put(idx_ucx, (void*)pNewMsg_ToSend, (void*)(Server_ucx.pUCX_Data[idx_ucx].remote_addr_new_msg), Server_ucx.pUCX_Data[idx_ucx].rkey, 1);
 	Wait_For_IO_Request_Result(pIO_Cmd_ToSend_Other_Server->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_ToSend_Other_Server->rem_buff));
-	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
 		perror("pthread_mutex_unlock");
 		exit(2);
 	}
@@ -504,9 +510,9 @@ void Request_Free_Stripe_Data(int idx_server, char szFileName[])
 {
 	IO_CMD_MSG *pIO_Cmd_ToSend_Other_Server;
 	char *pNewMsg_ToSend, *pMemAlloc;
-	int idx_qp;
+	int idx_ucx;
 
-	idx_qp = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_qp_server;
+	idx_ucx = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_ucx_server;
         pMemAlloc = CFixedSizeMemAllcator.Allocate_a_Block();
 
 //	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN) + 1*sizeof(int));
@@ -517,17 +523,18 @@ void Request_Free_Stripe_Data(int idx_server, char szFileName[])
 	pIO_Cmd_ToSend_Other_Server->tag_magic = (int)(next(rseed) & 0xFFFFFFFF);
 	pIO_Cmd_ToSend_Other_Server->op = IO_OP_MAGIC | RF_RW_OP_FREE_STRIPE_DATA;
 
-	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
 		perror("pthread_mutex_lock");
 		exit(2);
 	}
-	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, IO_Msg_Size_op);
+	// Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, IO_Msg_Size_op);
+	Server_ucx.UCX_Put(idx_ucx, (void*)pIO_Cmd_ToSend_Other_Server, (void*)(Server_ucx.pUCX_Data[idx_ucx].remote_addr_IO_CMD), Server_ucx.pUCX_Data[idx_ucx].rkey, IO_Msg_Size_op);
 	pNewMsg_ToSend[0] = TAG_NEW_REQUEST;	// new msg!
-	Server_qp.IB_Put(idx_qp, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_new_msg), Server_qp.pQP_Data[idx_qp].rem_key, 1);
-
+	// Server_qp.IB_Put(idx_qp, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_new_msg), Server_qp.pQP_Data[idx_qp].rem_key, 1);
+	Server_ucx.UCX_Put(idx_ucx, (void*)pNewMsg_ToSend, (void*)(Server_ucx.pUCX_Data[idx_ucx].remote_addr_new_msg), Server_ucx.pUCX_Data[idx_ucx].rkey, 1);
 	// No need to wait other server finish this request. 
 //	Wait_For_IO_Request_Result(pIO_Cmd_ToSend_Other_Server->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_ToSend_Other_Server->rem_buff));
-	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
 		perror("pthread_mutex_unlock");
 		exit(2);
 	}
@@ -543,15 +550,16 @@ int Request_ParentDir_Add_Entry(int idx_server, const char szPath[], int nLenPar
 	IO_CMD_MSG *pIO_Cmd_ToSend_Other_Server;
 	char *pNewMsg_ToSend, *pMemAlloc;
 	PARENTDIR_FUNC_RETURN *pParentDir_Func_Ret;
-	int idx_qp;
+	int idx_ucx;
 
-	idx_qp = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_qp_server;
+	idx_ucx = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_ucx_server;
 //	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN) + 1*sizeof(int));
         pMemAlloc = CFixedSizeMemAllcator.Allocate_a_Block();
 	pNewMsg_ToSend = (char*)pMemAlloc;
 	pIO_Cmd_ToSend_Other_Server = (IO_CMD_MSG *)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG);
 
-	pIO_Cmd_ToSend_Other_Server->rkey = Server_qp.mr_shm_global->rkey;
+	// pIO_Cmd_ToSend_Other_Server->rkey = Server_qp.mr_shm_global->rkey;
+	memcpy(pIO_Cmd_ToSend_Other_Server->rkey_buffer, Server_ucx.rkey_buffer, Server_ucx.rkey_buffer_size);
 	pIO_Cmd_ToSend_Other_Server->rem_buff = (void*)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG));
 	strcpy(pIO_Cmd_ToSend_Other_Server->szName, szPath);
 	pIO_Cmd_ToSend_Other_Server->nLen_Parent_Dir_Name = nLenParentDirName;
@@ -562,17 +570,18 @@ int Request_ParentDir_Add_Entry(int idx_server, const char szPath[], int nLenPar
 	pResult = (RW_FUNC_RETURN *)pIO_Cmd_ToSend_Other_Server->rem_buff;
 	pResult->nDataSize = 0; // init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data.
 
-	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
 		perror("pthread_mutex_lock");
 		exit(2);
 	}
 //	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, sizeof(IO_CMD_MSG));
-	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, IO_Msg_Size_op);
+	// Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, IO_Msg_Size_op);
+	Server_ucx.UCX_Put(idx_ucx, (void*)pIO_Cmd_ToSend_Other_Server, (void*)(Server_ucx.pUCX_Data[idx_ucx].remote_addr_IO_CMD), Server_ucx.pUCX_Data[idx_ucx].rkey, IO_Msg_Size_op);
 	pNewMsg_ToSend[0] = TAG_NEW_REQUEST;	// new msg!
-	Server_qp.IB_Put(idx_qp, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_new_msg), Server_qp.pQP_Data[idx_qp].rem_key, 1);
-
+	// Server_qp.IB_Put(idx_qp, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_new_msg), Server_qp.pQP_Data[idx_qp].rem_key, 1);
+	Server_ucx.UCX_Put(idx_ucx, (void*)pNewMsg_ToSend, (void*)(Server_ucx.pUCX_Data[idx_ucx].remote_addr_new_msg), Server_ucx.pUCX_Data[idx_ucx].rkey, 1);
 	Wait_For_IO_Request_Result(pIO_Cmd_ToSend_Other_Server->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_ToSend_Other_Server->rem_buff));
-	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
 		perror("pthread_mutex_unlock");
 		exit(2);
 	}
@@ -596,15 +605,16 @@ void Request_ParentDir_Remove_Entry(char szEntryName_ToRemove[], int idx_server,
 	char *pNewMsg_ToSend, *pMemAlloc;
 	PARENTDIR_FUNC_RETURN *pParentDir_Func_Ret;
 	int *pIntParam;
-	int idx_qp;
+	int idx_ucx;
 
-	idx_qp = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_qp_server;
+	idx_ucx = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_ucx_server;
         pMemAlloc = CFixedSizeMemAllcator.Allocate_a_Block();
 //	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN));
 	pNewMsg_ToSend = (char*)pMemAlloc;
 	pIO_Cmd_ToSend_Other_Server = (IO_CMD_MSG *)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG);
 
-	pIO_Cmd_ToSend_Other_Server->rkey = Server_qp.mr_shm_global->rkey;
+	// pIO_Cmd_ToSend_Other_Server->rkey = Server_qp.mr_shm_global->rkey;
+	memcpy(pIO_Cmd_ToSend_Other_Server->rkey_buffer, Server_ucx.rkey_buffer, Server_ucx.rkey_buffer_size);
 	pIO_Cmd_ToSend_Other_Server->rem_buff = (void*)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG));
 
 	pIntParam = (int*)pIO_Cmd_ToSend_Other_Server->szName;
@@ -618,17 +628,18 @@ void Request_ParentDir_Remove_Entry(char szEntryName_ToRemove[], int idx_server,
 	pResult = (RW_FUNC_RETURN *)pIO_Cmd_ToSend_Other_Server->rem_buff;
 	pResult->nDataSize = 0; // init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data.
 
-	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
 		perror("pthread_mutex_lock");
 		exit(2);
 	}
 //	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, sizeof(IO_CMD_MSG));
-	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, IO_Msg_Size_op);
+	// Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, IO_Msg_Size_op);
+	Server_ucx.UCX_Put(idx_ucx, (void*)pIO_Cmd_ToSend_Other_Server, (void*)(Server_ucx.pUCX_Data[idx_ucx].remote_addr_IO_CMD), Server_ucx.pUCX_Data[idx_ucx].rkey, IO_Msg_Size_op);
 	pNewMsg_ToSend[0] = TAG_NEW_REQUEST;	// new msg!
-	Server_qp.IB_Put(idx_qp, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_new_msg), Server_qp.pQP_Data[idx_qp].rem_key, 1);
-
+	// Server_qp.IB_Put(idx_qp, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_new_msg), Server_qp.pQP_Data[idx_qp].rem_key, 1);
+	Server_ucx.UCX_Put(idx_ucx, (void*)pNewMsg_ToSend, (void*)(Server_ucx.pUCX_Data[idx_ucx].remote_addr_new_msg), Server_ucx.pUCX_Data[idx_ucx].rkey, 1);
 	Wait_For_IO_Request_Result(pIO_Cmd_ToSend_Other_Server->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_ToSend_Other_Server->rem_buff));
-	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
 		perror("pthread_mutex_unlock");
 		exit(2);
 	}
@@ -1573,11 +1584,12 @@ size_t my_write_stripe(int fd, const char *szFileName, int server_shift, const v
 
 
 // loc_buf - the buffer was registered. rem_buf - the address on client side. dest_buf - the destination address in file system. 
-inline void my_Adaptive_Write(int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, void *dest_buf)
+inline void my_Adaptive_Write(int idx_ucx, void *loc_buf, void *rem_buf, ucp_rkey_h rkey, size_t count, void *dest_buf)
 {
 	unsigned long int offset;
 	int i, nBlocks, nBlocksM1, BlockSize;
-	struct ibv_mr *mr_tmp;
+	// struct ibv_mr *mr_tmp;
+	ucp_mem_h mr_tmp = NULL;
 	char *pDest;
 
 	if(count > MAX_SIZE_MR_BLOCK)	{	// multiple times RDMA
@@ -1588,50 +1600,64 @@ inline void my_Adaptive_Write(int idx_qp, void *loc_buf, unsigned int lkey, void
 		for(i=0; i<nBlocksM1; i++)	{
 			offset += MAX_SIZE_MR_BLOCK;
 			pDest = (char*)dest_buf + offset;
-			mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote(pDest, MAX_SIZE_MR_BLOCK);
+			// mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote(pDest, MAX_SIZE_MR_BLOCK);
+			Server_ucx.RegisterBuf_RW_Local_Remote(pDest, MAX_SIZE_MR_BLOCK, &mr_tmp);
 			assert(mr_tmp != NULL);
-			Server_qp.IB_Get(idx_qp, (void*)pDest, mr_tmp->lkey, (void*)((char*)rem_buf+offset), rkey, MAX_SIZE_MR_BLOCK);
-
-			nSizeReg -= mr_tmp->length;
+			// Server_qp.IB_Get(idx_qp, (void*)pDest, mr_tmp->lkey, (void*)((char*)rem_buf+offset), rkey, MAX_SIZE_MR_BLOCK);
+			Server_ucx.UCX_Get(idx_ucx, (void*)pDest, (void*)((char*)rem_buf+offset), rkey, MAX_SIZE_MR_BLOCK);
+			// nSizeReg -= mr_tmp->length;
+			nSizeUCXReg -= MAX_SIZE_MR_BLOCK;
 //			printf("DBG> nSizeReg = %ld\n", nSizeReg);
 
-			ibv_dereg_mr(mr_tmp);
+			// ibv_dereg_mr(mr_tmp);
+			ucp_mem_unmap(Server_ucx.ucp_main_context, mr_tmp);
 		}
 		BlockSize = count % MAX_SIZE_MR_BLOCK;
 		offset += MAX_SIZE_MR_BLOCK;
 		pDest = (char*)dest_buf + offset;
 		if(BlockSize > DATA_COPY_THRESHOLD_SIZE)	{
-			mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote(pDest, BlockSize);
+			mr_tmp = NULL;
+			// mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote(pDest, BlockSize);
+			Server_ucx.RegisterBuf_RW_Local_Remote(pDest, BlockSize, &mr_tmp);
 			assert(mr_tmp != NULL);
-			Server_qp.IB_Get(idx_qp, (void*)pDest, mr_tmp->lkey, (void*)((char*)rem_buf+offset), rkey, BlockSize);
-
-			nSizeReg -= mr_tmp->length;
+			// Server_qp.IB_Get(idx_qp, (void*)pDest, mr_tmp->lkey, (void*)((char*)rem_buf+offset), rkey, BlockSize);
+			Server_ucx.UCX_Get(idx_ucx, (void*)pDest, (void*)((char*)rem_buf+offset), rkey, BlockSize);
+			// nSizeReg -= mr_tmp->length;
+			nSizeUCXReg -= MAX_SIZE_MR_BLOCK;
 //			printf("DBG> nSizeReg = %ld\n", nSizeReg);
 
-			ibv_dereg_mr(mr_tmp);
+			// ibv_dereg_mr(mr_tmp);
+			ucp_mem_unmap(Server_ucx.ucp_main_context, mr_tmp);
 		}
 		else	{
-			Server_qp.IB_Get(idx_qp, loc_buf, lkey, (void*)((char*)rem_buf+offset), rkey, BlockSize);	// loc_buf was registered previously. 
+			// Server_qp.IB_Get(idx_qp, loc_buf, lkey, (void*)((char*)rem_buf+offset), rkey, BlockSize);	// loc_buf was registered previously. 
+			// memcpy((void*)pDest, loc_buf, BlockSize);
+			Server_ucx.UCX_Get(idx_ucx, loc_buf, (void*)((char*)rem_buf+offset), rkey, BlockSize);
 			memcpy((void*)pDest, loc_buf, BlockSize);
 		}
 	}
 	else if(count > DATA_COPY_THRESHOLD_SIZE)	{	// RDMA
-		mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote(dest_buf, count);
+		// mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote(dest_buf, count);
+		Server_ucx.RegisterBuf_RW_Local_Remote(dest_buf, count, &mr_tmp);
 		assert(mr_tmp != NULL);
-		Server_qp.IB_Get(idx_qp, (void*)dest_buf, mr_tmp->lkey, (void*)rem_buf, rkey, count);
-
-			nSizeReg -= mr_tmp->length;
+		// Server_qp.IB_Get(idx_qp, (void*)dest_buf, mr_tmp->lkey, (void*)rem_buf, rkey, count);
+		Server_ucx.UCX_Get(idx_ucx, (void*)dest_buf, (void*)rem_buf, rkey, count);
+		//	nSizeReg -= mr_tmp->length;
+		nSizeUCXReg -= count;
 //			printf("DBG> nSizeReg = %ld\n", nSizeReg);
 
-			ibv_dereg_mr(mr_tmp);
+		//	ibv_dereg_mr(mr_tmp);
+		ucp_mem_unmap(Server_ucx.ucp_main_context, mr_tmp);
 	}
 	else	{	// use register local buffer RMDA then memcpy. 
-		Server_qp.IB_Get(idx_qp, loc_buf, lkey, rem_buf, rkey, count);	// loc_buf was registered previously. 
+		// Server_qp.IB_Get(idx_qp, loc_buf, lkey, rem_buf, rkey, count);	// loc_buf was registered previously. 
+		// memcpy(dest_buf, loc_buf, count);
+		Server_ucx.UCX_Get(idx_ucx, loc_buf, rem_buf, rkey, count);
 		memcpy(dest_buf, loc_buf, count);
 	}
 }
 
-size_t my_write_stripe_RDMA(int fd, const char *szFileName, int server_shift, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset)
+size_t my_write_stripe_RDMA(int fd, const char *szFileName, int server_shift, int idx_ucx, void *loc_buf, void *rem_buf, ucp_rkey_h rkey, size_t count, off_t offset)
 {
 	int Done = 0, i, nExtraPointer, nExtraPointerNewlyAllocated, idx_file, idx_Block, bInsertNewRecord, nBytesResidue;
 	size_t nBytes_ToWrite, nBytes_Written, nBytes_Written_OneTime, nBytesToAllocate, nBytesJustAllocated, count_save;
@@ -1686,7 +1712,8 @@ size_t my_write_stripe_RDMA(int fd, const char *szFileName, int server_shift, in
 
 	nBytes_Written = 0;
 	if(nExtraPointer == 0)	{	// a new file
-		my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, count, (void*)((char*)pStripeDataLocal->pExtraData[idx_Block].AddressofData + (offset-pStripeDataLocal->pExtraData[idx_Block].FileOffset)));
+//		my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, count, (void*)((char*)pStripeDataLocal->pExtraData[idx_Block].AddressofData + (offset-pStripeDataLocal->pExtraData[idx_Block].FileOffset)));
+		my_Adaptive_Write(idx_ucx, loc_buf, rem_buf, rkey, count, (void*)((char*)pStripeDataLocal->pExtraData[idx_Block].AddressofData + (offset-pStripeDataLocal->pExtraData[idx_Block].FileOffset)));
 //		pStripeDataLocal->MaxDataRange = MAX(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
 //		Atomic_Increase(offset_Loc+nBytes_Written_OneTime, &(pStripeDataLocal->MaxDataRange));
 		nBytes_Written = count;
@@ -1697,14 +1724,16 @@ size_t my_write_stripe_RDMA(int fd, const char *szFileName, int server_shift, in
 			if(idx_Block < pStripeDataLocal->nExtraPointer)	{
 				if( (pStripeDataLocal->pExtraData[idx_Block].FileOffset + pStripeDataLocal->pExtraData[idx_Block].DataBlockSize - offset_Loc) <= nBytes_ToWrite)	{	// need to go on
 					nBytes_Written_OneTime = pStripeDataLocal->pExtraData[idx_Block].FileOffset + pStripeDataLocal->pExtraData[idx_Block].DataBlockSize - offset_Loc;
-					my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, nBytes_Written_OneTime, (void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset));
+					// my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, nBytes_Written_OneTime, (void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset));
+					my_Adaptive_Write(idx_ucx, loc_buf, rem_buf, rkey, nBytes_Written_OneTime, (void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset));
 //					pStripeDataLocal->MaxDataRange = MAX(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
 //					Atomic_Increase(offset_Loc+nBytes_Written_OneTime, &(pStripeDataLocal->MaxDataRange));
 					idx_Block++;	// move to next block!!!
 				}
 				else	{
 					nBytes_Written_OneTime = nBytes_ToWrite;
-					my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, nBytes_Written_OneTime, (void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset));
+					// my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, nBytes_Written_OneTime, (void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset));
+					my_Adaptive_Write(idx_ucx, loc_buf, rem_buf, rkey, nBytes_Written_OneTime, (void*)(pStripeDataLocal->pExtraData[idx_Block].AddressofData + offset_Loc - pStripeDataLocal->pExtraData[idx_Block].FileOffset));
 //					pStripeDataLocal->MaxDataRange = MAX(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
 //					Atomic_Increase(offset_Loc+nBytes_Written_OneTime, &(pStripeDataLocal->MaxDataRange));
 				}
@@ -1804,11 +1833,12 @@ size_t my_read_stripe(int fd, const char *szFileName, int server_shift, void *bu
 }
 
 // loc_buf - the buffer was registered. rem_buf - the address on client side. src_buf - the source address in file system. 
-inline void my_Adaptive_Read(int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, void *src_buf)
+inline void my_Adaptive_Read(int idx_ucx, void *loc_buf, void *rem_buf, ucp_rkey_h rkey, size_t count, void *src_buf)
 {
 	unsigned long int offset;
 	int i, nBlocks, nBlocksM1, BlockSize;
-	struct ibv_mr *mr_tmp;
+	// struct ibv_mr *mr_tmp;
+	ucp_mem_h mr_tmp = NULL;
 	char *pSrc;
 
 	if(count > MAX_SIZE_MR_BLOCK)	{	// multiple times RDMA
@@ -1819,52 +1849,62 @@ inline void my_Adaptive_Read(int idx_qp, void *loc_buf, unsigned int lkey, void 
 		for(i=0; i<nBlocksM1; i++)	{
 			offset += MAX_SIZE_MR_BLOCK;
 			pSrc = (char*)src_buf + offset;
-			mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote(pSrc, MAX_SIZE_MR_BLOCK);
+			// mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote(pSrc, MAX_SIZE_MR_BLOCK);
+			Server_ucx.RegisterBuf_RW_Local_Remote(pSrc, MAX_SIZE_MR_BLOCK, &mr_tmp);
 			assert(mr_tmp != NULL);
-			Server_qp.IB_Put(idx_qp, (void*)pSrc, mr_tmp->lkey, (void*)((char*)rem_buf+offset), rkey, MAX_SIZE_MR_BLOCK);
-
-			nSizeReg -= mr_tmp->length;
+			// Server_qp.IB_Put(idx_qp, (void*)pSrc, mr_tmp->lkey, (void*)((char*)rem_buf+offset), rkey, MAX_SIZE_MR_BLOCK);
+			Server_ucx.UCX_Put(idx_ucx, (void*)pSrc, (void*)((char*)rem_buf+offset), rkey, MAX_SIZE_MR_BLOCK);
+			nSizeUCXReg -= MAX_SIZE_MR_BLOCK;
 //			printf("DBG> nSizeReg = %ld\n", nSizeReg);
 
-			ibv_dereg_mr(mr_tmp);
+			// ibv_dereg_mr(mr_tmp);
+			ucp_mem_unmap(Server_ucx.ucp_main_context, mr_tmp);
 		}
 		BlockSize = count % MAX_SIZE_MR_BLOCK;
 		offset += MAX_SIZE_MR_BLOCK;
 		pSrc = (char*)src_buf + offset;
 		if(BlockSize > DATA_COPY_THRESHOLD_SIZE)	{
-			mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote(pSrc, BlockSize);
+			// mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote(pSrc, BlockSize);
+			Server_ucx.RegisterBuf_RW_Local_Remote(pSrc, BlockSize, &mr_tmp);
 			assert(mr_tmp != NULL);
-			Server_qp.IB_Put(idx_qp, (void*)pSrc, mr_tmp->lkey, (void*)((char*)rem_buf+offset), rkey, BlockSize);
+			// Server_qp.IB_Put(idx_qp, (void*)pSrc, mr_tmp->lkey, (void*)((char*)rem_buf+offset), rkey, BlockSize);
+			Server_ucx.UCX_Put(idx_ucx, (void*)pSrc, (void*)((char*)rem_buf+offset), rkey, BlockSize);
 
+// 			nSizeReg -= mr_tmp->length;
+// //			printf("DBG> nSizeReg = %ld\n", nSizeReg);
 
-			nSizeReg -= mr_tmp->length;
-//			printf("DBG> nSizeReg = %ld\n", nSizeReg);
-
-			ibv_dereg_mr(mr_tmp);
+// 			ibv_dereg_mr(mr_tmp);
+			nSizeUCXReg -= BlockSize;
+			ucp_mem_unmap(Server_ucx.ucp_main_context, mr_tmp);
 		}
 		else	{
 			memcpy(loc_buf, pSrc, BlockSize);
-			Server_qp.IB_Put(idx_qp, loc_buf, lkey, (void*)((char*)rem_buf+offset), rkey, BlockSize);	// loc_buf was registered previously. Will do later
+			// Server_qp.IB_Put(idx_qp, loc_buf, lkey, (void*)((char*)rem_buf+offset), rkey, BlockSize);	// loc_buf was registered previously. Will do later
+			Server_ucx.UCX_Put(idx_ucx, loc_buf, (void*)((char*)rem_buf+offset), rkey, BlockSize);
 		}
 	}
 	else if(count > DATA_COPY_THRESHOLD_SIZE)	{	// RDMA
-		mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote(src_buf, count);
+		// mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote(src_buf, count);
+		Server_ucx.RegisterBuf_RW_Local_Remote(src_buf, count, &mr_tmp);
 		assert(mr_tmp != NULL);
-		Server_qp.IB_Put(idx_qp, (void*)src_buf, mr_tmp->lkey, (void*)rem_buf, rkey, count);
+		// Server_qp.IB_Put(idx_qp, (void*)src_buf, mr_tmp->lkey, (void*)rem_buf, rkey, count);
+		Server_ucx.UCX_Put(idx_ucx, (void*)src_buf, (void*)rem_buf, rkey, count);
 
+// 			nSizeReg -= mr_tmp->length;
+// //			printf("DBG> nSizeReg = %ld\n", nSizeReg);
 
-			nSizeReg -= mr_tmp->length;
-//			printf("DBG> nSizeReg = %ld\n", nSizeReg);
-
-		ibv_dereg_mr(mr_tmp);
+// 		ibv_dereg_mr(mr_tmp);
+		nSizeUCXReg -= count;
+		ucp_mem_unmap(Server_ucx.ucp_main_context, mr_tmp);
 	}
 	else	{	// use register local buffer RMDA then memcpy. 
 		memcpy(loc_buf, src_buf, count);
-		Server_qp.IB_Put(idx_qp, loc_buf, lkey, rem_buf, rkey, count);	// loc_buf was registered previously. 
+		// Server_qp.IB_Put(idx_qp, loc_buf, lkey, rem_buf, rkey, count);	// loc_buf was registered previously. 
+		Server_ucx.UCX_Put(idx_ucx, loc_buf, rem_buf, rkey, count);
 	}
 }
 
-size_t my_read_stripe_RDMA(int fd, const char *szFileName, int server_shift, int idx_qp, void *loc_buf, unsigned int lkey, void *rem_buf, unsigned int rkey, size_t count, off_t offset)
+size_t my_read_stripe_RDMA(int fd, const char *szFileName, int server_shift, int idx_ucx, void *loc_buf,void *rem_buf, ucp_rkey_h rkey, size_t count, off_t offset)
 {
 	int Done = 0, i, nExtraPointer, idx_file, idx_Block;
 	size_t nBytes_Read, nBytes_ToRead, nBytes_Read_OneTime, nAllocatedSize, nPrevOffset, count_save, nFileSize, nBytesLeft, nBytesLeftInThisBlock;
@@ -1919,19 +1959,22 @@ size_t my_read_stripe_RDMA(int fd, const char *szFileName, int server_shift, int
 				if(nBytes_ToRead < nBytesLeftInThisBlock)	{	// no more blocks are needed. 
 					nBytes_Read_OneTime = MIN(nBytes_ToRead, nBytesLeft);
 //					memcpy((char*)buf+nBytes_Read, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset), nBytes_Read_OneTime);
-					my_Adaptive_Read(idx_qp, loc_buf, lkey, (void*)((char*)rem_buf+nBytes_Read), rkey, nBytes_Read_OneTime, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset));
+					// my_Adaptive_Read(idx_qp, loc_buf, lkey, (void*)((char*)rem_buf+nBytes_Read), rkey, nBytes_Read_OneTime, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset));
+					my_Adaptive_Read(idx_ucx, loc_buf, (void*)((char*)rem_buf+nBytes_Read), rkey, nBytes_Read_OneTime, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset));
 				}
 				else	{
 					if(nBytesLeft > nBytesLeftInThisBlock)	{	// Need to access next block!!!
 						nBytes_Read_OneTime = nBytesLeftInThisBlock;
 //						memcpy((char*)buf+nBytes_Read, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset), nBytes_Read_OneTime);
-						my_Adaptive_Read(idx_qp, loc_buf, lkey, (void*)((char*)rem_buf+nBytes_Read), rkey, nBytes_Read_OneTime, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset));
+						// my_Adaptive_Read(idx_qp, loc_buf, lkey, (void*)((char*)rem_buf+nBytes_Read), rkey, nBytes_Read_OneTime, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset));
+						my_Adaptive_Read(idx_ucx, loc_buf, (void*)((char*)rem_buf+nBytes_Read), rkey, nBytes_Read_OneTime, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset));
 						idx_Block++;	// move to next block!!!
 					}
 					else	{	// No need to access next block!!!
 						nBytes_Read_OneTime = nBytesLeft;
 //						memcpy((char*)buf+nBytes_Read, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset), nBytes_Read_OneTime);
-						my_Adaptive_Read(idx_qp, loc_buf, lkey, (void*)((char*)rem_buf+nBytes_Read), rkey, nBytes_Read_OneTime, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset));
+						// my_Adaptive_Read(idx_qp, loc_buf, lkey, (void*)((char*)rem_buf+nBytes_Read), rkey, nBytes_Read_OneTime, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset));
+						my_Adaptive_Read(idx_ucx, loc_buf, (void*)((char*)rem_buf+nBytes_Read), rkey, nBytes_Read_OneTime, (void*)(pExtraData[idx_Block].AddressofData + offset_Loc - pExtraData[idx_Block].FileOffset));
 					}
 				}
 				nBytes_Read += nBytes_Read_OneTime;
@@ -2916,7 +2959,11 @@ int my_opendir_by_index(int dir_idx, void *loc_buf, long int offset, long int nB
 
 	nDirEntryListBuffSize = sizeof(int)*(3 + nEntryToSend) + nBytesDirEntryNameAccu;	// the real buff size needed
 	if(nDirEntryListBuffSize > (IO_RESULT_BUFFER_SIZE - sizeof(RW_FUNC_RETURN)) )	{	// too large to fit in result buffer (loc_buf)
-		pResult_Ext->mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote((void*)pResult_New_Allocated, nDirEntryListBuffSize + sizeof(int));
+		pResult_Ext->mr_tmp = NULL;
+		Server_ucx.RegisterBuf_RW_Local_Remote((void*)pResult_New_Allocated, nDirEntryListBuffSize + sizeof(int), &pResult_Ext->mr_tmp);
+		pResult_Ext->mr_tmp_addr = (void*)pResult_New_Allocated;
+		pResult_Ext->mr_tmp_length = nDirEntryListBuffSize + sizeof(int);
+		// pResult_Ext->mr_tmp = Server_qp.IB_RegisterBuf_RW_Local_Remote((void*)pResult_New_Allocated, nDirEntryListBuffSize + sizeof(int));
 		assert(pResult_Ext->mr_tmp != NULL);
 	}
 	else	{

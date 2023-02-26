@@ -7,17 +7,34 @@
 
 #include "ucx_rma.h"
 #include "myfs.h"
+#include "dict.h"
+#include "io_queue.h"
 #include "utility.h"
+#include "xxhash.h"
+#include "corebinding.h"
+#include "unique_thread.h"
+#include "ncx_slab.h"
 #include "fixed_mem_allocator.h"
 
+
+long int nSizeUCXReg;
+
+extern CORE_BINDING CoreBinding;
 extern pthread_attr_t thread_attr;
+extern CCreatedUniqueThread Unique_Thread;
 
 extern CFIXEDSIZE_MEM_ALLOCATOR CFixedSizeMemAllcator;
 extern int mpi_rank, nFSServer;	// rank and size of MPI
+extern CHASHTABLE_INT *pHT_ActiveJobs;
+extern struct elt_Int *elt_list_ActiveJobs;
+extern int *ht_table_ActiveJobs;
+extern int nActiveJob;
+extern JOBREC ActiveJobList[MAX_NUM_ACTIVE_JOB];
 pthread_t pthread_IO_Worker_UCX[NUM_THREAD_IO_WORKER];
 
-// pthread_mutex_t lock_Modify_ActiveJob_List;
-int nTestNewMsg, TestNewMsgList[MAX_UCX_NEW_MSG];
+pthread_mutex_t lock_UCX_Modify_ActiveJob_List;
+int nUCXNewMsg, UCXNewMsgList[MAX_UCX_NEW_MSG];
+
 inline int Align64_Int(int a)
 {
 	// return ( (a & 0x3F) ? (64 + (a & 0xFFFFFFC0) ) : (a) );
@@ -95,6 +112,31 @@ void SERVER_RDMA::Init_Server_UCX_Env(int remote_buff_size) {
     
 }
 
+void SERVER_RDMA::ScanLostUCX() {
+	int j, idx_queue;
+	struct timeval tm1;	// tm1.tv_sec
+
+	gettimeofday(&tm1, NULL);
+
+	for(j=nFSServer; j<=IdxLastQP; j++)	{	// skip the clients on other servers
+//	for(j=0; j<=IdxLastQP; j++)	{
+		if(p_shm_TimeHeartBeat[j])	{
+//			if( (tm1.tv_sec - p_shm_TimeHeartBeat[j]) > (T_FREQ_ALARM_HB + 3) )	{	// out of dated heart beat. Lost connection??? Destroy the queue pair. 
+			if( (tm1.tv_sec - p_shm_TimeHeartBeat[j]) > (T_FREQ_ALARM_HB + 24000) )	{	// out of dated heart beat. Lost connection??? Destroy the queue pair. !!!!!!!!!!!!!!!!!
+				idx_queue = pUCX_Data[j].idx_queue;
+//				pthread_mutex_lock(&(IO_Queue_List[idx_queue].lock));
+//				IO_Queue_List[idx_queue].nQP --;
+//				if(IO_Queue_List[idx_queue].nQP == 0)	{	// time to release the queue
+//					Free_A_Queue(idx_queue);
+//				}
+//				pthread_mutex_unlock(&(IO_Queue_List[idx_queue].lock));
+				Destroy_A_UCPWorker(j);
+				printf("Destroy UCPWorker %d due to lost connection.\n", j);
+			}
+		}
+	}
+}
+
 void SERVER_RDMA::Clean_UCX_Env(void) {
     for(int i=0; i<NUM_THREAD_IO_WORKER; i++) {
         if(ucp_data_worker[i]) {
@@ -137,7 +179,7 @@ void SERVER_RDMA::Socket_Server_Loop() {
 	struct epoll_event ev;
 	struct signalfd_siginfo info;
 	// UCX_TODO
-	// CoreBinding.Bind_This_Thread();
+	CoreBinding.Bind_This_Thread();
 
 	// block all signals. we take signals synchronously via signalfd
 	sigset_t all;
@@ -261,7 +303,7 @@ void* Func_thread_Finish_UCX_Setup(void *pParam)
 
 	pUCXParam = (UCXPARAM *)pParam;
     //UCX_TODO
-	// if(Unique_Thread.Redeem_A_Token(pUCXParam->nToken) == 0)	return NULL;
+	if(Unique_Thread.Redeem_A_Token(pUCXParam->nToken) == 0)	return NULL;
 
 	fd = pUCXParam->fd;
 	idx = pUCXParam->idx;
@@ -272,7 +314,7 @@ void* Func_thread_Finish_UCX_Setup(void *pParam)
 
 
     // UCX_TODO
-	/*pthread_mutex_lock(&lock_Modify_ActiveJob_List);
+	pthread_mutex_lock(&lock_UCX_Modify_ActiveJob_List);
 	idx_JobRec = pHT_ActiveJobs->DictSearch(pData_to_recv->JobInfo.jobid, &elt_list_ActiveJobs, &ht_table_ActiveJobs, &jobid_hash);
 	if(idx_JobRec < 0)	{	// Do not exist. Need to insert it into hash table. 
 		idx_JobRec = pHT_ActiveJobs->DictInsertAuto(pData_to_recv->JobInfo.jobid, &elt_list_ActiveJobs, &ht_table_ActiveJobs);
@@ -281,7 +323,7 @@ void* Func_thread_Finish_UCX_Setup(void *pParam)
 	else	{
 		fetch_and_add(&(ActiveJobList[idx_JobRec].nQP), 1);	// Increse the counter by 1
 	}
-	pthread_mutex_unlock(&lock_Modify_ActiveJob_List);*/
+	pthread_mutex_unlock(&lock_UCX_Modify_ActiveJob_List);
 
   
 	
@@ -365,42 +407,42 @@ int SERVER_RDMA::Accept_Client()
 
 
 void SERVER_RDMA::ScanNewMsg() {
-	int i, k, LastQPLocal, idx_queue, idx_qp, nQP_Server;
+	int i, k, LastQPLocal, idx_queue, idx_ucx, nQP_Server;
 	__m512i Data;
 	unsigned long int cmpMask, T_Queued;
 	struct timeval tm;
 
-	nTestNewMsg = 0;
+	nUCXNewMsg = 0;
 	if(p_shm_NewMsgFlag == NULL)	return;
 	LastQPLocal = IdxLastQP + 1;
 	nQP_Server = NUM_THREAD_IO_WORKER_INTER_SERVER * nFSServer;
 	for(i=0; i<nQP_Server; i++)	{	// alway scan new msg from other servers first!!!
 		if(p_shm_NewMsgFlag[i])	{
-			TestNewMsgList[nTestNewMsg] = i;
-			nTestNewMsg++;
+			UCXNewMsgList[nUCXNewMsg] = i;
+			nUCXNewMsg++;
 			p_shm_NewMsgFlag[i] = 0;
 		}
 	}
 	gettimeofday(&tm, NULL);
 	T_Queued = tm.tv_sec * 1000000 + tm.tv_usec;
-	std::vector<IO_CMD_MSG*> tmpV;
-	for(i=0; i<nTestNewMsg; i++)	{
-		idx_qp = TestNewMsgList[i];
-		// idx_queue = pUCX_Data[idx_qp].idx_queue;
-		// p_shm_IO_Cmd_Msg[idx_qp].idx_qp = idx_qp;	// set index of qp. Needed for communication!
-		// p_shm_IO_Cmd_Msg[idx_qp].idx_JobRec = pUCX_Data[idx_qp].idx_JobRec;
-		// p_shm_IO_Cmd_Msg[idx_qp].T_Queued = T_Queued;
-		tmpV.push_back(&(p_shm_IO_Cmd_Msg[idx_qp]));
+
+	for(i=0; i<nUCXNewMsg; i++)	{
+		idx_ucx = UCXNewMsgList[i];
+		idx_queue = pUCX_Data[idx_ucx].idx_queue;
+		p_shm_IO_Cmd_Msg[idx_ucx].idx_qp = idx_ucx;	// set index of qp. Needed for communication!
+		p_shm_IO_Cmd_Msg[idx_ucx].idx_JobRec = pUCX_Data[idx_ucx].idx_JobRec;
+		p_shm_IO_Cmd_Msg[idx_ucx].T_Queued = T_Queued;
+		IO_Queue_List[idx_queue].Enqueue(&(p_shm_IO_Cmd_Msg[idx_ucx]));
 	}
-	nTestNewMsg = 0;
+	nUCXNewMsg = 0;
 
 	if(IdxLastQP64 <=192)	{	// simple version
 		for(i=0; i<LastQPLocal; i++)	{
 			if(p_shm_NewMsgFlag[i])	{
 				if(pUCX_Data[i].bServerReady)	{
-					TestNewMsgList[nTestNewMsg] = i;
+					UCXNewMsgList[nUCXNewMsg] = i;
 	//				printf("DBG> Rank = %d. Found new msg for qp %d.\n", mpi_rank, i);
-					nTestNewMsg++;
+					nUCXNewMsg++;
 					p_shm_NewMsgFlag[i] = 0;
 				}
 			}
@@ -415,9 +457,9 @@ void SERVER_RDMA::ScanNewMsg() {
 				for(k=0; k<64; k++)	{
 					if(cmpMask & 1LL)	{
 						if(pUCX_Data[i+k].bServerReady)	{
-							TestNewMsgList[nTestNewMsg] = i + k;
+							UCXNewMsgList[nUCXNewMsg] = i + k;
 	//						printf("DBG> Rank = %d. Found new msg for qp %d.\n", mpi_rank, i+k);
-							nTestNewMsg++;
+							nUCXNewMsg++;
 							p_shm_NewMsgFlag[i+k] = 0;
 						}
 					}
@@ -436,9 +478,9 @@ void SERVER_RDMA::ScanNewMsg() {
 							break;
 						}
 						if(pUCX_Data[i+k].bServerReady)	{
-							TestNewMsgList[nTestNewMsg] = i + k;
+							UCXNewMsgList[nUCXNewMsg] = i + k;
 	//						printf("DBG> Rank = %d. Found new msg for qp %d.\n", mpi_rank, i+k);
-							nTestNewMsg++;
+							nUCXNewMsg++;
 							p_shm_NewMsgFlag[i+k] = 0;
 						}
 					}
@@ -450,19 +492,19 @@ void SERVER_RDMA::ScanNewMsg() {
 
 	gettimeofday(&tm, NULL);
 	T_Queued = tm.tv_sec * 1000000 + tm.tv_usec;
-	for(i=0; i<nTestNewMsg; i++)	{
-		idx_qp = TestNewMsgList[i];
-		// idx_queue = pUCX_Data[idx_qp].idx_queue;
-		// p_shm_IO_Cmd_Msg[idx_qp].idx_qp = idx_qp;	// set index of qp. Needed for communication!
-		// p_shm_IO_Cmd_Msg[idx_qp].idx_JobRec = pQP_Data[idx_qp].idx_JobRec;
-		// p_shm_IO_Cmd_Msg[idx_qp].T_Queued = T_Queued;
-		tmpV.push_back(&(p_shm_IO_Cmd_Msg[idx_qp]));
+	for(i=0; i<nUCXNewMsg; i++)	{
+		idx_ucx = UCXNewMsgList[i];
+		idx_queue = pUCX_Data[idx_ucx].idx_queue;
+		p_shm_IO_Cmd_Msg[idx_ucx].idx_qp = idx_ucx;	// set index of qp. Needed for communication!
+		p_shm_IO_Cmd_Msg[idx_ucx].idx_JobRec = pUCX_Data[idx_ucx].idx_JobRec;
+		p_shm_IO_Cmd_Msg[idx_ucx].T_Queued = T_Queued;
+		IO_Queue_List[idx_queue].Enqueue(&(p_shm_IO_Cmd_Msg[idx_ucx]));
 	}
-	while(!tmpV.empty()) {
-		IO_CMD_MSG* cur = tmpV.back();
-		tmpV.pop_back();
-		// printf("DBG> mpi_rank:%d ScanNewMsg:%s\n", mpi_rank, (char*)cur);
-	}
+	// while(!tmpV.empty()) {
+	// 	IO_CMD_MSG* cur = tmpV.back();
+	// 	tmpV.pop_back();
+	// 	// printf("DBG> mpi_rank:%d ScanNewMsg:%s\n", mpi_rank, (char*)cur);
+	// }
 }
 
 void SERVER_RDMA::Drain_Client(const int fd)
@@ -538,7 +580,7 @@ void SERVER_RDMA::Drain_Client(const int fd)
             pUCXParam->idx = idx;
             pUCXParam->pServer_UCX = this;
             // UCX_TODO
-            // pUCXParam->nToken = Unique_Thread.Apply_A_Token();
+            pUCXParam->nToken = Unique_Thread.Apply_A_Token();
 
             if(pthread_create(&pthread_Setup_UCX, &thread_attr, Func_thread_Finish_UCX_Setup, (void*)pUCXParam)) {
                 fprintf(stderr, "Error creating thread Func_thread_Finish_UCX_Setup().\n");
@@ -673,7 +715,7 @@ void SERVER_RDMA::AllocateUCPDataWorker(int idx) {
 
     pUCX->ucp_data_worker = ucp_data_worker[idx_io_worker];
 
-    if(pthread_mutex_init(&(pUCX->qp_lock), NULL) != 0) {
+    if(pthread_mutex_init(&(pUCX->ucx_lock), NULL) != 0) {
 		perror("pthread_mutex_init");
 		exit(1);
 	}
@@ -769,8 +811,8 @@ void SERVER_RDMA::Init_Server_Memory(int max_num_qp, int port) {
 
 	nSizePerCallReturnBlock = (SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN) + 1*sizeof(int) + 64) & 0xFFFFFFC0;
     // UCX_TODO
-	// nSizeofReturnBuffer = CFixedSizeMemAllcator.Query_MemSize(nSizePerCallReturnBlock, MAX_NUM_RETURN_BUFF);
-    nSizeofReturnBuffer = 0;
+	nSizeofReturnBuffer = CFixedSizeMemAllcator.Query_MemSize(nSizePerCallReturnBlock, MAX_NUM_RETURN_BUFF);
+    // nSizeofReturnBuffer = 0;
 	if(mpi_rank == 0)	{
 		nSizeshm_Global = nSizeofNewMsgFlag + nSizeofHeartBeat + nSizeofIOCmdMsg + nSizeofIOResult + nSizeofIOResult_Recv + nSizeofReturnBuffer 
 			+ sizeof(JOB_SCALE_LIST) + sizeof(JOB_OP_SEND)*nFSServer;
@@ -813,7 +855,7 @@ void SERVER_RDMA::Init_Server_Memory(int max_num_qp, int port) {
 	}
 	// Other rank will get the value of pJobScale_Remote and pJob_OP_Recv with bcast!!!
     // UCX_TODO
-	// CFixedSizeMemAllcator.Init_Memory_Pool(p_CallReturnBuff);
+	CFixedSizeMemAllcator.Init_Memory_Pool(p_CallReturnBuff);
 
     FirstAV_QP = 0;
 	nQP = 0;
@@ -840,27 +882,80 @@ ucs_status_t SERVER_RDMA::RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp
     mem_map_params.length = len;
     mem_map_params.address = buf;
     ucs_status_t status = ucp_mem_map(ucp_main_context, &mem_map_params, memh);
+	if(memh == NULL) {
+		perror("ucp_mem_map");
+		fprintf(stderr, "Error occured at %s:L%d. Failure: ucp_mem_map on RW_Local_Remote.\n", __FILE__, __LINE__);
+		char szHostName[128];
+		gethostname(szHostName, 63);
+		printf("DBG> Hostname = %s pid = %d\n", szHostName, getpid());
+		fflush(stdout);
+		sleep(300);
+		exit(1);
+	}
+	nSizeUCXReg += len;
     return status;
 }
 
-void SERVER_RDMA::UCX_Put(int idx, void* loc_buf, void* rem_buf, size_t len) {
+void SERVER_RDMA::UCX_Pack_Rkey(ucp_mem_h memh, void *rkey_buffer) {
+	void* tmp_rkey_buffer;
+	size_t rkey_buffer_size;
+	ucs_status_t status = ucp_rkey_pack(ucp_main_context, memh, &tmp_rkey_buffer, &rkey_buffer_size);
+	if(status != UCS_OK) {
+		fprintf(stderr, "Error occured at %s:L%d. Failure: ucp_rkey_pack in UCX_Unpack_Rkey(). nConnectionAccu = %d\n", 
+			__FILE__, __LINE__, nConnectionAccu);
+		exit(1);
+	}
+	memcpy(rkey_buffer, tmp_rkey_buffer, rkey_buffer_size);
+	ucp_rkey_buffer_release(tmp_rkey_buffer);
+}
+
+void SERVER_RDMA::UCX_Unpack_Rkey(int idx, void* rkey_buffer, ucp_rkey_h* rkey_p) {
+	ucs_status_t status = ucp_ep_rkey_unpack(pUCX_Data[idx].peer_ep, rkey_buffer, rkey_p);
+	if(status != UCS_OK) {
+		fprintf(stderr, "Error occured at %s:L%d. Failure: ucp_ep_rkey_unpack in UCX_Unpack_Rkey(). tid= %d nConnectionAccu = %d Server() Client(%s)\n", 
+			__FILE__, __LINE__, pUCX_Data[idx].ctid,  nConnectionAccu, pUCX_Data[idx].szClientHostName, pUCX_Data[idx].szClientExeName);
+		exit(1);
+	}
+}
+
+void SERVER_RDMA::UCX_Put(int idx, void* loc_buff, void* rem_buf, void* rkey_buffer, size_t len) {
+	ucp_rkey_h rkey;
+    ucs_status_t status = ucp_ep_rkey_unpack(pUCX_Data[idx].peer_ep, rkey_buffer, &rkey);
+	if(status != UCS_OK) {
+		fprintf(stderr, "Error occured at %s:L%d. Failure: ucp_ep_rkey_unpack in Put(). tid= %d nConnectionAccu = %d Server() Client(%s)\n", 
+			__FILE__, __LINE__, pUCX_Data[idx].ctid, nConnectionAccu, pUCX_Data[idx].szClientHostName, pUCX_Data[idx].szClientExeName);
+		exit(1);
+	}
+	UCX_Put(idx, loc_buff, rem_buff, rkey, len);
+}
+void SERVER_RDMA::UCX_Get(int idx, void* loc_buff, void* rem_buf, void* rkey_buffer, size_t len) {
+	ucp_rkey_h rkey;
+    ucs_status_t status = ucp_ep_rkey_unpack(pUCX_Data[idx].peer_ep, rkey_buffer, &rkey);
+	if(status != UCS_OK) {
+		fprintf(stderr, "Error occured at %s:L%d. Failure: ucp_ep_rkey_unpack in Get(). tid= %d nConnectionAccu = %d Server() Client(%s)\n", 
+			__FILE__, __LINE__, pUCX_Data[idx].ctid, nConnectionAccu, pUCX_Data[idx].szClientHostName, pUCX_Data[idx].szClientExeName);
+		exit(1);
+	}
+	UCX_Get(idx, loc_buff, rem_buff, rkey, len);
+}
+
+void SERVER_RDMA::UCX_Put(int idx, void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t len) {
     long int t1_ms, t2_ms;
     struct timeval tm1, tm2;
     int bTimeOut=0;	// the flag of time out in PUT. 
     if(pUCX_Data[idx].bTimeout)	{	// Something wrong with this QP. Client may disconnect or die...
-		printf("WARNING> QP %d got timeout in previous Put(). Ignore all OPs for this QP. HostName = %s tid = %d\n", 
+		printf("WARNING> UCX %d got timeout in previous Put(). Ignore all OPs for this UCX. HostName = %s tid = %d\n", 
 			idx, pUCX_Data[idx].szClientHostName, pUCX_Data[idx].ctid);
 		return;
 	}
     ucp_ep_h peer_ep = pUCX_Data[idx].peer_ep;
-    ucp_rkey_h rkey = pUCX_Data[idx].rkey;
     ucp_worker_h ucp_data_worker = pUCX_Data[idx].ucp_data_worker;
 retry:
     ucp_request_param_t param;
     memset(&param, 0, sizeof(ucp_request_param_t));
     param.op_attr_mask = 0;
     ucs_status_ptr_t req = ucp_put_nbx(peer_ep, loc_buf, len, (uint64_t)rem_buf, rkey, &param);
-    ucs_status_t status = ucp_request_check_status(req);
+    // ucs_status_t status = ucp_request_check_status(req);
     if(UCS_PTR_IS_ERR(req)) {
         if(bTimeOut) {
             printf("ERROR> Rank = %d Put Timeout in UCX(%d) Put %zu bytes\n", 
@@ -868,10 +963,13 @@ retry:
             return;
         }
         fprintf(stderr, "Error occured at %s:L%d. Failure: ucp_put_nbx in Put(). tid= %d nConnectionAccu = %d Server() Client(%s)\n", 
-			__FILE__, __LINE__, nConnectionAccu, pUCX_Data[idx].ctid, pUCX_Data[idx].szClientHostName, pUCX_Data[idx].szClientExeName);
+			__FILE__, __LINE__, pUCX_Data[idx].ctid, nConnectionAccu, pUCX_Data[idx].szClientHostName, pUCX_Data[idx].szClientExeName);
 		exit(1);
     }
     pUCX_Data[idx].nPut_Get++;
+	if(req == NULL) {
+		pUCX_Data[idx].nPut_Get_Done += 1;
+	}
     if( (pUCX_Data[idx].nPut_Get - pUCX_Data[idx].nPut_Get_Done) >= UCX_QUEUE_SIZE ) {
         gettimeofday(&tm1, NULL);
 		t1_ms = (tm1.tv_sec * 1000) + (tm1.tv_usec / 1000);
@@ -893,7 +991,7 @@ retry:
             }
             else {
                 fprintf(stderr, "ucp_put_nbx failed %s\n", ucs_status_string(status));
-//				pthread_mutex_unlock(&(pUCX_Data[idx].qp_lock));
+//				pthread_mutex_unlock(&(pUCX_Data[idx].ucx_lock));
 				exit(1);
 				return;
             }
@@ -901,24 +999,24 @@ retry:
     }
 }
 
-void SERVER_RDMA::UCX_Get(int idx, void* loc_buf, void* rem_buf, size_t len) {
+void SERVER_RDMA::UCX_Get(int idx, void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t len) {
     long int t1_ms, t2_ms;
     struct timeval tm1, tm2;
     int bTimeOut=0;	// the flag of time out in PUT. 
     if(pUCX_Data[idx].bTimeout)	{	// Something wrong with this QP. Client may disconnect or die...
-		printf("WARNING> QP %d got timeout in previous Put(). Ignore all OPs for this QP. HostName = %s tid = %d\n", 
+		printf("WARNING> UCX %d got timeout in previous Put(). Ignore all OPs for this UCX. HostName = %s tid = %d\n", 
 			idx, pUCX_Data[idx].szClientHostName, pUCX_Data[idx].ctid);
 		return;
 	}
     ucp_ep_h peer_ep = pUCX_Data[idx].peer_ep;
-    ucp_rkey_h rkey = pUCX_Data[idx].rkey;
+    // ucp_rkey_h rkey = pUCX_Data[idx].rkey;
     ucp_worker_h ucp_data_worker = pUCX_Data[idx].ucp_data_worker;
 retry:
     ucp_request_param_t param;
     memset(&param, 0, sizeof(ucp_request_param_t));
     param.op_attr_mask = 0;
     ucs_status_ptr_t req = ucp_get_nbx(peer_ep, loc_buf, len, (uint64_t)rem_buf, rkey, &param);
-    ucs_status_t status = ucp_request_check_status(req);
+    // ucs_status_t status = ucp_request_check_status(req);
     if(UCS_PTR_IS_ERR(req)) {
         if(bTimeOut) {
             printf("ERROR> Rank = %d Get Timeout in UCX(%d) Put %zu bytes\n", 
@@ -926,10 +1024,13 @@ retry:
             return;
         }
         fprintf(stderr, "Error occured at %s:L%d. Failure: ucp_get_nbx in Put(). tid= %d nConnectionAccu = %d Server() Client(%s)\n", 
-			__FILE__, __LINE__, nConnectionAccu, pUCX_Data[idx].ctid, pUCX_Data[idx].szClientHostName, pUCX_Data[idx].szClientExeName);
+			__FILE__, __LINE__, pUCX_Data[idx].ctid, nConnectionAccu, pUCX_Data[idx].szClientHostName, pUCX_Data[idx].szClientExeName);
 		exit(1);
     }
     pUCX_Data[idx].nPut_Get++;
+	if(req == NULL) {
+		pUCX_Data[idx].nPut_Get_Done += 1;
+	}
     if( (pUCX_Data[idx].nPut_Get - pUCX_Data[idx].nPut_Get_Done) >= UCX_QUEUE_SIZE ) {
         gettimeofday(&tm1, NULL);
 		t1_ms = (tm1.tv_sec * 1000) + (tm1.tv_usec / 1000);
@@ -950,10 +1051,57 @@ retry:
             }
             else {
                 fprintf(stderr, "ucp_get_nbx failed %s\n", ucs_status_string(status));
-//				pthread_mutex_unlock(&(pQP_Data[idx].qp_lock));
+//				pthread_mutex_unlock(&(pQP_Data[idx].ucx_lock));
 				exit(1);
 				return;
             }
         }
     }
+}
+
+
+void SERVER_RDMA::Destroy_A_UCPWorker(int idx) {
+	int j, IdxLastQP_Save, nQP_Reserved_M1;
+	nQP_Reserved_M1 = nFSServer * NUM_THREAD_IO_WORKER_INTER_SERVER - 1;
+	pthread_mutex_lock(&process_lock);
+	p_shm_NewMsgFlag[idx] = 0;
+	p_shm_TimeHeartBeat[idx] = 0;
+	if(pUCX_Data[idx].ucp_data_worker != NULL) {
+		// ucp_worker_destroy(pUCX_Data[idx].ucp_data_worker); // SHOULD NOT DESTROY
+		pUCX_Data[idx].ucp_data_worker = NULL;
+	}
+	else	{
+		printf("ERROR> Unexpected!\n");
+	}
+	fetch_and_add(&(ActiveJobList[pUCX_Data[idx].idx_JobRec].nQP), -1);	// Decrese the counter by 1
+	pUCX_Data[idx].bServerReady = 0;
+
+	// to update the first available entry!!!
+	if(idx < FirstAV_QP)	{
+		FirstAV_QP = idx;
+	}
+	nQP--;
+	if(idx == IdxLastQP)	{	// Is removing the last record? To find the new last record. 
+		IdxLastQP_Save = IdxLastQP;
+		IdxLastQP = nQP_Reserved_M1;
+
+		for(j=IdxLastQP_Save-1; j>nQP_Reserved_M1; j--)	{
+			if(pUCX_Data[j].ucp_data_worker)	{	// a valid queue pair
+				IdxLastQP = j;
+				break;
+			}
+		}
+
+		IdxLastQP64 = Align64_Int(IdxLastQP+1);	// +1 is needed since IdxLastQP is included!
+	}
+
+	/* printf("DBG> Rank = %d Destroyed %d QP in job %d (idx %d: %d qps). Client hostname %s ExeName = %s tid = %d nQP = %d FirstAV_QP = %d IdxLastQP = %d\n", 
+		mpi_rank, idx, pQP_Data[idx].jobid, pQP_Data[idx].idx_JobRec, ActiveJobList[pQP_Data[idx].idx_JobRec].nQP, pQP_Data[idx].szClientHostName, 
+		pQP_Data[idx].szClientExeName, pQP_Data[idx].ctid, nQP, FirstAV_QP, IdxLastQP); */
+
+	if( FirstAV_QP > (nQP+NUM_THREAD_IO_WORKER_INTER_SERVER) )	{
+		printf("DBG> Something wrong!\n");
+	}
+
+	pthread_mutex_unlock(&process_lock);
 }

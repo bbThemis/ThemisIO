@@ -97,7 +97,7 @@ UCX_RMA_SETUP_DATA *pUCX_RMA_Inter_FS=NULL;
 int mpi_rank, nFSServer=0;	// rank and size of MPI
 int nNUMAPerNode=1;	// number of numa nodes per compute node
 
-SERVER_QUEUEPAIR Server_qp;
+// SERVER_QUEUEPAIR Server_qp;
 SERVER_RDMA Server_ucx;
 pthread_attr_t thread_attr;
 
@@ -112,7 +112,7 @@ void Setup_UCX_Among_Servers(void);
 
 void Setup_QP_Among_Servers(void)
 {
-	int i, j, idx;
+	/*int i, j, idx;
 
 	pQPair_Inter_FS = (QPAIR_DATA *)malloc(sizeof(QPAIR_DATA)*nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER);
 
@@ -188,7 +188,7 @@ void Setup_QP_Among_Servers(void)
 
 	if(mpi_rank == 0)	Server_qp.pJobScale_Remote->nActiveJob = 0;
 
-	printf("DBG> Rank = %d Finishing Setup_QP_Among_Servers().\n", mpi_rank);
+	printf("DBG> Rank = %d Finishing Setup_QP_Among_Servers().\n", mpi_rank);*/
 }
 
 void Setup_UCX_Among_Servers(void) {
@@ -292,14 +292,15 @@ void Get_Local_Server_Info(void)
 
 static void* Func_thread_Print_Data(void *pParam)
 {
-	SERVER_QUEUEPAIR *pServer_qp;
+	// SERVER_QUEUEPAIR *pServer_qp;
+	SERVER_RDMA* pServer_ucx;
 	struct timeval tm1;	// tm1.tv_sec
 	
-	pServer_qp = (SERVER_QUEUEPAIR *)pParam;
+	pServer_ucx = (SERVER_RDMA *)pParam;
 	while(1)	{
 		sleep(1);
-		if(pServer_qp->pQP_Data)	{
-			if( (pServer_qp->pQP_Data[0].queue_pair) || (pServer_qp->pQP_Data[1].queue_pair) )	{
+		if(pServer_ucx->pUCX_Data)	{
+			if( (pServer_ucx->pUCX_Data[0].ucp_data_worker) || (pServer_ucx->pUCX_Data[1].ucp_data_worker) )	{
 				break;
 			}
 		}
@@ -310,19 +311,19 @@ static void* Func_thread_Print_Data(void *pParam)
 
 	while(1)	{
 		gettimeofday(&tm1, NULL);
-		for(int j=0; j<=pServer_qp->IdxLastQP; j++)	{
-			if(pServer_qp->p_shm_TimeHeartBeat[j])	{
+		for(int j=0; j<=pServer_ucx->IdxLastQP; j++)	{
+			if(pServer_ucx->p_shm_TimeHeartBeat[j])	{
 //				printf("DBG> Addr pServer_qp->p_shm_TimeHeartBeat[0] = %p Index(QP) = %d\n", &(pServer_qp->p_shm_TimeHeartBeat[j]), j);
 //				printf("Rank %d: heart beat time stamp %ld My time %ld\n", j, pServer_qp->p_shm_TimeHeartBeat[j], tm1.tv_sec);
 			}
 		}
-		pServer_qp->ScanLostQueuePairs();
+		pServer_ucx->ScanLostUCX();
 		sleep(1);
 	}
 
 	return NULL;
 }
-
+/*
 #define UCX_Rma_Put_Test_String "From %d to %d times %d"
 #define UCX_Rma_Put_Checkpass_String "From %d to %d times %d pass put check\n"
 #define UCX_Rma_Put_Checkfail_String "From %d to %d times %d fail put check\n"
@@ -341,6 +342,7 @@ static void* UCX_Rma_Put_Test(void* pParam) {
 				// fprintf(stdout, "mpi_rank %d: UCX_Put From %d to %d times %d\n", mpi_rank,  mpi_rank, i, j);
 				sprintf(test_buff, UCX_Rma_Put_Test_String, mpi_rank, i, j);
 				uint64_t rem_addr = pServer_RDMA->pUCX_Data[idx+j].remote_addr_IO_CMD;
+				ucp_rkey_h rkey = pUCX_Data[idx + j].rkey;
 				pServer_RDMA->UCX_Put(idx + j, test_buff, (void*)rem_addr, test_len);
 				free(test_buff);
 			}
@@ -391,7 +393,8 @@ static void* UCX_Rma_Get_Test(void* pParam, void** loc_pptr) {
 			for(int j=0; j<NUM_THREAD_IO_WORKER_INTER_SERVER; j++)	{
 				uint64_t loc_buf = (uint64_t)(*loc_pptr) + (idx + j) * UCX_Rma_Get_Test_String_Len;
 				uint64_t rem_addr = pServer_RDMA->pUCX_Data[idx+j].remote_addr_IO_CMD;
-				pServer_RDMA->UCX_Get(idx + j, (void*)loc_buf, (void*)rem_addr, test_len);
+				ucp_rkey_h rkey = pUCX_Data[idx + j].rkey;
+				pServer_RDMA->UCX_Get(idx + j, (void*)loc_buf, (void*)rem_addr, rkey, test_len);
 			}
 		}
 	}
@@ -423,11 +426,11 @@ static void* UCX_Rma_Get_Test_Check(void* pParam, void* loc_ptr) {
 	}
 	free(loc_ptr);
 }
-
-static void* Func_thread_Test_UCX_Client_Serv_Polling_New_Msg(void *pParam)
+*/
+static void* Func_thread_UCX_Polling_New_Msg(void *pParam)
 {
 	SERVER_RDMA *pServer_ucx;
-	
+	CoreBinding.Bind_This_Thread();
 
 	pServer_ucx = (SERVER_RDMA *)pParam;
 	while(1)	{
@@ -477,14 +480,14 @@ static void* Func_thread_ucx_server(void *pParam) {
 	pServer_ucx = (SERVER_RDMA *)pParam;
 	pServer_ucx->Init_Server_UCX_Env(DEFAULT_REM_BUFF_SIZE);
 	pServer_ucx->Init_Server_Memory(2048, ThisNode.ucx_port);
-	//UCX_TEST
-	// for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
-	// 	IO_Worker_tid_List[i] = i;
-	// 	if(pthread_create(&(pthread_IO_Worker_UCX[i]), NULL, Func_thread_IO_Worker, &(IO_Worker_tid_List[i]))) {
-	// 		fprintf(stderr, "Error creating thread\n");
-	// 		return 0;
-	// 	}
-	// }
+	
+	for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
+		IO_Worker_tid_List[i] = i;
+		if(pthread_create(&(pthread_IO_Worker_UCX[i]), NULL, Func_thread_IO_Worker, &(IO_Worker_tid_List[i]))) {
+			fprintf(stderr, "Error creating thread\n");
+			return 0;
+		}
+	}
 
 	Ucx_Server_Started = 1;	// active the flag: Server started running!!!
 	printf("Rank = %d. UCX Server is started.\n", mpi_rank);
@@ -631,8 +634,9 @@ int main(int argc, char **argv)
 {
 	int i;
 	FILE *fOut;
-	pthread_t thread_qp_server, thread_print_data, thread_polling_newmsg, thread_global_sharing, thread_ucx_server;
-	pthread_t thread_ucx_test, thread_ucx_polling_newmsg;
+	pthread_t thread_qp_server, thread_polling_newmsg/*, thread_global_sharing, thread_print_data*/;
+	pthread_t thread_ucx_polling_newmsg, thread_ucx_server;
+	// pthread_t thread_ucx_test;
 //	unsigned char *pNewMsg_ToSend=NULL;
 //	IO_CMD_MSG *pIO_Cmd_toSend;
 //	struct ibv_mr *mr_local;
@@ -679,8 +683,8 @@ int main(int argc, char **argv)
 	}
 
 	// Store the fairness_mode in Server_qp.  It will be used in Func_thread_IO_Worker_FairQueue.
-	Server_qp.fairness_mode = server_options.getFairnessMode();
-
+	// Server_qp.fairness_mode = server_options.getFairnessMode();
+	Server_ucx.fairness_mode = server_options.getFairnessMode();
 	Init_Memory();
 //	Test_File_System_Local();
 
@@ -715,10 +719,10 @@ int main(int argc, char **argv)
 		fclose(fOut);
 	}
 
-	if(pthread_create(&(thread_qp_server), NULL, Func_thread_qp_server, &Server_qp)) {
-		fprintf(stderr, "Error creating thread\n");
-		return 1;
-	}
+	// if(pthread_create(&(thread_qp_server), NULL, Func_thread_qp_server, &Server_qp)) {
+	// 	fprintf(stderr, "Error creating thread\n");
+	// 	return 1;
+	// }
 	// UCX_TEST
 	if(pthread_create(&(thread_ucx_server), NULL, Func_thread_ucx_server, &Server_ucx)) {
 		fprintf(stderr, "Error creating thread\n");
@@ -726,11 +730,11 @@ int main(int argc, char **argv)
 	}
 
 //	Setup_Signal_QueuePair();
-	while(1)	{
-		if(Server_Started)	break;
-	}
+	// while(1)	{
+	// 	if(Server_Started)	break;
+	// }
 	
-	Setup_QP_Among_Servers();
+	// Setup_QP_Among_Servers();
 
 	while(1)	{
 		if(Ucx_Server_Started)	break;
@@ -755,17 +759,17 @@ int main(int argc, char **argv)
 //		return 1;
 //	}
 
-	if(pthread_create(&(thread_polling_newmsg), NULL, Func_thread_Polling_New_Msg, &Server_qp)) {
-		fprintf(stderr, "Error creating thread\n");
-		return 1;
-	}
-	printf("DBG> Rank = %d,  started Func_thread_Polling_New_Msg().\n", mpi_rank);
-
-	// if(pthread_create(&(thread_ucx_polling_newmsg), NULL, Func_thread_Test_UCX_Client_Serv_Polling_New_Msg, &Server_ucx)) {
-	// 	fprintf(stderr, "Error creating thread thread_ucx_polling_newmsg\n");
+	// if(pthread_create(&(thread_polling_newmsg), NULL, Func_thread_Polling_New_Msg, &Server_qp)) {
+	// 	fprintf(stderr, "Error creating thread\n");
 	// 	return 1;
 	// }
-	// printf("DBG> Rank = %d,  started Func_thread_Test_UCX_Client_Serv_Polling_New_Msg().\n", mpi_rank);
+	// printf("DBG> Rank = %d,  started Func_thread_Polling_New_Msg().\n", mpi_rank);
+
+	if(pthread_create(&(thread_ucx_polling_newmsg), NULL, Func_thread_UCX_Polling_New_Msg, &Server_ucx)) {
+		fprintf(stderr, "Error creating thread thread_ucx_polling_newmsg\n");
+		return 1;
+	}
+	printf("DBG> Rank = %d,  started Func_thread_UCX_Polling_New_Msg().\n", mpi_rank);
 
 	signal(SIGALRM, sigalarm_handler); // Register signal handler
 	alarm(T_FREQ_REPORT_RESULT);
@@ -805,7 +809,11 @@ int main(int argc, char **argv)
 	printf("DBG> Rank = %d result = %d\n", mpi_rank, pResult->ret_value);
 */
 	
-	if(pthread_join(thread_polling_newmsg, NULL)) {
+	// if(pthread_join(thread_polling_newmsg, NULL)) {
+	// 	fprintf(stderr, "Error joining thread.\n");
+	// 	return 2;
+	// }
+	if(pthread_join(thread_ucx_polling_newmsg, NULL)) {
 		fprintf(stderr, "Error joining thread.\n");
 		return 2;
 	}
@@ -815,10 +823,10 @@ int main(int argc, char **argv)
 //		return 2;
 //	}
 
-	if(pthread_join(thread_qp_server, NULL)) {
-		fprintf(stderr, "Error joining thread.\n");
-		return 2;
-	}
+	// if(pthread_join(thread_qp_server, NULL)) {
+	// 	fprintf(stderr, "Error joining thread.\n");
+	// 	return 2;
+	// }
 
 	if(pthread_join(thread_ucx_server, NULL)) {
 		fprintf(stderr, "Error joining thread thread_ucx_server.\n");

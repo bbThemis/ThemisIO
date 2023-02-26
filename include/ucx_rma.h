@@ -31,10 +31,11 @@
 #include "io_queue.h"
 #include "ucx_rma_common.h"
 
+#include "ucx_qp_common.h"
 
 
 
-
+extern CIO_QUEUE IO_Queue_List[MAX_NUM_QUEUE];
 #define MAX_UCX_NEW_MSG	(1024*16)
 typedef struct {
     ucp_worker_h ucp_data_worker;
@@ -58,7 +59,7 @@ typedef struct {
     ucp_rkey_h rkey;
 
     unsigned long int	rem_addr;
-    pthread_mutex_t	qp_lock;
+    pthread_mutex_t	ucx_lock;
     char szClientHostName[UCX_MAX_HOSTNAME_LEN];
 	char szClientExeName[UCX_MAX_EXENAME_LEN];
 
@@ -84,6 +85,7 @@ public:
     int nConnectionAccu = 0;
     int max_qp, nQP, IdxLastQP, IdxLastQP64, FirstAV_QP;	// IdxLastQP64 is 64 aligned for IdxLastQP
     int nSizeshm_Global;
+    FairnessMode fairness_mode;
 pthread_mutex_t process_lock;	// for this process
 
     CHASHTABLE_INT *p_Hash_socket_fd = NULL;
@@ -126,11 +128,18 @@ pthread_mutex_t process_lock;	// for this process
                                      ucp_address_t* peer_address,
                                      ucp_ep_h *server_ep);
     ucs_status_t RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp_mem_h* memh);
-    void UCX_Put(int idx, void* loc_buff, void* rem_buf, size_t len);
-    void UCX_Get(int idx, void* loc_buff, void* rem_buf, size_t len);
+    
+    void UCX_Pack_Rkey(ucp_mem_h memh, void *rkey_buffer);
+    void UCX_Unpack_Rkey(int idx, void* rkey_buffer, ucp_rkey_h* rkey_p);
+    void UCX_Put(int idx, void* loc_buff, void* rem_buf, void* rkey_buffer, size_t len);
+    void UCX_Get(int idx, void* loc_buff, void* rem_buf, void* rkey_buffer, size_t len);
+    void UCX_Put(int idx, void* loc_buff, void* rem_buf, ucp_rkey_h rkey, size_t len);
+    void UCX_Get(int idx, void* loc_buff, void* rem_buf, ucp_rkey_h rkey, size_t len);
 
     int FindFirstAvailableQP(void);
+    void ScanLostUCX();
     void ScanNewMsg();
+    void Destroy_A_UCPWorker(int idx);
 private:
     int Init_Context(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker);
     int Init_Worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker);

@@ -14,11 +14,14 @@
 #include "corebinding.h"
 #include "fair_queue.h"
 
+#include "ucx_rma.h"
+
 extern CORE_BINDING CoreBinding;
 extern int nFSServer, mpi_rank;
 
 // defined in put_get_server.cpp
 extern SERVER_QUEUEPAIR Server_qp;
+extern SERVER_RDMA Server_ucx;
 
 
 int active_prob=0;	// the index of active probability set. Only can be 0 or 1. ^ 1 to flip it. 
@@ -41,7 +44,7 @@ long int nOPs_Done[NUM_THREAD_IO_WORKER];
 std::unordered_map<int, int> uid_gid;
 
 // Current number of valid entries is nActiveJob (defined below).
-// Writes to ActiveJobList[] and nActiveJob are synchronized with lock_Modify_ActiveJob_List in qp.cpp, reads are not synchronized
+// Writes to ActiveJobList[] and nActiveJob are synchronized with lock_UCX_Modify_ActiveJob_List in ucx_rma.cpp, reads are not synchronized
 JOBREC ActiveJobList[MAX_NUM_ACTIVE_JOB];
 
 // size=nActiveJob
@@ -56,7 +59,8 @@ float ActiveJobProbability[2][MAX_NUM_ACTIVE_JOB];	// two set of list of probabl
 
 CIO_QUEUE __attribute__((aligned(64))) IO_Queue_List[MAX_NUM_QUEUE];
 __thread uint64_t rseed[2];
-__thread int idx_qp_server=0;
+// __thread int idx_qp_server=0;
+__thread int idx_ucx_server=0;
 IO_CMD_MSG __attribute__((aligned(64))) QueueMsgBuff[MAX_NUM_QUEUE*IO_QUEUE_SIZE];
 
 
@@ -67,7 +71,8 @@ struct elt_Int *elt_list_ActiveJobs = NULL;
 int *ht_table_ActiveJobs=NULL;
 
 // defined in qp.cpp, this protects ActiveJobList
-extern pthread_mutex_t lock_Modify_ActiveJob_List;
+// extern pthread_mutex_t lock_Modify_ActiveJob_List;
+extern pthread_mutex_t lock_UCX_Modify_ActiveJob_List;
 extern pthread_mutex_t *pAccess_qp0_lock;
 
 // Number of microseconds between calls to FairQueue::housekeeping().
@@ -85,24 +90,27 @@ long getTimeMicros() {
 // Send my record of job OP to rank 0
 void Upload_Job_OP_List(long int T_Upload)
 {
-	int idx_qp;
+	int idx_ucx;
 
 	if(mpi_rank == 0)	return;
 	if(nActiveJob == 0)	return;
 
-	idx_qp = 0;	// Using the first QP
-	Server_qp.pJob_OP_Send->T_op_us = T_Upload;
+	idx_ucx = 0;	// Using the first QP
+	// Server_qp.pJob_OP_Send->T_op_us = T_Upload;
+	Server_ucx.pJob_OP_Send->T_op_us = T_Upload;
+	// if(Server_qp.pQP_Data[idx_ucx].queue_pair == NULL)	return;
+	if(Server_ucx.pUCX_Data[idx_ucx].ucp_data_worker == NULL)	return;
 
-	if(Server_qp.pQP_Data[idx_qp].queue_pair == NULL)	return;
 
-	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
 		perror("pthread_mutex_lock");
 		exit(2);
 	}
 
-	Server_qp.IB_Put(idx_qp, (void*)Server_qp.pJob_OP_Send, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pJob_OP_Recv), Server_qp.pQP_Data[idx_qp].rem_key, sizeof(JOB_OP_REC)*(nActiveJob+1));
+	// Server_qp.IB_Put(idx_ucx, (void*)Server_qp.pJob_OP_Send, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pJob_OP_Recv), Server_qp.pQP_Data[idx_qp].rem_key, sizeof(JOB_OP_REC)*(nActiveJob+1));
+	Server_ucx.UCX_Put(idx_ucx, (void*)Server_ucx.pJob_OP_Send, (void*)(Server_ucx.pJob_OP_Recv), Server_ucx.pUCX_Data[idx_ucx].rkey, sizeof(JOB_OP_REC)*(nActiveJob+1));
 
-	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
 		perror("pthread_mutex_unlock");
 		exit(2);
 	}
@@ -124,27 +132,30 @@ int Query_JobID(int job_id, JOB_OP_SEND *pJobList)
 
 void Download_Scaling_Factors(long int T_Download)
 {
-	int idx_qp, nBytesExpected;
+	int idx_ucx, nBytesExpected;
 
 	if(mpi_rank == 0)	return;
 
-	idx_qp = 0;	// Using the first QP
+	idx_ucx = 0;	// Using the first QP
 
-	if(Server_qp.pQP_Data[idx_qp].queue_pair == NULL)	return;
-
-	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+	// if(Server_qp.pQP_Data[idx_ucx].queue_pair == NULL)	return;
+	if(Server_ucx.pUCX_Data[idx_ucx].ucp_data_worker == NULL)	return;
+	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
 		perror("pthread_mutex_lock");
 		exit(2);
 	}
 
-	Server_qp.IB_Get(idx_qp, (void*)Server_qp.pJobScale_Local, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pJobScale_Remote), Server_qp.pQP_Data[idx_qp].rem_key, N_BYTE_READ_SCALING);
-	nBytesExpected = sizeof(int)*4 + Server_qp.pJobScale_Local->nActiveJob*sizeof(int)*2;
+	// Server_qp.IB_Get(idx_ucx, (void*)Server_qp.pJobScale_Local, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pJobScale_Remote), Server_qp.pQP_Data[idx_qp].rem_key, N_BYTE_READ_SCALING);
+	Server_ucx.UCX_Get(idx_ucx, (void*)Server_ucx.pJobScale_Local,  (void*)(Server_ucx.pJobScale_Remote), Server_ucx.pUCX_Data[idx_ucx].rkey, N_BYTE_READ_SCALING);
+	nBytesExpected = sizeof(int)*4 + Server_ucx.pJobScale_Local->nActiveJob*sizeof(int)*2;
 	if(nBytesExpected > N_BYTE_READ_SCALING)	{
-		Server_qp.IB_Get(idx_qp, (void*)((char*)(Server_qp.pJobScale_Local) + N_BYTE_READ_SCALING), Server_qp.mr_shm_global->lkey, 
-			(void*)((char*)(Server_qp.pJobScale_Remote) + N_BYTE_READ_SCALING), Server_qp.pQP_Data[idx_qp].rem_key, nBytesExpected-N_BYTE_READ_SCALING);
+		/*Server_qp.IB_Get(idx_ucx, (void*)((char*)(Server_qp.pJobScale_Local) + N_BYTE_READ_SCALING), Server_qp.mr_shm_global->lkey, 
+			(void*)((char*)(Server_qp.pJobScale_Remote) + N_BYTE_READ_SCALING), Server_qp.pQP_Data[idx_ucx].rem_key, nBytesExpected-N_BYTE_READ_SCALING);*/
+		Server_ucx.UCX_Get(idx_ucx, (void*)((char*)(Server_ucx.pJobScale_Local) + N_BYTE_READ_SCALING),
+			(void*)((char*)(Server_ucx.pJobScale_Remote) + N_BYTE_READ_SCALING), Server_ucx.pUCX_Data[idx_ucx].rkey, nBytesExpected-N_BYTE_READ_SCALING);
 	}
 
-	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_qp])) != 0) {
+	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
 		perror("pthread_mutex_unlock");
 		exit(2);
 	}
@@ -162,17 +173,18 @@ void Sum_OP_Done_All_Servers(long int T_Download)
 	JobList.nActiveJob = 0;
 
 	for(idx_server=0; idx_server<nFSServer; idx_server++)	{
-		nJob_Local = Server_qp.pJob_OP_Recv[idx_server].nActiveJob;
+		nJob_Local = Server_ucx.pJob_OP_Recv[idx_server].nActiveJob;
 		for(idx_job=0; idx_job<nJob_Local; idx_job++)	{
-			idx = Query_JobID(Server_qp.pJob_OP_Recv[idx_server].Job_Op[idx_job].jobid, &JobList);
-			printf("DBG> %d nOPs_Done = %ld\n", idx_server, Server_qp.pJob_OP_Recv[idx_server].Job_Op[idx_job].nOps_Done);
+			// idx = Query_JobID(Server_qp.pJob_OP_Recv[idx_server].Job_Op[idx_job].jobid, &JobList);
+			idx = Query_JobID(Server_ucx.pJob_OP_Recv[idx_server].Job_Op[idx_job].jobid, &JobList);
+			printf("DBG> %d nOPs_Done = %ld\n", idx_server, Server_ucx.pJob_OP_Recv[idx_server].Job_Op[idx_job].nOps_Done);
 			if(idx >=0)	{	// found 
-				JobList.Job_Op[idx].nOps_Done += ( Server_qp.pJob_OP_Recv[idx_server].Job_Op[idx_job].nOps_Done );
+				JobList.Job_Op[idx].nOps_Done += ( Server_ucx.pJob_OP_Recv[idx_server].Job_Op[idx_job].nOps_Done );
 			}
 			else	{	// Not found. Append this record. 
-				JobList.Job_Op[JobList.nActiveJob].jobid = Server_qp.pJob_OP_Recv[idx_server].Job_Op[idx_job].jobid;
-				JobList.Job_Op[JobList.nActiveJob].nnode = Server_qp.pJob_OP_Recv[idx_server].Job_Op[idx_job].nnode;
-				JobList.Job_Op[JobList.nActiveJob].nOps_Done = Server_qp.pJob_OP_Recv[idx_server].Job_Op[idx_job].nOps_Done;
+				JobList.Job_Op[JobList.nActiveJob].jobid = Server_ucx.pJob_OP_Recv[idx_server].Job_Op[idx_job].jobid;
+				JobList.Job_Op[JobList.nActiveJob].nnode = Server_ucx.pJob_OP_Recv[idx_server].Job_Op[idx_job].nnode;
+				JobList.Job_Op[JobList.nActiveJob].nOps_Done = Server_ucx.pJob_OP_Recv[idx_server].Job_Op[idx_job].nOps_Done;
 				JobList.nActiveJob++;
 			}
 		}
@@ -185,8 +197,8 @@ void Sum_OP_Done_All_Servers(long int T_Download)
 	printf("DBG> nOP_Done_Total = %ld\n", nOP_Done_Total);
 
 
-	if(nOP_Done_Total < N_OP_DONE_THRESHOLD)	Server_qp.pJobScale_Remote->nActiveJob = 0;
-	Server_qp.pJobScale_Remote->nActiveJob = JobList.nActiveJob;
+	if(nOP_Done_Total < N_OP_DONE_THRESHOLD)	Server_ucx.pJobScale_Remote->nActiveJob = 0;
+	Server_ucx.pJobScale_Remote->nActiveJob = JobList.nActiveJob;
 
 	for(idx_job=0; idx_job<JobList.nActiveJob; idx_job++)	{
 //		if(JobList.Job_Op[idx_job].nOps_Done == 0)	{
@@ -194,14 +206,14 @@ void Sum_OP_Done_All_Servers(long int T_Download)
 //		}
 		JobList.Job_Op[idx_job].nOps_Done++;	// Make sure it is larger than zero
 
-		Server_qp.pJobScale_Remote->Job_Scale[idx_job].jobid = JobList.Job_Op[idx_job].jobid;
+		Server_ucx.pJobScale_Remote->Job_Scale[idx_job].jobid = JobList.Job_Op[idx_job].jobid;
 		scale = (float)( 1.0 * JobList.Job_Op[idx_job].nnode * nOP_Done_Total/(JobList.Job_Op[idx_job].nOps_Done*nNode_Total) );
 		scale = MIN(scale, nFSServer*1.0);
 		if(JobList.Job_Op[idx_job].nOps_Done < N_OP_DONE_THRESHOLD)	{	// Not an active job on this node
 			scale = PROB_LOWWER_BOUND;
 		}
-		Server_qp.pJobScale_Remote->Job_Scale[idx_job].scale = scale;
-		printf("DBG> s[%d] = %lf %d %d %ld %ld\n", idx_job, Server_qp.pJobScale_Remote->Job_Scale[idx_job].scale, JobList.Job_Op[idx_job].nnode, nNode_Total, 
+		Server_ucx.pJobScale_Remote->Job_Scale[idx_job].scale = scale;
+		printf("DBG> s[%d] = %lf %d %d %ld %ld\n", idx_job, Server_ucx.pJobScale_Remote->Job_Scale[idx_job].scale, JobList.Job_Op[idx_job].nnode, nNode_Total, 
 			nOP_Done_Total, JobList.Job_Op[idx_job].nOps_Done);
 	}
 
@@ -217,8 +229,8 @@ void Init_ActiveJobList(void)
 
 	memset(ActiveJobList, 0, sizeof(JOBREC)*MAX_NUM_ACTIVE_JOB);
 
-	if(pthread_mutex_init(&lock_Modify_ActiveJob_List, NULL) != 0) { 
-		printf("\n mutex lock init failed for lock_Modify_ActiveJob_List in Init_ActiveJobList()\n"); 
+	if(pthread_mutex_init(&lock_UCX_Modify_ActiveJob_List, NULL) != 0) { 
+		printf("\n mutex lock init failed for lock_UCX_Modify_ActiveJob_List in Init_ActiveJobList()\n"); 
 		exit(1);
 	}
 	for(i=0; i<MAX_NUM_ACTIVE_JOB; i++)	{
@@ -277,9 +289,9 @@ float Query_Scaling_Factor(int jobid)
 {
 	int i;
 
-	for(i=0; i<Server_qp.pJobScale_Local->nActiveJob; i++)	{
-		if(Server_qp.pJobScale_Local->Job_Scale[i].jobid == jobid)	{
-			return Server_qp.pJobScale_Local->Job_Scale[i].scale;
+	for(i=0; i<Server_ucx.pJobScale_Local->nActiveJob; i++)	{
+		if(Server_ucx.pJobScale_Local->Job_Scale[i].jobid == jobid)	{
+			return Server_ucx.pJobScale_Local->Job_Scale[i].scale;
 		}
 	}
 	return 1.0f;
@@ -292,13 +304,13 @@ void Scale_Probability_List(void)
 	long int nOP_Done_Sum=0;
 
 	if(nActiveJob == 0)	return;
-	if(Server_qp.pJobScale_Remote == NULL)	return;
+	if(Server_ucx.pJobScale_Remote == NULL)	return;
 
 	new_active_prob = active_prob ^ 1;	// flip
 	pJobProb = ActiveJobProbability[new_active_prob];
 
 	for(i=0; i<nActiveJob; i++)	{
-		Server_qp.pJobScale_Local->Job_Scale[i].scale;
+		Server_ucx.pJobScale_Local->Job_Scale[i].scale;
 //		pJobProb[i] = ActiveJobList[IdxJobRecList[i].idx_rec_ht].nnode;
 		printf("rank = %d s[%d] = %lf\n", mpi_rank, i, Query_Scaling_Factor(IdxJobRecList[i].jobid));
 		pJobProb[i] = (ActiveJobList[IdxJobRecList[i].idx_rec_ht].nnode * Query_Scaling_Factor(IdxJobRecList[i].jobid));
@@ -318,11 +330,11 @@ void Scale_Probability_List(void)
 		printf("INFO> jobid %d nnode %d %6.3lf\n", ActiveJobList[IdxJobRecList[i].idx_rec_ht].jobid, ActiveJobList[IdxJobRecList[i].idx_rec_ht].nnode, pJobProb[i]);
 	}
 
-	Server_qp.pJob_OP_Send->nActiveJob = nActiveJob;
+	Server_ucx.pJob_OP_Send->nActiveJob = nActiveJob;
 	for(i=0; i<nActiveJob; i++)	{
-		Server_qp.pJob_OP_Send->Job_Op[i].jobid = ActiveJobList[i].jobid;
-		Server_qp.pJob_OP_Send->Job_Op[i].nnode = ActiveJobList[i].nnode;
-		Server_qp.pJob_OP_Send->Job_Op[i].nOps_Done = 0;	// recount from 0
+		Server_ucx.pJob_OP_Send->Job_Op[i].jobid = ActiveJobList[i].jobid;
+		Server_ucx.pJob_OP_Send->Job_Op[i].nnode = ActiveJobList[i].nnode;
+		Server_ucx.pJob_OP_Send->Job_Op[i].nOps_Done = 0;	// recount from 0
 	}
 
 	active_prob ^= 1;
@@ -331,7 +343,7 @@ void Scale_Probability_List(void)
 void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id)
 {
 	int i;
-	JOB_OP_SEND *pJob_OP = Server_qp.pJob_OP_Send;
+	JOB_OP_SEND *pJob_OP = Server_ucx.pJob_OP_Send;
 	JOB_OP_REC *pJob_Done = pJob_OP->Job_Op;
 
 	ActiveJobList[idx_rec].jobid = jobid;
@@ -356,7 +368,7 @@ void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id)
 		pJob_Done[i].nOps_Done = 0;	// recount from 0
 	}
 	if(mpi_rank == 0)	{
-		Server_qp.pJobScale_Remote->nActiveJob = 0;
+		Server_ucx.pJobScale_Remote->nActiveJob = 0;
 	}
 
 	// Query gid for this user
@@ -439,11 +451,11 @@ void* Func_thread_IO_Worker_LeiSizeFair(void *pParam)	// process all IO wrok
 	long int T_Start_us, T_Now, T_Upload, T_Download, T_Sum;
 	struct timeval tm;
 
-	while(! Server_qp.pJobScale_Remote)	{
+	while(! Server_ucx.pJobScale_Remote)	{
 	}
 	sleep(1);
 
-	T_Start_us = Server_qp.T_Start_us;
+	T_Start_us = Server_ucx.T_Start_us;
 	T_Download = T_Start_us;
 	T_Upload = T_Download + T_FOR_UPLOAD;
 	T_Sum = T_Download + T_FOR_SUM;
@@ -501,7 +513,7 @@ void* Func_thread_IO_Worker_LeiSizeFair(void *pParam)	// process all IO wrok
 
 				Op_Msg.tid = thread_id;
 				
-				if (pthread_mutex_lock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
+				if (pthread_mutex_lock(&(Server_ucx.pUCX_Data[Op_Msg.idx_qp].ucx_lock)) != 0) {
 					perror("pthread_mutex_lock");
 					exit(2);
 				}
@@ -509,7 +521,7 @@ void* Func_thread_IO_Worker_LeiSizeFair(void *pParam)	// process all IO wrok
 				Process_One_IO_OP(&Op_Msg);// Do the real IO work!
 				nOPs_Done[thread_id]++;
 				
-				if (pthread_mutex_unlock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
+				if (pthread_mutex_unlock(&(Server_ucx.pUCX_Data[Op_Msg.idx_qp].ucx_lock)) != 0) {
 					perror("pthread_mutex_unlock");
 					exit(2);
 				}
@@ -628,10 +640,10 @@ void* Func_thread_IO_Worker_LeiSizeFair(void *pParam)	// process all IO wrok
 			}
 			//memcpy(&Op_Msg, pOP_Msg_Retrieve, sizeof(IO_CMD_MSG));
 			fetch_and_add((int*)&(ActiveJobList[Op_Msg.idx_JobRec].nOps_Done), 1);
-			fetch_and_add((int*)&(Server_qp.pJob_OP_Send->Job_Op[idx_job].nOps_Done), 1);
+			fetch_and_add((int*)&(Server_ucx.pJob_OP_Send->Job_Op[idx_job].nOps_Done), 1);
 			Op_Msg.tid = thread_id;
 			
-			if (pthread_mutex_lock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
+			if (pthread_mutex_lock(&(Server_ucx.pUCX_Data[Op_Msg.idx_qp].ucx_lock)) != 0) {
 				perror("pthread_mutex_lock");
 				exit(2);
 			}
@@ -639,7 +651,7 @@ void* Func_thread_IO_Worker_LeiSizeFair(void *pParam)	// process all IO wrok
 			Process_One_IO_OP(&Op_Msg);// Do the real IO work!
 			nOPs_Done[thread_id]++;
 			
-			if (pthread_mutex_unlock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
+			if (pthread_mutex_unlock(&(Server_ucx.pUCX_Data[Op_Msg.idx_qp].ucx_lock)) != 0) {
 				perror("pthread_mutex_unlock");
 				exit(2);
 			}
@@ -668,8 +680,13 @@ static void Inter_server_communication_loop(int thread_id, CIO_QUEUE *queue) {
 
 		msg.tid = thread_id;
 				
-		pthread_mutex_t *qp_lock = &Server_qp.pQP_Data[msg.idx_qp].qp_lock;
-		if (pthread_mutex_lock(qp_lock)) {
+		// pthread_mutex_t *qp_lock = &Server_qp.pQP_Data[msg.idx_qp].qp_lock;
+		// if (pthread_mutex_lock(qp_lock)) {
+		// 	perror("pthread_mutex_lock");
+		// 	exit(2);
+		// }
+		pthread_mutex_t *ucx_lock = &Server_ucx.pUCX_Data[msg.idx_qp].ucx_lock;
+		if (pthread_mutex_lock(ucx_lock)) {
 			perror("pthread_mutex_lock");
 			exit(2);
 		}
@@ -677,7 +694,7 @@ static void Inter_server_communication_loop(int thread_id, CIO_QUEUE *queue) {
 		Process_One_IO_OP(&msg);	// Do the real IO work!
 		nOPs_Done[thread_id]++;
 				
-		if (pthread_mutex_unlock(qp_lock)) {
+		if (pthread_mutex_unlock(ucx_lock)) {
 			perror("pthread_mutex_unlock");
 			exit(2);
 		}
@@ -720,7 +737,7 @@ void fairQueueWorker(int thread_id) {
 	
 	IO_CMD_MSG msg;
 	JobInfoLookup job_info_lookup(ActiveJobList, &nActiveJob);
-	FairQueue fair_queue(Server_qp.fairness_mode, mpi_rank, thread_id, job_info_lookup, MAX_JOB_IDLE_SEC);
+	FairQueue fair_queue(Server_ucx.fairness_mode, mpi_rank, thread_id, job_info_lookup, MAX_JOB_IDLE_SEC);
 	int pending_count = 0;
 
 	// Call FairQueue::housekeeping() at regular intervals.
@@ -771,8 +788,8 @@ void fairQueueWorker(int thread_id) {
 		// per-job counter
 		fetch_and_add((int*)&(ActiveJobList[msg.idx_JobRec].nOps_Done), 1);
 		
-		pthread_mutex_t *qp_lock = &Server_qp.pQP_Data[msg.idx_qp].qp_lock;
-		if (pthread_mutex_lock(qp_lock)) {
+		pthread_mutex_t *ucx_lock = &Server_ucx.pUCX_Data[msg.idx_qp].ucx_lock;
+		if (pthread_mutex_lock(ucx_lock)) {
 			perror("pthread_mutex_lock");
 			exit(2);
 		}
@@ -783,7 +800,7 @@ void fairQueueWorker(int thread_id) {
 		// per-thread counter
 		nOPs_Done[thread_id]++;
 
-		if (pthread_mutex_unlock(qp_lock)) {
+		if (pthread_mutex_unlock(ucx_lock)) {
 			perror("pthread_mutex_unlock");
 			exit(2);
 		}
@@ -893,10 +910,10 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 	const int thread_id = *((int*)pParam);
 
 	CoreBinding.Bind_This_Thread();
-	idx_qp_server = thread_id % NUM_THREAD_IO_WORKER_INTER_SERVER;
+	idx_ucx_server = thread_id % NUM_THREAD_IO_WORKER_INTER_SERVER;
 
 	if (thread_id == 0) {
-		printf("INFO> fairness policy: %s\n", ServerOptions::fairnessModeToString(Server_qp.fairness_mode));
+		printf("INFO> fairness policy: %s\n", ServerOptions::fairnessModeToString(Server_ucx.fairness_mode));
 	}
 
 	// the first few threads are dedicated for inter-server communication via queue[0]
@@ -904,7 +921,7 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 		printf("DBG> FairQueue thread_id %d inter-server-queue %d\n", thread_id, thread_id);
 		Inter_server_communication_loop(thread_id, &(IO_Queue_List[thread_id]));
 	} else {
-    fairQueueWorker(thread_id);
+    	fairQueueWorker(thread_id);
     // fairQueueWorker_TimeSharing(thread_id);
 	}
 
@@ -924,7 +941,7 @@ void* Func_thread_IO_Worker_FIFO(void *pParam)	// process all IO wrok
 	thread_id = *((int*)pParam);
 	printf("DBG> Func_thread_IO_Worker_FIFO(): thread_id = %d\n", thread_id);
 	CoreBinding.Bind_This_Thread();
-	idx_qp_server = thread_id % NUM_THREAD_IO_WORKER_INTER_SERVER;
+	idx_ucx_server = thread_id % NUM_THREAD_IO_WORKER_INTER_SERVER;
 
 	gettimeofday(&tm, NULL);
 	rseed[0] = tm.tv_sec;
@@ -941,7 +958,11 @@ void* Func_thread_IO_Worker_FIFO(void *pParam)	// process all IO wrok
 					fetch_and_add((int*)&(ActiveJobList[Op_Msg.idx_JobRec].nOps_Done), 1);
 					Op_Msg.tid = thread_id;
 					
-					if (pthread_mutex_lock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
+					// if (pthread_mutex_lock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
+					// 	perror("pthread_mutex_lock");
+					// 	exit(2);
+					// }
+					if (pthread_mutex_lock(&(Server_ucx.pUCX_Data[Op_Msg.idx_qp].ucx_lock)) != 0) {
 						perror("pthread_mutex_lock");
 						exit(2);
 					}
@@ -949,10 +970,16 @@ void* Func_thread_IO_Worker_FIFO(void *pParam)	// process all IO wrok
 					Process_One_IO_OP(&Op_Msg);	// Do the real IO work!
 					nOPs_Done[thread_id]++;
 					
-					if (pthread_mutex_unlock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
+
+					if (pthread_mutex_unlock(&(Server_ucx.pUCX_Data[Op_Msg.idx_qp].ucx_lock)) != 0) {
 						perror("pthread_mutex_unlock");
 						exit(2);
 					}
+					
+					// if (pthread_mutex_unlock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
+					// 	perror("pthread_mutex_unlock");
+					// 	exit(2);
+					// }
 				}
 			}
 		}
@@ -983,7 +1010,7 @@ void* Func_thread_IO_Worker_FIFO(void *pParam)	// process all IO wrok
 						pIO_Queue->Dequeue(&Op_Msg);
 						Op_Msg.tid = thread_id;
 						
-						if (pthread_mutex_lock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
+						if (pthread_mutex_lock(&(Server_ucx.pUCX_Data[Op_Msg.idx_qp].ucx_lock)) != 0) {
 							perror("pthread_mutex_lock");
 							exit(2);
 						}
@@ -991,7 +1018,7 @@ void* Func_thread_IO_Worker_FIFO(void *pParam)	// process all IO wrok
 						Process_One_IO_OP(&Op_Msg);	// Do the real IO work!
 						nOPs_Done[thread_id]++;
 						
-						if (pthread_mutex_unlock(&(Server_qp.pQP_Data[Op_Msg.idx_qp].qp_lock)) != 0) {
+						if (pthread_mutex_unlock(&(Server_ucx.pUCX_Data[Op_Msg.idx_qp].ucx_lock)) != 0) {
 							perror("pthread_mutex_unlock");
 							exit(2);
 						}
@@ -1007,7 +1034,10 @@ void* Func_thread_IO_Worker_FIFO(void *pParam)	// process all IO wrok
 // IO worker thread, either fair or FIFO
 void* Func_thread_IO_Worker(void *pParam)
 {
-	if(Server_qp.fairness_mode == FIFO)	{
+	// if(Server_qp.fairness_mode == FIFO)	{
+	// 	return Func_thread_IO_Worker_FIFO(pParam);
+	// }
+	if(Server_ucx.fairness_mode == FIFO)	{
 		return Func_thread_IO_Worker_FIFO(pParam);
 	}
 
