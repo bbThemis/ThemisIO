@@ -109,6 +109,8 @@ void SERVER_RDMA::Init_Server_UCX_Env(int remote_buff_size) {
         Init_Worker(ucp_main_context, &ucp_data_worker[i]);
 		assert(ucp_data_worker[i] != NULL);
 	}
+
+	fprintf(stdout, "DBG> Init_Server_UCX_Env successfully\n");
     
 }
 
@@ -873,6 +875,7 @@ void SERVER_RDMA::Init_Server_Memory(int max_num_qp, int port) {
     assert(rkey_buffer != NULL);
     assert(rkey_buffer_size <= MAX_UCP_RKEY_SIZE);
     assert(status == UCS_OK);
+	fprintf(stdout, "DBG> Init_Server_Memory successfully\n");
 }
 
 ucs_status_t SERVER_RDMA::RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp_mem_h* memh) {

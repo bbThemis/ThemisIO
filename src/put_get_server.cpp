@@ -192,6 +192,7 @@ void Setup_QP_Among_Servers(void)
 }
 
 void Setup_UCX_Among_Servers(void) {
+	fprintf(stdout, "DBG> Setup_UCX_Among_Servers begin\n");
 	int i, j, idx;
 
 	pUCX_RMA_Inter_FS = (UCX_RMA_SETUP_DATA *)malloc(sizeof(UCX_RMA_SETUP_DATA)*nFSServer*NUM_THREAD_IO_WORKER_INTER_SERVER);
@@ -481,6 +482,9 @@ static void* Func_thread_ucx_server(void *pParam) {
 	pServer_ucx->Init_Server_UCX_Env(DEFAULT_REM_BUFF_SIZE);
 	pServer_ucx->Init_Server_Memory(2048, ThisNode.ucx_port);
 	
+	Init_ActiveJobList();
+	Init_QueueList();
+
 	for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
 		IO_Worker_tid_List[i] = i;
 		if(pthread_create(&(pthread_IO_Worker_UCX[i]), NULL, Func_thread_IO_Worker, &(IO_Worker_tid_List[i]))) {
@@ -659,9 +663,9 @@ int main(int argc, char **argv)
         perror("Error: sigaction");
        exit(1);
     }
-        if( (old_action.sa_handler != SIG_DFL) && (old_action.sa_handler != SIG_IGN) )  {
-                org_int = old_action.sa_sigaction;
-        }
+    if( (old_action.sa_handler != SIG_DFL) && (old_action.sa_handler != SIG_IGN) )  {
+            org_int = old_action.sa_sigaction;
+    }
 
 
 	CoreBinding.Init_Core_Binding();

@@ -661,8 +661,9 @@ void* Func_thread_IO_Worker_LeiSizeFair(void *pParam)	// process all IO wrok
 
 
 static void Inter_server_communication_loop(int thread_id, CIO_QUEUE *queue) {
+	
 	IO_CMD_MSG msg;
-
+	fprintf(stdout, "DBG> Inter_server_communication_loop %d\n", mpi_rank);
 	while(1)	{
 		if (queue->Dequeue(&msg)) {
 			// queue was empty. wait for a little bit without burning CPU time or descheduling this thread
@@ -685,7 +686,9 @@ static void Inter_server_communication_loop(int thread_id, CIO_QUEUE *queue) {
 		// 	perror("pthread_mutex_lock");
 		// 	exit(2);
 		// }
+		// fprintf(stdout, "Inter_server_communication_loop %d before ucx_lock %d\n", mpi_rank, msg.idx_qp);
 		pthread_mutex_t *ucx_lock = &Server_ucx.pUCX_Data[msg.idx_qp].ucx_lock;
+		
 		if (pthread_mutex_lock(ucx_lock)) {
 			perror("pthread_mutex_lock");
 			exit(2);
@@ -733,7 +736,7 @@ void fairQueueWorker(int thread_id) {
 		IdxMax = offset + (worker_id+1) * n_queues / n_threads - 1;
 	}
 
-	printf("DBG> FairQueue rank %d thread_id %d queues %d..%d (count=%d)\n", mpi_rank, thread_id, IdxMin, IdxMax, IdxMax-IdxMin+1);
+	
 	
 	IO_CMD_MSG msg;
 	JobInfoLookup job_info_lookup(ActiveJobList, &nActiveJob);
@@ -742,7 +745,7 @@ void fairQueueWorker(int thread_id) {
 
 	// Call FairQueue::housekeeping() at regular intervals.
 	long next_housekeeping_time = getTimeMicros() + FAIRQUEUE_HOUSEKEEPING_FREQ_MICROS;
-
+	printf("DBG> FairQueue rank %d thread_id %d queues %d..%d (count=%d)\n", mpi_rank, thread_id, IdxMin, IdxMax, IdxMax-IdxMin+1);
 	while(1)	{	// loop forever
 		long now = getTimeMicros();
 		if (now > next_housekeeping_time) {
@@ -918,7 +921,7 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 
 	// the first few threads are dedicated for inter-server communication via queue[0]
 	if (thread_id < NUM_THREAD_IO_WORKER_INTER_SERVER)	{
-		printf("DBG> FairQueue thread_id %d inter-server-queue %d\n", thread_id, thread_id);
+		printf("DBG> FairQueue %d thread_id %d inter-server-queue %d\n", mpi_rank, thread_id, thread_id);
 		Inter_server_communication_loop(thread_id, &(IO_Queue_List[thread_id]));
 	} else {
     	fairQueueWorker(thread_id);
@@ -1289,7 +1292,7 @@ void CIO_QUEUE::Enqueue(IO_CMD_MSG *pOp_Msg)
 int CIO_QUEUE::Dequeue(IO_CMD_MSG *pOp_Msg)	// 1 - Queue is empty, 0 - Success. 
 {
 	IO_CMD_MSG *pMsg;
-		
+	// fprintf(stdout, "CIO_QUEUE::Dequeue\n");
 	if (pthread_mutex_lock(&lock) != 0) {
 		perror("pthread_mutex_lock");
 		exit(2);

@@ -422,7 +422,7 @@ int CLIENT_UCX::UCX_Put(void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t le
     }
 	nPut++;
 	if(req == NULL) {
-		// fprintf(stdout, "DBG> UCX_Put returns immediately\n");
+		fprintf(stdout, "DBG> UCX_Put returns immediately\n");
 		nPut_Done +=1;
 	}
 	if( (nPut - nPut_Done) >= UCX_QUEUE_SIZE ) {
@@ -466,7 +466,7 @@ int CLIENT_UCX::UCX_Get(void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t le
     }
 	nGet++;
 	if(req == NULL) {
-		// fprintf(stdout, "DBG> UCX_Get returns immediately\n");
+		fprintf(stdout, "DBG> UCX_Get returns immediately\n");
 		nGet_Done +=1;
 	}
 	if( (nGet - nGet_Done) >= UCX_QUEUE_SIZE ) {
