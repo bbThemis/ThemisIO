@@ -539,13 +539,22 @@ int main(int argc, char **argv) {
 		string tag;
 		if (opt.tag.size() > 0) tag = "." + opt.tag;
 
+    long user_id = getuid();
+    const char *fake_user_id = getenv("THEMIS_FAKE_USERID");
+    if (fake_user_id)
+      sscanf(fake_user_id, "%ld", &user_id);
+
 		char job_id[100] = {0};
 		const char *slurm_jobid = getenv("SLURM_JOBID");
 		if (slurm_jobid && strlen(slurm_jobid) < 50)
 			snprintf(job_id, sizeof job_id, " jobid=%s", slurm_jobid);
 
+    const char *fake_job_id = getenv("THEMIS_FAKE_JOBID");
+    if (fake_job_id)
+      snprintf(job_id, sizeof job_id, " jobid=%s", fake_job_id);
+
 		printf("rw_speed%s time=%s nn=%d np=%d user=%ld%s mbps=%.3f mbps_rank_stddev=%.3f mbps_1sec_time_slices=%s\n",
-					 tag.c_str(), timestamp(0).c_str(), node_count, np, (long)getuid(), job_id, total_mbps, mbps_rank_stddev,
+					 tag.c_str(), timestamp(0).c_str(), node_count, np, user_id, job_id, total_mbps, mbps_rank_stddev,
 					 io_over_time.toString().c_str());
 	}
 

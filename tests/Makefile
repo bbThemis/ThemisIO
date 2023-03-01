@@ -31,7 +31,7 @@ common.o: common.cpp common.h
 	$(CXX) -c $<
 
 fs_variability: fs_variability.cpp common.o lustre_wrapper.o
-	$(CXX) $^ -o $@
+	$(CXX) $^ $(LUSTRE_LIB) -o $@
 
 clean:
 	rm -f $(EXECS) *.o *.so *~

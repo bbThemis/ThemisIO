@@ -1,5 +1,6 @@
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
-
+#endif
 #include <sched.h>
 #include <sys/sysinfo.h>
 #include <stdio.h>
