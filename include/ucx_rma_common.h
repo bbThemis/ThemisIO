@@ -4,8 +4,8 @@
 #include <ucp/api/ucp_def.h>
 #include <uct/api/uct.h>
 
-#define MAX_UCP_RKEY_SIZE (50)
-#define MAX_UCP_ADDR_LEN (250)
+#define MAX_UCP_RKEY_SIZE (150)
+#define MAX_UCP_ADDR_LEN (450)
 
 #define T_FREQ_ALARM_HB			(1500000)	// update every 15 seconds
 

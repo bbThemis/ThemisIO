@@ -394,6 +394,7 @@ inline int Wait_For_IO_Request_Result(int Tag_Magic, RW_FUNC_RETURN *pIO_Result)
 		gettimeofday(&tm2, NULL);
 		t2_ms = (tm2.tv_sec * 1000) + (tm2.tv_usec / 1000);
 		if( (t2_ms - t1_ms) > UCX_WAIT_RESULT_TIMEOUT_MS )	{
+			printf("DBG> Timeout[nDataSize]. pid = %d on %s\n", getpid());
 			return 1;	// time out
 		}
 	}
@@ -406,6 +407,7 @@ inline int Wait_For_IO_Request_Result(int Tag_Magic, RW_FUNC_RETURN *pIO_Result)
 		gettimeofday(&tm2, NULL);
 		t2_ms = (tm2.tv_sec * 1000) + (tm2.tv_usec / 1000);
 		if( (t2_ms - t1_ms) > UCX_WAIT_RESULT_TIMEOUT_MS )	{
+			printf("DBG> Timeout[pTag_End]. pid = %d on %s\n", getpid());
 			return 1;	// time out
 		}
 	}
@@ -1591,7 +1593,7 @@ inline void my_Adaptive_Write(int idx_ucx, void *loc_buf, void *rem_buf, ucp_rke
 	// struct ibv_mr *mr_tmp;
 	ucp_mem_h mr_tmp = NULL;
 	char *pDest;
-
+	fprintf(stdout, "my_Adaptive_Write\n");
 	if(count > MAX_SIZE_MR_BLOCK)	{	// multiple times RDMA
 		nBlocks = (count % MAX_SIZE_MR_BLOCK) ? ( (count / MAX_SIZE_MR_BLOCK) + 1) : (count / MAX_SIZE_MR_BLOCK);
 		nBlocksM1 = nBlocks - 1;
@@ -1713,6 +1715,7 @@ size_t my_write_stripe_RDMA(int fd, const char *szFileName, int server_shift, in
 	nBytes_Written = 0;
 	if(nExtraPointer == 0)	{	// a new file
 //		my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, count, (void*)((char*)pStripeDataLocal->pExtraData[idx_Block].AddressofData + (offset-pStripeDataLocal->pExtraData[idx_Block].FileOffset)));
+		fprintf(stdout, "nExtraPointer == 0 a new file\n");
 		my_Adaptive_Write(idx_ucx, loc_buf, rem_buf, rkey, count, (void*)((char*)pStripeDataLocal->pExtraData[idx_Block].AddressofData + (offset-pStripeDataLocal->pExtraData[idx_Block].FileOffset)));
 //		pStripeDataLocal->MaxDataRange = MAX(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
 //		Atomic_Increase(offset_Loc+nBytes_Written_OneTime, &(pStripeDataLocal->MaxDataRange));

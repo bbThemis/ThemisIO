@@ -108,7 +108,7 @@ public:
 	static ucs_status_t RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp_mem_h* memh);
 	int UCX_Put(void* loc_buff, void* rem_buf, ucp_rkey_h rkey, size_t len);
     int UCX_Get(void* loc_buff, void* rem_buf, ucp_rkey_h rkey, size_t len);
-
+	int UCX_Flush(ucp_worker_h ucp_worker);
 	static void UCX_Pack_Rkey(ucp_mem_h memh, void *rkey_buffer);
 };
 
@@ -405,7 +405,36 @@ ucs_status_t CLIENT_UCX::RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp_
     ucs_status_t status = ucp_mem_map(ucp_main_context, &mem_map_params, memh);
     return status;
 }
-
+int CLIENT_UCX::UCX_Flush(ucp_worker_h ucp_worker) {
+	ucp_request_param_t param;
+    memset(&param, 0, sizeof(ucp_request_param_t));
+	ucs_status_ptr_t req = ucp_worker_flush_nbx(ucp_worker, &param);
+	if(UCS_PTR_IS_ERR(req)) {
+        fprintf(stderr, "Error occured at %s:L%d. Failure: ucp_worker_flush_nbx in UCX_Flush().\n", __FILE__, __LINE__);
+		exit(1);
+    }
+	if(req == NULL) {
+		fprintf(stdout, "DBG> UCX_Flush returns immediately \n");
+	}
+	while(1) {
+		ucp_worker_progress(ucp_worker);
+		// fprintf(stdout, "DBG> UCX_Put ucs_status_ptr_t %p\n", req);
+        ucs_status_t status = ucp_request_check_status(req);
+        if(status == UCS_OK) {
+			fprintf(stdout, "DBG> UCX_Flush UCS_OK\n");
+            break;
+        }
+        else if(status == UCS_INPROGRESS) {
+        }
+        else {
+            fprintf(stderr, "ucp_worker_flush_nbx failed %s\n", ucs_status_string(status));
+//			pthread_mutex_unlock(&(pQP_Data[idx].qp_lock));
+			exit(1);
+			return 1;
+        }
+	}
+	return 1;
+}
 int CLIENT_UCX::UCX_Put(void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t len) {
 	int ne, ret;
 	// fprintf(stdout, "DBG> UCX_Put loc_buf %p rem_buf\n", loc_buf, rem_buf);
@@ -422,7 +451,7 @@ int CLIENT_UCX::UCX_Put(void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t le
     }
 	nPut++;
 	if(req == NULL) {
-		fprintf(stdout, "DBG> UCX_Put returns immediately\n");
+		fprintf(stdout, "DBG> UCX_Put returns immediately loc %p rem %p\n", loc_buf, rem_buf);
 		nPut_Done +=1;
 	}
 	if( (nPut - nPut_Done) >= UCX_QUEUE_SIZE ) {
@@ -432,7 +461,7 @@ int CLIENT_UCX::UCX_Put(void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t le
             ucs_status_t status = ucp_request_check_status(req);
             if(status == UCS_OK) {
                 nPut_Done +=1;
-				fprintf(stdout, "DBG> UCX_Put UCS_OK\n");
+				fprintf(stdout, "DBG> UCX_Put UCS_OK loc %p rem %p\n", loc_buf, rem_buf);
                 break;
             }
             else if(status == UCS_INPROGRESS) {
@@ -446,6 +475,7 @@ int CLIENT_UCX::UCX_Put(void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t le
         }
     }
 	ucx_put_get_locked = 0;
+	UCX_Flush(ucp_worker);
 	pthread_mutex_unlock(&ucx_put_get_lock);
 	
 	return 0;
@@ -456,6 +486,7 @@ int CLIENT_UCX::UCX_Get(void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t le
 	
 	if(ucp_worker == NULL)	return 1;
 	pthread_mutex_lock(&ucx_put_get_lock);
+	ucx_put_get_locked = 1;
 	ucp_request_param_t param;
     memset(&param, 0, sizeof(ucp_request_param_t));
     param.op_attr_mask = 0;
@@ -488,6 +519,7 @@ int CLIENT_UCX::UCX_Get(void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t le
         }
     }
 	ucx_put_get_locked = 0;
+	UCX_Flush(ucp_worker);
 	pthread_mutex_unlock(&ucx_put_get_lock);
 
 	return 0;

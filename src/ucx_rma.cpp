@@ -56,6 +56,8 @@ SERVER_RDMA::SERVER_RDMA(void)
         printf("\n mutex process_lock init failed\n"); 
         exit(1);
     }
+	nAllUCXNewMsg = 0;
+	nPreAllUCXNewMsg = 0;
 }
 
 SERVER_RDMA::~SERVER_RDMA(void)
@@ -168,10 +170,10 @@ ucs_status_t SERVER_RDMA::server_create_ep(ucp_worker_h data_worker,
     if (status != UCS_OK) {
         fprintf(stderr, "mpi_rank %d failed to create an endpoint on the server: (%s)\n", mpi_rank,
                 ucs_status_string(status));
-    } /*else {
-        fprintf(stdout, "mpi_rank %d succeed to create an endpoint on the server: (%s)\n", mpi_rank,
-                ucs_status_string(status));
-    }*/
+    } else {
+        fprintf(stdout, "mpi_rank %d succeed to create an endpoint on the server with client: (%s)\n", mpi_rank,
+                peer_address);
+    }
 
     return status;
 }
@@ -436,6 +438,10 @@ void SERVER_RDMA::ScanNewMsg() {
 		p_shm_IO_Cmd_Msg[idx_ucx].T_Queued = T_Queued;
 		IO_Queue_List[idx_queue].Enqueue(&(p_shm_IO_Cmd_Msg[idx_ucx]));
 	}
+	pthread_mutex_lock(&process_lock);
+	nPreAllUCXNewMsg = nAllUCXNewMsg;
+	nAllUCXNewMsg += nUCXNewMsg;
+	pthread_mutex_unlock(&process_lock);
 	nUCXNewMsg = 0;
 
 	if(IdxLastQP64 <=192)	{	// simple version
@@ -502,6 +508,11 @@ void SERVER_RDMA::ScanNewMsg() {
 		p_shm_IO_Cmd_Msg[idx_ucx].T_Queued = T_Queued;
 		IO_Queue_List[idx_queue].Enqueue(&(p_shm_IO_Cmd_Msg[idx_ucx]));
 	}
+	pthread_mutex_lock(&process_lock);
+	nAllUCXNewMsg += nUCXNewMsg;
+	if(nPreAllUCXNewMsg != nAllUCXNewMsg) fprintf(stdout, "nAllUCXNewMsg %d\n", nAllUCXNewMsg);
+	pthread_mutex_unlock(&process_lock);
+
 	// while(!tmpV.empty()) {
 	// 	IO_CMD_MSG* cur = tmpV.back();
 	// 	tmpV.pop_back();
@@ -726,12 +737,12 @@ void SERVER_RDMA::AllocateUCPDataWorker(int idx) {
     status = ucp_worker_get_address(pUCX->ucp_data_worker, &pUCX->address_p, &pUCX->address_length);
     assert(pUCX->address_length <= MAX_UCP_ADDR_LEN);
     if(status != UCS_OK) {
-        fprintf(stderr, "ucp_worker_get_address Failure: %s.\n", ucs_status_string(status));
+        fprintf(stderr, "AllocateUCPDataWorker Failure: %s.\n", ucs_status_string(status));
 		exit(1);
     } 
-    // else {
-    //     fprintf(stderr, "ucp_worker_get_address Success: %s %d\n", pUCX->address_p, pUCX->address_length);
-    // }
+    else {
+        fprintf(stdout, "mpi_rank %d idx %d: AllocateUCPDataWorker Success: %s %d\n", mpi_rank, idx, pUCX->address_p, pUCX->address_length);
+    }
 }
 
 int SERVER_RDMA::Init_Context(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker)
@@ -974,6 +985,7 @@ retry:
     pUCX_Data[idx].nPut_Get++;
 	if(req == NULL) {
 		pUCX_Data[idx].nPut_Get_Done += 1;
+		fprintf(stdout, "DBG> UCX_Put returns immediately loc %p rem %p\n", loc_buf, rem_buf);
 	}
     if( (pUCX_Data[idx].nPut_Get - pUCX_Data[idx].nPut_Get_Done) >= UCX_QUEUE_SIZE ) {
         gettimeofday(&tm1, NULL);
@@ -986,6 +998,7 @@ retry:
             ucs_status_t status = ucp_request_check_status(req);
             if(status == UCS_OK) {
                 pUCX_Data[idx].nPut_Get_Done +=1;
+				fprintf(stdout, "DBG> UCX_Put UCS_OK loc %p rem %p\n", loc_buf, rem_buf);
                 break;
             }
             else if(status == UCS_INPROGRESS) {
@@ -1002,6 +1015,38 @@ retry:
             }
         }
     }
+	UCX_Flush(ucp_data_worker);
+}
+
+int SERVER_RDMA::UCX_Flush(ucp_worker_h ucp_worker) {
+	ucp_request_param_t param;
+    memset(&param, 0, sizeof(ucp_request_param_t));
+	ucs_status_ptr_t req = ucp_worker_flush_nbx(ucp_worker, &param);
+	if(UCS_PTR_IS_ERR(req)) {
+        fprintf(stderr, "Error occured at %s:L%d. Failure: ucp_worker_flush_nbx in UCX_Flush().\n", __FILE__, __LINE__);
+		exit(1);
+    }
+	if(req == NULL) {
+		fprintf(stdout, "DBG> UCX_Flush returns immediately \n");
+	}
+	while(1) {
+		ucp_worker_progress(ucp_worker);
+		// fprintf(stdout, "DBG> UCX_Put ucs_status_ptr_t %p\n", req);
+        ucs_status_t status = ucp_request_check_status(req);
+        if(status == UCS_OK) {
+			fprintf(stdout, "DBG> UCX_Flush UCS_OK\n");
+            break;
+        }
+        else if(status == UCS_INPROGRESS) {
+        }
+        else {
+            fprintf(stderr, "ucp_worker_flush_nbx failed %s\n", ucs_status_string(status));
+//			pthread_mutex_unlock(&(pQP_Data[idx].qp_lock));
+			exit(1);
+			return 1;
+        }
+	}
+	return 1;
 }
 
 void SERVER_RDMA::UCX_Get(int idx, void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t len) {
@@ -1035,6 +1080,7 @@ retry:
     pUCX_Data[idx].nPut_Get++;
 	if(req == NULL) {
 		pUCX_Data[idx].nPut_Get_Done += 1;
+		fprintf(stdout, "DBG> UCX_Get returns immediately loc %p rem %p\n", loc_buf, rem_buf);
 	}
     if( (pUCX_Data[idx].nPut_Get - pUCX_Data[idx].nPut_Get_Done) >= UCX_QUEUE_SIZE ) {
         gettimeofday(&tm1, NULL);
@@ -1046,6 +1092,7 @@ retry:
             ucs_status_t status = ucp_request_check_status(req);
             if(status == UCS_OK) {
                 pUCX_Data[idx].nPut_Get_Done +=1;
+				fprintf(stdout, "DBG> UCX_Put UCS_OK loc %p rem %p\n", loc_buf, rem_buf);
                 break;
             }
             else if(status == UCS_INPROGRESS) {
@@ -1055,13 +1102,14 @@ retry:
 				}
             }
             else {
-                fprintf(stderr, "ucp_get_nbx failed %s\n", ucs_status_string(status));
+                fprintf(stderr, "ucp_get_nbx failed %s loc %p rem %p\n", ucs_status_string(status), loc_buf, rem_buf);
 //				pthread_mutex_unlock(&(pQP_Data[idx].ucx_lock));
 				exit(1);
 				return;
             }
         }
     }
+	UCX_Flush(ucp_data_worker);
 }
 
 

@@ -758,7 +758,9 @@ void fairQueueWorker(int thread_id) {
 			_mm_pause();
 			continue;
 		}
-
+		// sleep(1);
+		// printf("============================================Here 1\n");
+		// fflush(stdout);
 		// move all incoming messages into fair queue object
 		for (CIO_QUEUE *queue = IO_Queue_List + IdxMin;
 				 queue <= IO_Queue_List + IdxMax;
@@ -773,7 +775,8 @@ void fairQueueWorker(int thread_id) {
 				}
 			}
 		}
-
+		// printf("============================================Here 2\n");
+		// fflush(stdout);
 		// If there is nothing to do, pause and try again
 		if (pending_count == 0) {
 			_mm_pause();
@@ -799,11 +802,12 @@ void fairQueueWorker(int thread_id) {
 		
 		Process_One_IO_OP(&msg);// Do the real IO work!
 		pending_count--;
-
 		// per-thread counter
 		nOPs_Done[thread_id]++;
 
 		if (pthread_mutex_unlock(ucx_lock)) {
+			printf("============================================Here\n");
+			fflush(stdout);
 			perror("pthread_mutex_unlock");
 			exit(2);
 		}

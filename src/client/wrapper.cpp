@@ -510,12 +510,97 @@ inline void Test_UCX_Put(int idx_fs)
 	// fprintf(stdout, "Test_UCX_Put finished\n");
 }
 
+
+
+inline void PrintIOType(IO_CMD_MSG *pIO_Cmd) {
+	int Op_Tag = pIO_Cmd->op & 0xFF;
+	switch(Op_Tag)	{
+	case RF_RW_OP_OPEN:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_OPEN\n");
+		break;
+	case RF_RW_OP_CLOSE:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_CLOSE\n");
+		break;
+	case RF_RW_OP_OPENDIR:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_OPENDIR\n");
+		break;
+	case RF_RW_OP_READ:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_READ\n");
+		break;
+	case RF_RW_OP_WRITE:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_WRITE\n");
+		break;
+	case RF_RW_OP_STAT:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_STAT\n");
+		break;
+	case RF_RW_OP_LSTAT:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_LSTAT\n");
+		break;
+	case RF_RW_OP_FSTAT:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_FSTAT\n");
+		break;
+	case RF_RW_OP_REMOVE_FILE:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_REMOVE_FILE\n");
+		break;
+	case RF_RW_OP_REMOVE_DIR:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_REMOVE_DIR\n");
+		break;
+	case RF_RW_OP_MKDIR:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_MKDIR\n");
+		break;
+	case RF_RW_OP_TRUNCATE:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_TRUNCATE\n");
+		break;
+	case RF_RW_OP_FTRUNCATE:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_FTRUNCATE\n");
+		break;
+	case RF_RW_OP_FUTIMENS:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_FUTIMENS\n");
+		break;
+	case RF_RW_OP_UTIMES:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_UTIMES\n");
+		break;
+	case RF_RW_OP_ADDENTRY_PARENT_DIR:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_ADDENTRY_PARENT_DIR\n");
+		break;
+	case RF_RW_OP_REMOVEENTRY_PARENT_DIR:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_REMOVEENTRY_PARENT_DIR\n");
+		break;
+
+	case RF_RW_OP_DIR_EXIST:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_DIR_EXIST\n");
+		break;
+	case RF_RW_OP_FREE_STRIPE_DATA:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_FREE_STRIPE_DATA\n");
+		break;
+	case RF_RW_OP_PRINT_MEM:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_PRINT_MEM\n");
+		break;
+	case RF_RW_OP_HELLO:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_HELLO\n");
+		break;
+	case RF_RW_OP_STAT_FS:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_STAT_FS\n");
+		break;
+	case RF_RW_OP_READ_DIR_ENTRIES:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_READ_DIR_ENTRIES\n");
+		break;
+	case RF_RW_OP_DISCONNECT:
+		fprintf(stdout, "DBG> PrintIOType:RF_RW_OP_DISCONNECT\n");
+		break;
+	default:
+		printf("ERROR> Unknown Op_Tag = %d in PrintIOType().\n", Op_Tag);
+		break;
+	}
+}
+
 inline void Send_IO_Request(int idx_fs)
 {
 	IO_CMD_MSG *pIO_Cmd = (IO_CMD_MSG *)ucx_loc_buff;
 	RW_FUNC_RETURN *pResult = (RW_FUNC_RETURN *)ucx_rem_buff;
 	int bTimeout;
-
+	PrintIOType(pIO_Cmd);
+	fprintf(stdout, "DBG> Send_IO_Request begins loc %p rem %p\n", pIO_Cmd, pResult);
 	while(1)	{
 		// send the IO request first
 		pIO_Cmd->tag_magic = rand();
@@ -535,6 +620,7 @@ inline void Send_IO_Request(int idx_fs)
 			break;	// NEVER send multiple RF_RW_OP_DISCONNECT command!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		}
 	}
+	fprintf(stdout, "DBG> Send_IO_Request finished loc %p rem %p\n", pIO_Cmd, pResult);
 }
 /*
 static inline int fetch_and_add(int* variable, int value)
@@ -3449,9 +3535,9 @@ inline int Wait_For_IO_Request_Result(int Tag_Magic)
 		t2_ms = (tm2.tv_sec * 1000) + (tm2.tv_usec / 1000);
 		if( (t2_ms - t1_ms) > UCX_WAIT_RESULT_TIMEOUT_MS )	{
 			gethostname(szHostName, 63);
-			printf("DBG> Timeout. pid = %d on %s\n", getpid(), szHostName);
+			printf("DBG> Timeout[nDataSize]. pid = %d on %s\n", getpid(), szHostName);
 			fflush(stdout);
-			sleep(300);
+			sleep(1);
 			return 1;	// time out
 		}
 	}
@@ -3477,7 +3563,7 @@ inline int Wait_For_IO_Request_Result(int Tag_Magic)
 		t2_ms = (tm2.tv_sec * 1000) + (tm2.tv_usec / 1000);
 		if( (t2_ms - t1_ms) > UCX_WAIT_RESULT_TIMEOUT_MS )	{
 			gethostname(szHostName, 63);
-			printf("DBG> Timeout. pid = %d on %s\n", getpid(), szHostName);
+			printf("DBG> Timeout[endTage]. pid = %d on %s\n", getpid(), szHostName);
                         fflush(stdout);
                         sleep(300);
 

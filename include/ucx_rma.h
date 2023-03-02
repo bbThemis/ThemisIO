@@ -135,12 +135,16 @@ pthread_mutex_t process_lock;	// for this process
     void UCX_Get(int idx, void* loc_buff, void* rem_buf, void* rkey_buffer, size_t len);
     void UCX_Put(int idx, void* loc_buff, void* rem_buf, ucp_rkey_h rkey, size_t len);
     void UCX_Get(int idx, void* loc_buff, void* rem_buf, ucp_rkey_h rkey, size_t len);
+    int UCX_Flush(ucp_worker_h ucp_worker);
 
     int FindFirstAvailableQP(void);
     void ScanLostUCX();
     void ScanNewMsg();
     void Destroy_A_UCPWorker(int idx);
 private:
+
+    int nAllUCXNewMsg;
+    int nPreAllUCXNewMsg;
     int Init_Context(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker);
     int Init_Worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker);
     int Get_IO_Worker_Index_from_UCX_Index(int idx_ucx);
