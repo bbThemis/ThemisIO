@@ -1,4 +1,4 @@
-TACC:  Starting up job 5250527 
+TACC:  Starting up job 5279506 
 TACC:  Starting parallel tasks... 
 DBG> Begin Init_UCX_Client()
 DBG> Begin Init_UCX_Client()
@@ -56,174 +56,526 @@ DBG> Begin Init_UCX_Client()
 DBG> Begin Init_UCX_Client()
 DBG> Begin Init_UCX_Client()
 DBG> Begin Init_UCX_Client()
-[1677086464.912146] [c206-006:128718:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086464.938638] [c206-006:128718:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.133586] [c206-006:128718:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.134015] [c206-006:128722:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.143136] [c206-006:128722:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.164038] [c206-006:128722:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.244209] [c206-006:128723:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.247585] [c206-006:128713:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.249384] [c206-006:128723:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.249757] [c206-006:128683:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.249756] [c206-006:128693:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.250279] [c206-006:128691:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.251474] [c206-006:128737:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.252535] [c206-006:128713:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.253405] [c206-006:128731:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.254308] [c206-006:128683:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.254782] [c206-006:128693:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.255093] [c206-006:128691:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.256164] [c206-006:128737:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.257956] [c206-006:128731:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.273346] [c206-006:128723:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.275120] [c206-006:128713:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.276781] [c206-006:128683:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.278058] [c206-006:128693:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.278399] [c206-006:128691:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.278611] [c206-006:128737:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.279193] [c206-006:128731:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.296389] [c206-006:128703:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.299698] [c206-006:128703:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.319714] [c206-006:128703:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.351907] [c206-006:128719:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.353358] [c206-006:128686:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.354808] [c206-006:128707:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.355801] [c206-006:128733:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.357082] [c206-006:128721:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.363606] [c206-006:128719:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.363857] [c206-006:128686:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.364881] [c206-006:128707:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.365228] [c206-006:128733:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.365784] [c206-006:128721:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.375137] [c206-006:128726:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.375942] [c206-006:128710:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.377041] [c206-006:128688:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.378091] [c206-006:128690:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.378495] [c206-006:128727:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.378811] [c206-006:128695:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.381472] [c206-006:128726:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.382856] [c206-006:128710:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.383471] [c206-006:128688:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.383908] [c206-006:128708:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.385391] [c206-006:128727:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.385491] [c206-006:128695:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.385610] [c206-006:128690:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.390044] [c206-006:128684:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.390935] [c206-006:128728:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.391302] [c206-006:128696:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.391636] [c206-006:128712:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.392700] [c206-006:128685:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.394245] [c206-006:128708:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.396187] [c206-006:128682:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.396375] [c206-006:128705:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.400222] [c206-006:128704:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.410977] [c206-006:128684:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.410979] [c206-006:128699:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.411422] [c206-006:128728:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.411598] [c206-006:128689:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.412394] [c206-006:128696:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.413315] [c206-006:128712:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.415691] [c206-006:128725:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.415798] [c206-006:128715:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.416408] [c206-006:128685:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.417361] [c206-006:128729:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.418344] [c206-006:128697:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.418424] [c206-006:128706:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.419362] [c206-006:128682:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.420088] [c206-006:128705:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.422385] [c206-006:128692:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.423074] [c206-006:128687:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.423287] [c206-006:128717:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.423927] [c206-006:128732:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.424252] [c206-006:128704:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.424265] [c206-006:128730:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.424483] [c206-006:128724:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.424731] [c206-006:128721:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.424948] [c206-006:128711:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.425067] [c206-006:128716:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.425113] [c206-006:128734:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.425114] [c206-006:128714:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.425737] [c206-006:128698:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.425964] [c206-006:128736:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.426592] [c206-006:128701:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.426659] [c206-006:128702:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.427521] [c206-006:128735:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.427636] [c206-006:128720:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.428175] [c206-006:128719:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.428504] [c206-006:128733:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.428540] [c206-006:128700:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.428647] [c206-006:128694:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.432974] [c206-006:128686:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.434384] [c206-006:128707:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.434771] [c206-006:128699:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.434895] [c206-006:128689:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.437581] [c206-006:128715:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.437689] [c206-006:128725:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.438491] [c206-006:128729:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.438919] [c206-006:128697:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.439156] [c206-006:128706:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.441036] [c206-006:128732:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.441855] [c206-006:128692:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.442000] [c206-006:128724:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.442964] [c206-006:128730:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.443424] [c206-006:128711:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.443490] [c206-006:128736:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.443612] [c206-006:128714:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.443817] [c206-006:128687:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.444288] [c206-006:128720:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.444484] [c206-006:128698:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.444974] [c206-006:128702:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.444978] [c206-006:128716:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.445175] [c206-006:128734:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.445253] [c206-006:128701:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.445485] [c206-006:128717:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.446686] [c206-006:128735:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.446697] [c206-006:128700:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.448160] [c206-006:128694:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.448860] [c206-006:128709:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.474168] [c206-006:128726:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.476696] [c206-006:128710:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.478539] [c206-006:128709:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1677086465.479943] [c206-006:128688:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.481256] [c206-006:128695:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.481799] [c206-006:128727:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.483445] [c206-006:128690:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.486904] [c206-006:128708:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.489563] [c206-006:128684:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.491766] [c206-006:128696:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.491778] [c206-006:128712:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.491844] [c206-006:128685:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.491897] [c206-006:128705:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.491899] [c206-006:128728:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.491949] [c206-006:128682:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.493346] [c206-006:128704:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.497924] [c206-006:128689:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.500057] [c206-006:128699:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.503146] [c206-006:128729:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.503209] [c206-006:128706:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.503300] [c206-006:128715:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.503329] [c206-006:128725:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.504046] [c206-006:128702:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.504090] [c206-006:128697:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.504475] [c206-006:128724:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.504621] [c206-006:128692:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.505208] [c206-006:128711:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.508314] [c206-006:128732:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.508723] [c206-006:128720:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.508953] [c206-006:128735:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.509523] [c206-006:128700:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.509806] [c206-006:128701:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.509959] [c206-006:128736:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.509994] [c206-006:128714:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.510038] [c206-006:128730:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.510088] [c206-006:128687:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.510128] [c206-006:128698:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.510155] [c206-006:128734:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.510207] [c206-006:128716:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.510245] [c206-006:128694:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.510372] [c206-006:128717:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-[1677086465.517879] [c206-006:128709:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
-rw_speed time=2023-02-22:11:21:07 np=56 nn=1 sim_nn=1 rank0host=c206-006.frontera.tacc.utexas.edu -prefix=/myfs/rw_speed -iosize=1048576 -filesize=104857600 -time=5.0 -tag=job2
-rw_speed.job2 time=2023-02-22:11:21:12 nn=1 np=56 user=102 jobid=1002 mbps=15436.678 mbps_rank_stddev=24.132 mbps_1sec_time_slices=(6191.0,13831.0,15596.0,17144.0,17462.0,54.0)
+[1677802565.356232] [c100-005:3459 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.413454] [c100-005:3563 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.417242] [c100-005:3468 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.440227] [c100-005:3459 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.441448] [c100-005:3532 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.443121] [c100-005:3527 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.443936] [c100-005:3567 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.444617] [c100-005:3487 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.445440] [c100-005:3530 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.454520] [c100-005:3576 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.456693] [c100-005:3557 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.457981] [c100-005:3454 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.460156] [c100-005:3540 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.460459] [c100-005:3563 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.460921] [c100-005:3482 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.461155] [c100-005:3570 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.461763] [c100-005:3573 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.461823] [c100-005:3468 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.462366] [c100-005:3461 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.462510] [c100-005:3528 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.462651] [c100-005:3574 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.463217] [c100-005:3564 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.463996] [c100-005:3568 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.464218] [c100-005:3532 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.464242] [c100-005:3518 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.464584] [c100-005:3566 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.464657] [c100-005:3534 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.464895] [c100-005:3516 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.465265] [c100-005:3567 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.465344] [c100-005:3479 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.466070] [c100-005:3487 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.466070] [c100-005:3530 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.466104] [c100-005:3522 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.466295] [c100-005:3536 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.466683] [c100-005:3519 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.466751] [c100-005:3575 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.466885] [c100-005:3527 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.467056] [c100-005:3460 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.467380] [c100-005:3470 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.467448] [c100-005:3513 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.467520] [c100-005:3558 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.467678] [c100-005:3455 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.467781] [c100-005:3561 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.467841] [c100-005:3471 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.467902] [c100-005:3559 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.467978] [c100-005:3457 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.468068] [c100-005:3571 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.468132] [c100-005:3562 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.468200] [c100-005:3572 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.468273] [c100-005:3547 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.468380] [c100-005:3565 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.468448] [c100-005:3556 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.468518] [c100-005:3548 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.468580] [c100-005:3458 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.468667] [c100-005:3469 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.468729] [c100-005:3555 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.468793] [c100-005:3463 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.468863] [c100-005:3537 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.468964] [c100-005:3538 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.469029] [c100-005:3544 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.469159] [c100-005:3533 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.469234] [c100-005:3462 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.469380] [c100-005:3464 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.469458] [c100-005:3569 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.479492] [c100-005:3576 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.494881] [c100-005:3557 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.501358] [c100-005:3454 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.514270] [c100-005:3540 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.516289] [c100-005:3570 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.517140] [c100-005:3482 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.520008] [c100-005:3573 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.522509] [c100-005:3528 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.523656] [c100-005:3574 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.524807] [c100-005:3461 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.525366] [c100-005:3564 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.525398] [c100-005:3522 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.525766] [c100-005:3536 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.525993] [c100-005:3534 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.526586] [c100-005:3518 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.526994] [c100-005:3566 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.527141] [c100-005:3516 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.527316] [c100-005:3568 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.528004] [c100-005:3479 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.528470] [c100-005:3460 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.528701] [c100-005:3458 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.528922] [c100-005:3561 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.528999] [c100-005:3470 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.529122] [c100-005:3548 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.529200] [c100-005:3571 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.529308] [c100-005:3519 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.529516] [c100-005:3572 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.529533] [c100-005:3457 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.529611] [c100-005:3513 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.530391] [c100-005:3556 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.530388] [c100-005:3559 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.530402] [c100-005:3538 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.530497] [c100-005:3471 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.530571] [c100-005:3555 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.530571] [c100-005:3558 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.530629] [c100-005:3565 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.530723] [c100-005:3569 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.530902] [c100-005:3533 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.530966] [c100-005:3462 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.531009] [c100-005:3455 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.531122] [c100-005:3562 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.531151] [c100-005:3463 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.531495] [c100-005:3575 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.531562] [c100-005:3547 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.531575] [c100-005:3544 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.531979] [c100-005:3537 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.532379] [c100-005:3464 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1677802565.532764] [c100-005:3469 :0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_RC_MLX5_RETRY_COUNT,UCX_UD_MLX5_TIMEOUT,UCX_RC_MLX5_TIMEOUT,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+
+Connection Failed 
+[1677802565.560365] [c100-005:3559 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.560630] [c100-005:3518 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.560768] [c100-005:3470 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.561056] [c100-005:3516 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.561074] [c100-005:3462 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.561373] [c100-005:3471 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.561571] [c100-005:3548 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.563519] [c100-005:3522 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.564383] [c100-005:3528 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.564580] [c100-005:3569 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.564789] [c100-005:3556 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.565329] [c100-005:3454 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.565723] [c100-005:3532 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.566124] [c100-005:3574 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.566333] [c100-005:3537 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.566901] [c100-005:3566 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.568401] [c100-005:3527 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.569239] [c100-005:3555 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.570165] [c100-005:3565 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.570228] [c100-005:3530 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.570469] [c100-005:3557 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.570905] [c100-005:3561 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.571041] [c100-005:3538 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.571427] [c100-005:3558 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.572341] [c100-005:3519 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.573037] [c100-005:3469 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.573292] [c100-005:3540 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.573542] [c100-005:3513 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.573964] [c100-005:3487 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.574209] [c100-005:3479 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.574307] [c100-005:3570 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.574380] [c100-005:3458 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1677802565.574524] [c100-005:3547 :0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 0 PID 3241 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 1 PID 3242 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 2 PID 3243 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 3 PID 3244 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 4 PID 3245 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 5 PID 3246 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 6 PID 3247 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 7 PID 3248 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 8 PID 3249 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 10 PID 3251 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 11 PID 3252 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 12 PID 3253 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 13 PID 3254 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 14 PID 3255 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 15 PID 3256 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 16 PID 3257 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 17 PID 3258 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 18 PID 3259 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 19 PID 3260 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 20 PID 3261 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 21 PID 3262 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 22 PID 3263 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 23 PID 3264 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 24 PID 3265 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 25 PID 3266 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 26 PID 3268 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 27 PID 3273 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 28 PID 3275 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 29 PID 3280 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 30 PID 3283 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 31 PID 3290 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 32 PID 3299 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 33 PID 3305 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 34 PID 3310 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 35 PID 3314 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 36 PID 3318 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 37 PID 3323 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 38 PID 3325 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 39 PID 3328 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 40 PID 3329 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 41 PID 3335 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 42 PID 3337 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 43 PID 3342 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 44 PID 3346 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 45 PID 3352 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 46 PID 3360 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 47 PID 3366 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 48 PID 3373 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 49 PID 3377 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 50 PID 3383 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 51 PID 3392 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 52 PID 3395 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 53 PID 3400 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 54 PID 3406 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   RANK 55 PID 3409 RUNNING AT c100-005
+=   KILLED BY SIGNAL: 9 (Killed)
+===================================================================================
+TACC:  MPI job exited with code: 255 
 TACC:  Shutdown complete. Exiting. 
