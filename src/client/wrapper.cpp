@@ -76,7 +76,7 @@ static unsigned long page_size, filter;
 
 int Get_Fd_Redirected(int fd);
 void Send_IO_Request(int idx_fs);
-int Wait_For_IO_Request_Result(int Tag_Magic);
+int Wait_For_IO_Request_Result(ucp_worker_h data_worker, int Tag_Magic);
 
 //start	to compile list of memory blocks in /proc/pid/maps
 #define MAX_NUM_SEG	(1024)
