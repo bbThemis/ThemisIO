@@ -477,9 +477,9 @@ static void* Func_thread_Polling_New_Msg(void *pParam)
 
 void* Func_thread_UCX_Worker_Progress(void* pParam) {
 	ucp_worker_h data_worker = *((ucp_worker_h*)pParam);
-	// while(true) {
-	// 	ucp_worker_progress(data_worker);
-	// }
+	while(true) {
+		ucp_worker_progress(data_worker);
+	}
 	return NULL;
 }
 
