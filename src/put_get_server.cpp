@@ -45,6 +45,8 @@ extern LISTJOBREC IdxJobRecList[MAX_NUM_ACTIVE_JOB];
 // extern pthread_t pthread_preallocate[N_THREAD_PREALLOCATE_QP];
 extern pthread_t pthread_IO_Worker[NUM_THREAD_IO_WORKER];
 extern pthread_t pthread_IO_Worker_UCX[NUM_THREAD_IO_WORKER];
+extern pthread_t thread_ucx_worker_progress[NUM_THREAD_IO_WORKER];
+
 extern CCreatedUniqueThread Unique_Thread;
 extern CIO_QUEUE IO_Queue_List[MAX_NUM_QUEUE];
 
@@ -473,6 +475,14 @@ static void* Func_thread_Polling_New_Msg(void *pParam)
 	return NULL;*/
 }
 
+void* Func_thread_UCX_Worker_Progress(void* pParam) {
+	ucp_worker_h data_worker = *((ucp_worker_h*)pParam);
+	while(true) {
+		ucp_worker_progress(data_worker);
+	}
+	return NULL;
+}
+
 static void* Func_thread_ucx_server(void *pParam) {
 	SERVER_RDMA *pServer_ucx;
 	int i;
@@ -488,6 +498,13 @@ static void* Func_thread_ucx_server(void *pParam) {
 	for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
 		IO_Worker_tid_List[i] = i;
 		if(pthread_create(&(pthread_IO_Worker_UCX[i]), NULL, Func_thread_IO_Worker, &(IO_Worker_tid_List[i]))) {
+			fprintf(stderr, "Error creating thread\n");
+			return 0;
+		}
+	}
+
+	for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
+		if(pthread_create(&(thread_ucx_worker_progress[i]), NULL, Func_thread_UCX_Worker_Progress, &(pServer_ucx->ucp_data_worker[i]))) {
 			fprintf(stderr, "Error creating thread\n");
 			return 0;
 		}
@@ -640,6 +657,7 @@ int main(int argc, char **argv)
 	FILE *fOut;
 	pthread_t thread_qp_server, thread_polling_newmsg/*, thread_global_sharing, thread_print_data*/;
 	pthread_t thread_ucx_polling_newmsg, thread_ucx_server;
+	
 	// pthread_t thread_ucx_test;
 //	unsigned char *pNewMsg_ToSend=NULL;
 //	IO_CMD_MSG *pIO_Cmd_toSend;
@@ -768,13 +786,13 @@ int main(int argc, char **argv)
 	// 	return 1;
 	// }
 	// printf("DBG> Rank = %d,  started Func_thread_Polling_New_Msg().\n", mpi_rank);
-
+	
 	if(pthread_create(&(thread_ucx_polling_newmsg), NULL, Func_thread_UCX_Polling_New_Msg, &Server_ucx)) {
 		fprintf(stderr, "Error creating thread thread_ucx_polling_newmsg\n");
 		return 1;
 	}
 	printf("DBG> Rank = %d,  started Func_thread_UCX_Polling_New_Msg().\n", mpi_rank);
-
+	
 	signal(SIGALRM, sigalarm_handler); // Register signal handler
 	alarm(T_FREQ_REPORT_RESULT);
 

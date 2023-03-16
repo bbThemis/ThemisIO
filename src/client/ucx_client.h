@@ -475,9 +475,9 @@ int CLIENT_UCX::UCX_Put(void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t le
         }
     }
 	ucx_put_get_locked = 0;
-	UCX_Flush(ucp_worker);
+	// UCX_Flush(ucp_worker);
 	pthread_mutex_unlock(&ucx_put_get_lock);
-	
+	if(req != NULL) ucp_request_free(req);
 	return 0;
 }
 
@@ -519,9 +519,9 @@ int CLIENT_UCX::UCX_Get(void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t le
         }
     }
 	ucx_put_get_locked = 0;
-	UCX_Flush(ucp_worker);
+	// UCX_Flush(ucp_worker);
 	pthread_mutex_unlock(&ucx_put_get_lock);
-
+	if(req != NULL) ucp_request_free(req);
 	return 0;
 }
 

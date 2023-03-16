@@ -611,7 +611,7 @@ inline void Send_IO_Request(int idx_fs)
 		ucx_loc_buff[0] = TAG_NEW_REQUEST;
 		// pClient_qp[idx_fs]->IB_Put(loc_buff, mr_loc->lkey, (void*)(pClient_qp[idx_fs]->remote_addr_new_msg), pClient_qp[idx_fs]->pal_remote_mem.key, 1);
 		pClient_ucx[idx_fs]->UCX_Put(ucx_loc_buff,  (void*)(pClient_ucx[idx_fs]->remote_addr_new_msg), (pClient_ucx[idx_fs]->pal_remote_mem.rkey), 1);
-		bTimeout = Wait_For_IO_Request_Result(pIO_Cmd->tag_magic);
+		bTimeout = Wait_For_IO_Request_Result(pClient_ucx[idx_fs]->ucp_worker, pIO_Cmd->tag_magic);
 		if(bTimeout==0)	break;
 		if( pIO_Cmd->op == RF_RW_OP_DISCONNECT)	break;	// NEVER send multiple RF_RW_OP_DISCONNECT command!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		else if( pIO_Cmd->op == RF_RW_OP_CLOSE)	{
@@ -3518,7 +3518,7 @@ inline void Wait_For_IO_Request_Result(int Tag_Magic)
 }
 */
 
-inline int Wait_For_IO_Request_Result(int Tag_Magic)
+inline int Wait_For_IO_Request_Result(ucp_worker_h data_worker, int Tag_Magic)
 {
 	RW_FUNC_RETURN *pResult = (RW_FUNC_RETURN *)ucx_rem_buff;
 	int *pTag_End;
@@ -3529,6 +3529,7 @@ inline int Wait_For_IO_Request_Result(int Tag_Magic)
 	gettimeofday(&tm1, NULL);
 	t1_ms = (tm1.tv_sec * 1000) + (tm1.tv_usec / 1000);
 	while(1)	{
+		ucp_worker_progress(data_worker);
 		if(pResult->nDataSize > 0)	break;	// waiting for the size of result. 
 
 		gettimeofday(&tm2, NULL);
@@ -3550,12 +3551,13 @@ inline int Wait_For_IO_Request_Result(int Tag_Magic)
 //	}
 
 	while(1)	{
-	        if( pResult->nDataSize > IO_RESULT_BUFFER_SIZE )        {
-        	        pTag_End =  (int*)((char*)ucx_rem_buff + sizeof(RW_FUNC_RETURN_EXT) - sizeof(int) );
-        	}
-	        else    {
-        	        pTag_End =  (int*)((char*)ucx_rem_buff + pResult->nDataSize - 4);
-	        }
+		ucp_worker_progress(data_worker);
+	    if( pResult->nDataSize > IO_RESULT_BUFFER_SIZE )        {
+                pTag_End =  (int*)((char*)ucx_rem_buff + sizeof(RW_FUNC_RETURN_EXT) - sizeof(int) );
+        }
+	    else    {
+                pTag_End =  (int*)((char*)ucx_rem_buff + pResult->nDataSize - 4);
+	    }
 
 		if( ( (pResult->Tag_Ini) ^ (*pTag_End) ) == Tag_Magic )	break;	// waiting for the ending tag. 
 

@@ -379,7 +379,7 @@ int Query_Parent_Dir(const char szDirName[], char szParentDir[], int *nLenParent
 	return Query_Server_Index_Dir_Index(szParentDir, i, pIdx_Server);
 }
 
-inline int Wait_For_IO_Request_Result(int Tag_Magic, RW_FUNC_RETURN *pIO_Result)
+inline int Wait_For_IO_Request_Result(ucp_worker_h data_worker, int Tag_Magic, RW_FUNC_RETURN *pIO_Result)
 {
 	RW_FUNC_RETURN *pResult = pIO_Result;
 	int *pTag_End, Tag_Ini;
@@ -389,6 +389,7 @@ inline int Wait_For_IO_Request_Result(int Tag_Magic, RW_FUNC_RETURN *pIO_Result)
 	gettimeofday(&tm1, NULL);
 	t1_ms = (tm1.tv_sec * 1000) + (tm1.tv_usec / 1000);
 	while(1)	{
+		ucp_worker_progress(data_worker);
 		if(pResult->nDataSize > 0)	break;	// waiting for the size of result. 
 
 		gettimeofday(&tm2, NULL);
@@ -402,6 +403,7 @@ inline int Wait_For_IO_Request_Result(int Tag_Magic, RW_FUNC_RETURN *pIO_Result)
 	pTag_End =  (int*)((char*)pIO_Result + pResult->nDataSize - sizeof(int));
 
 	while(1)	{
+		ucp_worker_progress(data_worker);
 		if( ( Tag_Ini ^ (*pTag_End) ) == Tag_Magic )	break;	// waiting for the ending tag. 
 
 		gettimeofday(&tm2, NULL);
@@ -447,7 +449,7 @@ void Query_Other_Server(int idx_server)
 	pNewMsg_ToSend[0] = TAG_NEW_REQUEST;	// new msg!
 	// Server_qp.IB_Put(idx_ucx, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_ucx].remote_addr_new_msg), Server_qp.pQP_Data[idx_ucx].rem_key, 1);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pNewMsg_ToSend, (void*)(Server_ucx.pUCX_Data[idx_ucx].remote_addr_new_msg), Server_ucx.pUCX_Data[idx_ucx].rkey, 1);
-	Wait_For_IO_Request_Result(pIO_Cmd_ToSend_Other_Server->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_ToSend_Other_Server->rem_buff));
+	Wait_For_IO_Request_Result(Server_ucx.pUCX_Data[idx_ucx].ucp_data_worker, pIO_Cmd_ToSend_Other_Server->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_ToSend_Other_Server->rem_buff));
 	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
 		perror("pthread_mutex_unlock");
 		exit(2);
@@ -493,7 +495,7 @@ int Request_Is_ParentDIr_Existing(int idx_server, char szPath[], int *pIdx_Paren
 	pNewMsg_ToSend[0] = TAG_NEW_REQUEST;	// new msg!
 	//Server_qp.IB_Put(idx_qp, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_new_msg), Server_qp.pQP_Data[idx_qp].rem_key, 1);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pNewMsg_ToSend, (void*)(Server_ucx.pUCX_Data[idx_ucx].remote_addr_new_msg), Server_ucx.pUCX_Data[idx_ucx].rkey, 1);
-	Wait_For_IO_Request_Result(pIO_Cmd_ToSend_Other_Server->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_ToSend_Other_Server->rem_buff));
+	Wait_For_IO_Request_Result(Server_ucx.pUCX_Data[idx_ucx].ucp_data_worker, pIO_Cmd_ToSend_Other_Server->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_ToSend_Other_Server->rem_buff));
 	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
 		perror("pthread_mutex_unlock");
 		exit(2);
@@ -582,7 +584,7 @@ int Request_ParentDir_Add_Entry(int idx_server, const char szPath[], int nLenPar
 	pNewMsg_ToSend[0] = TAG_NEW_REQUEST;	// new msg!
 	// Server_qp.IB_Put(idx_qp, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_new_msg), Server_qp.pQP_Data[idx_qp].rem_key, 1);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pNewMsg_ToSend, (void*)(Server_ucx.pUCX_Data[idx_ucx].remote_addr_new_msg), Server_ucx.pUCX_Data[idx_ucx].rkey, 1);
-	Wait_For_IO_Request_Result(pIO_Cmd_ToSend_Other_Server->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_ToSend_Other_Server->rem_buff));
+	Wait_For_IO_Request_Result(Server_ucx.pUCX_Data[idx_ucx].ucp_data_worker, pIO_Cmd_ToSend_Other_Server->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_ToSend_Other_Server->rem_buff));
 	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
 		perror("pthread_mutex_unlock");
 		exit(2);
@@ -640,7 +642,7 @@ void Request_ParentDir_Remove_Entry(char szEntryName_ToRemove[], int idx_server,
 	pNewMsg_ToSend[0] = TAG_NEW_REQUEST;	// new msg!
 	// Server_qp.IB_Put(idx_qp, (void*)pNewMsg_ToSend, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_new_msg), Server_qp.pQP_Data[idx_qp].rem_key, 1);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pNewMsg_ToSend, (void*)(Server_ucx.pUCX_Data[idx_ucx].remote_addr_new_msg), Server_ucx.pUCX_Data[idx_ucx].rkey, 1);
-	Wait_For_IO_Request_Result(pIO_Cmd_ToSend_Other_Server->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_ToSend_Other_Server->rem_buff));
+	Wait_For_IO_Request_Result(Server_ucx.pUCX_Data[idx_ucx].ucp_data_worker, pIO_Cmd_ToSend_Other_Server->tag_magic, (RW_FUNC_RETURN*)(pIO_Cmd_ToSend_Other_Server->rem_buff));
 	if (pthread_mutex_unlock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
 		perror("pthread_mutex_unlock");
 		exit(2);

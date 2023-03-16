@@ -31,6 +31,8 @@ extern int *ht_table_ActiveJobs;
 extern int nActiveJob;
 extern JOBREC ActiveJobList[MAX_NUM_ACTIVE_JOB];
 pthread_t pthread_IO_Worker_UCX[NUM_THREAD_IO_WORKER];
+pthread_t thread_ucx_worker_progress[NUM_THREAD_IO_WORKER];
+
 
 pthread_mutex_t lock_UCX_Modify_ActiveJob_List;
 int nUCXNewMsg, UCXNewMsgList[MAX_UCX_NEW_MSG];
@@ -1015,7 +1017,8 @@ retry:
             }
         }
     }
-	UCX_Flush(ucp_data_worker);
+	// UCX_Flush(ucp_data_worker);
+	if(req != NULL) ucp_request_free(req);
 }
 
 int SERVER_RDMA::UCX_Flush(ucp_worker_h ucp_worker) {
@@ -1109,7 +1112,8 @@ retry:
             }
         }
     }
-	UCX_Flush(ucp_data_worker);
+	if(req != NULL) ucp_request_free(req);
+	// UCX_Flush(ucp_data_worker);
 }
 
 
