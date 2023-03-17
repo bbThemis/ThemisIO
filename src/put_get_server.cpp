@@ -478,7 +478,10 @@ static void* Func_thread_Polling_New_Msg(void *pParam)
 void* Func_thread_UCX_Worker_Progress(void* pParam) {
 	ucp_worker_h data_worker = *((ucp_worker_h*)pParam);
 	while(true && data_worker != NULL) {
-		ucp_worker_progress(data_worker);
+		int ret = ucp_worker_progress(data_worker);
+		if(ret != 0) {
+			printf("ucp_worker_progress %d\n", ret);
+		}
 		// sleep(1);
 	}
 	return NULL;
