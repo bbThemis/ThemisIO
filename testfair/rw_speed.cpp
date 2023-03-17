@@ -410,8 +410,9 @@ int main(int argc, char **argv) {
 	string filename_str = opt.getFilename();
 	const char *filename = filename_str.c_str();
 	// printf("[%d] filename=\"%s\"\n", rank, filename);
-
-	int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	char nFileName[100];
+	sprintf(nFileName, "%s%d", filename, iteration + 1);
+	int fd = open(nFileName, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
 	// make sure everyone was able to open their files
 	int min_fd;
@@ -528,11 +529,11 @@ int main(int argc, char **argv) {
 
   // printf("[%d] %ld bytes\n", rank, io_bytes);
 	long total_io_bytes;
-  double rank_io_bytes_stddev;
-  gatherStats(io_bytes, total_io_bytes, rank_io_bytes_stddev);
+  	double rank_io_bytes_stddev;
+  	gatherStats(io_bytes, total_io_bytes, rank_io_bytes_stddev);
 
 	double total_mbps = total_io_bytes / ((1<<20) * elapsed_sec);
-  double mbps_rank_stddev = rank_io_bytes_stddev / ((1<<20) * elapsed_sec);
+  	double mbps_rank_stddev = rank_io_bytes_stddev / ((1<<20) * elapsed_sec);
 
 	io_over_time.gather();
 
@@ -565,7 +566,7 @@ int main(int argc, char **argv) {
 	if (opt.cleanup)
 		remove(filename);
 
-  MPI_Finalize();
+  	MPI_Finalize();
 
 	return 0;
 }
