@@ -20,7 +20,7 @@
 // #define NUM_THREAD_IO_WORKER_INTER_SERVER  (8)
 // #define NUM_THREAD_IO_WORKER  (16+NUM_THREAD_IO_WORKER_INTER_SERVER)
 
-#define NUM_THREAD_IO_WORKER_INTER_SERVER  (0)
+#define NUM_THREAD_IO_WORKER_INTER_SERVER  (1)
 #define NUM_THREAD_IO_WORKER  (1+NUM_THREAD_IO_WORKER_INTER_SERVER)
 
 // to simpilfy testing, switch to one inter-server thread and one io thread
