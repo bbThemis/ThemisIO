@@ -17,8 +17,11 @@
 
 #define	N_SECOND_THRESHOLD_REMOVE_JOB	(15)	// When (nQP == 0) and dT > N_SECOND_THRESHOLD_REMOVE_JOB, remove current job from active job list
 
-#define NUM_THREAD_IO_WORKER_INTER_SERVER  (8)
-#define NUM_THREAD_IO_WORKER  (16+NUM_THREAD_IO_WORKER_INTER_SERVER)
+// #define NUM_THREAD_IO_WORKER_INTER_SERVER  (8)
+// #define NUM_THREAD_IO_WORKER  (16+NUM_THREAD_IO_WORKER_INTER_SERVER)
+
+#define NUM_THREAD_IO_WORKER_INTER_SERVER  (0)
+#define NUM_THREAD_IO_WORKER  (1+NUM_THREAD_IO_WORKER_INTER_SERVER)
 
 // to simpilfy testing, switch to one inter-server thread and one io thread
 // #define NUM_THREAD_IO_WORKER_INTER_SERVER  (1)
