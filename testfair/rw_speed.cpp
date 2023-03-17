@@ -411,7 +411,7 @@ int main(int argc, char **argv) {
 	const char *filename = filename_str.c_str();
 	// printf("[%d] filename=\"%s\"\n", rank, filename);
 	char nFileName[100];
-	sprintf(nFileName, "%s%d", filename, iteration + 1);
+	sprintf(nFileName, "%s1", filename);
 	int fd = open(nFileName, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
 	// make sure everyone was able to open their files
