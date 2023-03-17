@@ -479,7 +479,7 @@ void* Func_thread_UCX_Worker_Progress(void* pParam) {
 	ucp_worker_h data_worker = *((ucp_worker_h*)pParam);
 	while(true && data_worker != NULL) {
 		ucp_worker_progress(data_worker);
-		sleep(1);
+		// sleep(1);
 	}
 	return NULL;
 }
@@ -504,12 +504,12 @@ static void* Func_thread_ucx_server(void *pParam) {
 		}
 	}
 
-	for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
-		if(pthread_create(&(thread_ucx_worker_progress[i]), NULL, Func_thread_UCX_Worker_Progress, &(pServer_ucx->ucp_data_worker[i]))) {
-			fprintf(stderr, "Error creating thread\n");
-			return 0;
-		}
-	}
+	// for(i=0; i<NUM_THREAD_IO_WORKER; i++)	{
+	// 	if(pthread_create(&(thread_ucx_worker_progress[i]), NULL, Func_thread_UCX_Worker_Progress, &(pServer_ucx->ucp_data_worker[i]))) {
+	// 		fprintf(stderr, "Error creating thread\n");
+	// 		return 0;
+	// 	}
+	// }
 
 	Ucx_Server_Started = 1;	// active the flag: Server started running!!!
 	printf("Rank = %d. UCX Server is started.\n", mpi_rank);

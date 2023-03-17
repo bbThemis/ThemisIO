@@ -417,7 +417,9 @@ void SERVER_RDMA::ScanNewMsg() {
 	__m512i Data;
 	unsigned long int cmpMask, T_Queued;
 	struct timeval tm;
-
+	for(i=0; i<NUM_THREAD_IO_WORKER; i++) {
+		ucp_worker_progress(ucp_data_worker[i]);
+	}
 	nUCXNewMsg = 0;
 	if(p_shm_NewMsgFlag == NULL)	return;
 	LastQPLocal = IdxLastQP + 1;
@@ -788,7 +790,7 @@ int SERVER_RDMA::Init_Worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker
 
     worker_params.field_mask  = UCP_WORKER_PARAM_FIELD_THREAD_MODE;
     worker_params.thread_mode = UCS_THREAD_MODE_MULTI;
-	
+
     status = ucp_worker_create(ucp_context, &worker_params, ucp_worker);
     if (status != UCS_OK) {
         fprintf(stderr, "failed to ucp_worker_create (%s)\n", ucs_status_string(status));
