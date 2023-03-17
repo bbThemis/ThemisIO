@@ -479,6 +479,7 @@ void* Func_thread_UCX_Worker_Progress(void* pParam) {
 	ucp_worker_h data_worker = *((ucp_worker_h*)pParam);
 	while(true && data_worker != NULL) {
 		ucp_worker_progress(data_worker);
+		sleep(1);
 	}
 	return NULL;
 }
