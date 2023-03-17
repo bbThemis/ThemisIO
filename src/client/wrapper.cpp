@@ -1144,6 +1144,7 @@ ssize_t stripe_read(int fd, char *szFileName, void *buf, size_t size, off_t offs
 			// mr_loc_buf = CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote((char*)buf+nBytesRead, nBytesReadOneTime);
 			// pIO_Cmd->rkey = mr_loc_buf->rkey;
 			// pIO_Cmd->rem_buff = mr_loc_buf->addr;
+			printf("stripe_read > DATA_COPY_THRESHOLD_SIZE\n");
 			CLIENT_UCX::RegisterBuf_RW_Local_Remote((char*)buf+nBytesRead, nBytesReadOneTime, &mr_loc_buf);
 			CLIENT_UCX::UCX_Pack_Rkey(mr_loc_buf, pIO_Cmd->rkey_buffer);
 			pIO_Cmd->rem_buff = (void*)((char*)buf+nBytesRead);
@@ -1151,6 +1152,7 @@ ssize_t stripe_read(int fd, char *szFileName, void *buf, size_t size, off_t offs
 		else	{
 			// pIO_Cmd->rkey = mr_rem->rkey;
 			// pIO_Cmd->rem_buff = mr_rem->addr;
+			printf("stripe_read <= DATA_COPY_THRESHOLD_SIZE\n");
 			CLIENT_UCX::UCX_Pack_Rkey(ucx_mr_rem, pIO_Cmd->rkey_buffer);
 			pIO_Cmd->rem_buff = ucx_rem_buff;
 		}
@@ -1346,6 +1348,7 @@ ssize_t stripe_write(int fd, char *szFileName, const void *buf, size_t size, off
 			// mr_loc_buf = CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote((char*)buf+nBytesWritten, nBytesWriteOneTime);
 			// pIO_Cmd->rkey = mr_loc_buf->rkey;
 			// pIO_Cmd->rem_buff = mr_loc_buf->addr;
+			printf("stripe_write > DATA_COPY_THRESHOLD_SIZE\n");
 			CLIENT_UCX::RegisterBuf_RW_Local_Remote((char*)buf+nBytesWritten, nBytesWriteOneTime, &mr_loc_buf);
 			CLIENT_UCX::UCX_Pack_Rkey(mr_loc_buf, pIO_Cmd->rkey_buffer);
 			pIO_Cmd->rem_buff = (void*)((char*)buf+nBytesWritten);
@@ -1353,6 +1356,7 @@ ssize_t stripe_write(int fd, char *szFileName, const void *buf, size_t size, off
 		}
 		else	{
 			// pIO_Cmd->rkey = mr_rem->rkey;
+			printf("stripe_write <= DATA_COPY_THRESHOLD_SIZE\n");
 			CLIENT_UCX::UCX_Pack_Rkey(ucx_mr_rem, pIO_Cmd->rkey_buffer);
 			// pIO_Cmd->rem_buff = mr_rem->addr;
 			pIO_Cmd->rem_buff = ucx_rem_buff;
