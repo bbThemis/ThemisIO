@@ -417,9 +417,9 @@ void SERVER_RDMA::ScanNewMsg() {
 	__m512i Data;
 	unsigned long int cmpMask, T_Queued;
 	struct timeval tm;
-	for(i=0; i<NUM_THREAD_IO_WORKER; i++) {
-		ucp_worker_progress(ucp_data_worker[i]);
-	}
+	// for(i=0; i<NUM_THREAD_IO_WORKER; i++) {
+	// 	ucp_worker_progress(ucp_data_worker[i]);
+	// }
 	nUCXNewMsg = 0;
 	if(p_shm_NewMsgFlag == NULL)	return;
 	LastQPLocal = IdxLastQP + 1;
