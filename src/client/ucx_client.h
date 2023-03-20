@@ -400,9 +400,11 @@ void CLIENT_UCX::Setup_UCP_Connection(int IdxServer, char loc_buff[], size_t siz
 ucs_status_t CLIENT_UCX::RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp_mem_h* memh) {
     uct_allocated_memory_t alloc_mem;
     ucp_mem_map_params_t mem_map_params;
+	memset(&mem_map_params, 9, sizeof(mem_map_params));
     mem_map_params.field_mask = UCP_MEM_MAP_PARAM_FIELD_ADDRESS | UCP_MEM_MAP_PARAM_FIELD_LENGTH;
     mem_map_params.length = len;
     mem_map_params.address = buf;
+	mem_map_params.flags      = UCP_MEM_MAP_FIXED;
     ucs_status_t status = ucp_mem_map(ucp_main_context, &mem_map_params, memh);
     return status;
 }
