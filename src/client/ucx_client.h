@@ -291,6 +291,7 @@ void CLIENT_UCX::Init_UCX_Env() {
 }
 
 void CLIENT_UCX::Setup_UCP_Connection(int IdxServer, char loc_buff[], size_t size_loc_buff, char rem_buff[], size_t size_rem_buff) {
+	printf("Setup_UCP_Connection %d\n", IdxServer);
 	int idx;
 //	GLOBAL_ADDR_DATA Global_Addr_Data;
 	unsigned long long t;
