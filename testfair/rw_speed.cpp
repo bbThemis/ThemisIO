@@ -515,6 +515,7 @@ int main(int argc, char **argv) {
 
 		// XXX ThemisIO doesn't yet support seek
 		close(fd);
+		sprintf(nFileName, "%s%d", filename, iteration + 1);
 		fd = open(nFileName, O_WRONLY);
 		if (fd < 0) {
 			printf("[%d] %.6f write iteration %d of %s, open returned %d error %s\n",
