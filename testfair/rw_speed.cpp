@@ -460,6 +460,7 @@ int main(int argc, char **argv) {
 			// if(iteration == 2) break;
 			fillBuffer(data, file_offset);
 			int bytes_written = write(fd, data.data(), opt.io_size);
+			printf("write fd %d\n", fd);
 			if (bytes_written != opt.io_size) {
 				printf("[%d] %.6f write fail, %d of %d bytes\n", rank, getTime(), bytes_written, opt.io_size);
 				done = true;
