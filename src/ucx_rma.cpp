@@ -899,6 +899,7 @@ ucs_status_t SERVER_RDMA::RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp
     mem_map_params.field_mask = UCP_MEM_MAP_PARAM_FIELD_ADDRESS | UCP_MEM_MAP_PARAM_FIELD_LENGTH;
     mem_map_params.length = len;
     mem_map_params.address = buf;
+	mem_map_params.flags      = UCP_MEM_MAP_FIXED;
     ucs_status_t status = ucp_mem_map(ucp_main_context, &mem_map_params, memh);
 	if(memh == NULL) {
 		perror("ucp_mem_map");
