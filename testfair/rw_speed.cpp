@@ -457,7 +457,7 @@ int main(int argc, char **argv) {
        			done=true;
        			break;
       		}
-			if(iteration == 2) break;
+			// if(iteration == 2) break;
 			fillBuffer(data, file_offset);
 			int bytes_written = write(fd, data.data(), opt.io_size);
 			if (bytes_written != opt.io_size) {
