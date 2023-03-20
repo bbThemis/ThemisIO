@@ -409,10 +409,10 @@ int main(int argc, char **argv) {
 	
 	string filename_str = opt.getFilename();
 	const char *filename = filename_str.c_str();
-	// printf("[%d] filename=\"%s\"\n", rank, filename);
-	// char nFileName[100];
-	// sprintf(nFileName, "%s1", filename);
-	int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	printf("[%d] filename=\"%s\"\n", rank, filename);
+	char nFileName[100];
+	sprintf(nFileName, "%s1", filename);
+	int fd = open(nFileName, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
 	// make sure everyone was able to open their files
 	int min_fd;
@@ -474,9 +474,9 @@ int main(int argc, char **argv) {
 
 		// XXX ThemisIO doesn't yet support seek
 		close(fd);
-		// char nFileName[100];
-		// sprintf(nFileName, "%s%d", filename, iteration);
-		fd = open(filename, O_RDONLY);
+		char nFileName[100];
+		sprintf(nFileName, "%s%d", filename, iteration);
+		fd = open(nFileName, O_RDONLY);
 		if (fd < 0) {
 			printf("[%d] %.6f read iteration %d of %s, open returned %d, error %s\n",
 						 rank, getTime(), iteration, filename, fd, strerror(errno));
@@ -514,10 +514,10 @@ int main(int argc, char **argv) {
 
 		// XXX ThemisIO doesn't yet support seek
 		close(fd);
-		fd = open(filename, O_WRONLY);
+		fd = open(nFileName, O_WRONLY);
 		if (fd < 0) {
 			printf("[%d] %.6f write iteration %d of %s, open returned %d error %s\n",
-						 rank, getTime(), iteration, filename, fd, strerror(errno));
+						 rank, getTime(), iteration, nFileName, fd, strerror(errno));
 			break;
 		}
 
