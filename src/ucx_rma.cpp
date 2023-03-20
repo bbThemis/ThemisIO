@@ -1097,7 +1097,7 @@ retry:
             ucs_status_t status = ucp_request_check_status(req);
             if(status == UCS_OK) {
                 pUCX_Data[idx].nPut_Get_Done +=1;
-				fprintf(stdout, "DBG> UCX_Put UCS_OK loc %p rem %p\n", loc_buf, rem_buf);
+				fprintf(stdout, "DBG> UCX_Get UCS_OK loc %p rem %p\n", loc_buf, rem_buf);
                 break;
             }
             else if(status == UCS_INPROGRESS) {
