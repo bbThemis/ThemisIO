@@ -327,6 +327,7 @@ void RW_Read(IO_CMD_MSG *pRF_Op_Msg)
 		// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 		Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, pResult->nDataSize);
 		fprintf(stdout, "DBG> RW_Read <=DATA_COPY_THRESHOLD_SIZE rem_buff %p idx_ucx %d datasize %d\n", rem_buff, idx_ucx, pResult->nDataSize);
+		ucp_rkey_destroy(rkey);
 	}
 	else	{
 //		if(pRF_Op_Msg->offset >= pMetaData[fd_List[pRF_Op_Msg->fd].idx_file].st_size)   {       // out of range
