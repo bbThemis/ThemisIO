@@ -1,11 +1,11 @@
 #!/bin/bash
 
 ppn=1
-iosize=1m
+iosize=5m
 
 IBRUN_TASKS_PER_NODE=$ppn ibrun -n $(($ppn * 1)) -o $(($ppn * 1)) \
    ../tests/themis_client.sh -u 101 -j 1001 -n 1 \
-   ./rw_speed -time=15 -iosize=$iosize -filesize=1m -tag=job1 &> rw_speed1.out &
+   ./rw_speed -time=15 -iosize=$iosize -filesize=10m -tag=job1 &> rw_speed1.out &
 
 # IBRUN_TASKS_PER_NODE=$ppn ibrun -n $(($ppn * 1)) -o $(($ppn * 3)) \
 #    ../tests/themis_client.sh -u 102 -j 1002 -n 1 -s 5 \

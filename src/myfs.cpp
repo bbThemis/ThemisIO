@@ -1845,7 +1845,7 @@ inline void my_Adaptive_Read(int idx_ucx, void *loc_buf, void *rem_buf, ucp_rkey
 	// struct ibv_mr *mr_tmp;
 	ucp_mem_h mr_tmp = NULL;
 	char *pSrc;
-
+	printf("DBG> my_Adaptive_Read idx_ucx %d loc_buf %p rem_buff %p count %d\n", idx_ucx, loc_buf, rem_buf, count);
 	if(count > MAX_SIZE_MR_BLOCK)	{	// multiple times RDMA
 		nBlocks = (count % MAX_SIZE_MR_BLOCK) ? ( (count / MAX_SIZE_MR_BLOCK) + 1) : (count / MAX_SIZE_MR_BLOCK);
 		nBlocksM1 = nBlocks - 1;
@@ -1858,12 +1858,14 @@ inline void my_Adaptive_Read(int idx_ucx, void *loc_buf, void *rem_buf, ucp_rkey
 			Server_ucx.RegisterBuf_RW_Local_Remote(pSrc, MAX_SIZE_MR_BLOCK, &mr_tmp);
 			assert(mr_tmp != NULL);
 			// Server_qp.IB_Put(idx_qp, (void*)pSrc, mr_tmp->lkey, (void*)((char*)rem_buf+offset), rkey, MAX_SIZE_MR_BLOCK);
+			printf("DBG> UCX_PUT MAX_SIZE_MR_BLOCK rem_buff:%p offset:%ld size:%d\n", rem_buf, offset, MAX_SIZE_MR_BLOCK);
 			Server_ucx.UCX_Put(idx_ucx, (void*)pSrc, (void*)((char*)rem_buf+offset), rkey, MAX_SIZE_MR_BLOCK);
 			nSizeUCXReg -= MAX_SIZE_MR_BLOCK;
 //			printf("DBG> nSizeReg = %ld\n", nSizeReg);
 
 			// ibv_dereg_mr(mr_tmp);
 			ucp_mem_unmap(Server_ucx.ucp_main_context, mr_tmp);
+			mr_tmp = NULL;
 		}
 		BlockSize = count % MAX_SIZE_MR_BLOCK;
 		offset += MAX_SIZE_MR_BLOCK;
@@ -1881,6 +1883,7 @@ inline void my_Adaptive_Read(int idx_ucx, void *loc_buf, void *rem_buf, ucp_rkey
 // 			ibv_dereg_mr(mr_tmp);
 			nSizeUCXReg -= BlockSize;
 			ucp_mem_unmap(Server_ucx.ucp_main_context, mr_tmp);
+			mr_tmp = NULL;
 		}
 		else	{
 			memcpy(loc_buf, pSrc, BlockSize);
@@ -1901,6 +1904,7 @@ inline void my_Adaptive_Read(int idx_ucx, void *loc_buf, void *rem_buf, ucp_rkey
 // 		ibv_dereg_mr(mr_tmp);
 		nSizeUCXReg -= count;
 		ucp_mem_unmap(Server_ucx.ucp_main_context, mr_tmp);
+		mr_tmp = NULL;
 	}
 	else	{	// use register local buffer RMDA then memcpy. 
 		memcpy(loc_buf, src_buf, count);
@@ -1941,10 +1945,11 @@ size_t my_read_stripe_RDMA(int fd, const char *szFileName, int server_shift, int
 		else	pStripeDataLocal = &(pStripeData[idx_file]);
 	}
 
-        if(offset >= pStripeDataLocal->MaxOffset)       {
-                pthread_mutex_unlock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
-                return 0;       // no data available. Out of range
-        }
+    if(offset >= pStripeDataLocal->MaxOffset)       {
+		printf("no data available. Out of range\n");
+        pthread_mutex_unlock(&(file_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+        return 0;       // no data available. Out of range
+    }
 
 	idx_Block = Query_Index_StorageBlock_with_Offset_Stripe(pStripeDataLocal, offset);
 	MaxDataRange = pStripeDataLocal->MaxDataRange;

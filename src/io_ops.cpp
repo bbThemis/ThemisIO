@@ -309,7 +309,7 @@ void RW_Read(IO_CMD_MSG *pRF_Op_Msg)
 	pResult = (RW_FUNC_RETURN *)( (char*)(Server_ucx.p_shm_IO_Result) + pRF_Op_Msg->tid*IO_RESULT_BUFFER_SIZE);
 	Server_ucx.UCX_Unpack_Rkey(idx_ucx, rkey_buffer, &rkey);
 //	Determine_Index_StorageBlock_for_Offset(pRF_Op_Msg->fd, pRF_Op_Msg->offset);
-	fprintf(stdout, "DBG> RW_Read begin rem_buff %p idx_ucx %d\n", rem_buff, idx_ucx);
+	fprintf(stdout, "DBG> RW_Read begin rem_buff %p idx_ucx %d tid %d\n", rem_buff, idx_ucx, pRF_Op_Msg->tid);
 	if(pRF_Op_Msg->nLen <= DATA_COPY_THRESHOLD_SIZE)	{
 //		if(pRF_Op_Msg->offset >= pMetaData[fd_List[pRF_Op_Msg->fd].idx_file].st_size)	{	// out of range
 //			pResult->ret_value = 0;
@@ -341,6 +341,7 @@ void RW_Read(IO_CMD_MSG *pRF_Op_Msg)
 		
 		// rem_buff = (void*)(Server_qp.pQP_Data[idx_qp].rem_addr);
 		// rkey = Server_qp.pQP_Data[idx_qp].rem_key;
+		// sleep(2.5);
 		rem_buff = (void*)(Server_ucx.pUCX_Data[idx_ucx].rem_addr);
 		rkey = Server_ucx.pUCX_Data[idx_ucx].rkey;
 		pResult->nDataSize = sizeof(RW_FUNC_RETURN);	// different!!!
@@ -350,9 +351,9 @@ void RW_Read(IO_CMD_MSG *pRF_Op_Msg)
 		*pTag_End = (pResult->Tag_Ini) ^ tag_magic;
 		// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].rem_addr), Server_qp.pQP_Data[idx_qp].rem_key, pResult->nDataSize);
 		Server_ucx.UCX_Put(idx_ucx, (void*)pResult, (void*)(Server_ucx.pUCX_Data[idx_ucx].rem_addr), Server_ucx.pUCX_Data[idx_ucx].rkey, pResult->nDataSize);
-		fprintf(stdout, "DBG> RW_Read > DATA_COPY_THRESHOLD_SIZE rem_buff %p idx_ucx %d datasize %d\n", rem_buff, idx_ucx, pResult->nDataSize);
+		fprintf(stdout, "DBG> RW_Read > DATA_COPY_THRESHOLD_SIZE ret value %d myerrno %d rem_buff %p idx_ucx %d datasize %d Tag_End %d tag_magic %d\n", pResult->ret_value, pResult->myerrno, rem_buff, idx_ucx, pResult->nDataSize, *pTag_End, tag_magic);
 	}
-	ucp_rkey_destroy(rkey);
+	// ucp_rkey_destroy(rkey);
 	fprintf(stdout, "DBG> RW_Read end rem_buff %p idx_ucx %d\n", rem_buff, idx_ucx);
 }
 

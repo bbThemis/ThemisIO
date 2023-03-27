@@ -600,7 +600,7 @@ inline void Send_IO_Request(int idx_fs)
 	RW_FUNC_RETURN *pResult = (RW_FUNC_RETURN *)ucx_rem_buff;
 	int bTimeout;
 	PrintIOType(pIO_Cmd);
-	fprintf(stdout, "DBG> Send_IO_Request begins loc %p rem %p\n", pIO_Cmd, pResult);
+	fprintf(stdout, "DBG> Send_IO_Request idx_fs %d begins loc %p rem %p\n", idx_fs, pIO_Cmd, pResult);
 	while(1)	{
 		// send the IO request first
 		pIO_Cmd->tag_magic = rand();
@@ -3529,7 +3529,7 @@ inline int Wait_For_IO_Request_Result(ucp_worker_h data_worker, int Tag_Magic)
 	struct timeval tm1, tm2;	// tm1.tv_sec
 	long int t1_ms, t2_ms;
 	char szHostName[128];
-
+	printf("Wait_For_IO_Request_Result %p data_worker %p\n", pResult, data_worker);
 	gettimeofday(&tm1, NULL);
 	t1_ms = (tm1.tv_sec * 1000) + (tm1.tv_usec / 1000);
 	while(1)	{
@@ -3571,11 +3571,12 @@ inline int Wait_For_IO_Request_Result(ucp_worker_h data_worker, int Tag_Magic)
 			gethostname(szHostName, 63);
 			printf("DBG> Timeout[endTage]. pid = %d on %s\n", getpid(), szHostName);
                         fflush(stdout);
-                        sleep(300);
+                        // sleep(300);
 
 			return 1;	// time out
 		}
 	}
+	printf("Wait_For_IO_Request_Result nDataSize %d TagEnd %d Tag_Magic %d\n", pResult->nDataSize, *pTag_End, Tag_Magic);
 	return 0;
 }
 
@@ -5132,7 +5133,9 @@ __attribute__((destructor)) void Finalize_Client()
 	for(i=0; i<MAX_UCX_PER_PROCESS; i++)	{
 		if(pClient_ucx_List[i])	{
 			if(pClient_ucx_List[i]->ucp_worker)	{	// to put a msg to let server close this associated QP
-				pIO_Cmd = (IO_CMD_MSG *)(pClient_ucx_List[i]->mr_loc_thread_addr);
+				// pIO_Cmd = (IO_CMD_MSG *)(pClient_ucx_List[i]->mr_loc_thread_addr);
+				pIO_Cmd = (IO_CMD_MSG *)ucx_loc_buff;
+				printf("pClient_ucx_List %d pIO_Cmd %p", i, pIO_Cmd);
 				assert(pIO_Cmd != NULL);
 //				local_mr = CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote((void*)pIO_Cmd, sizeof(IO_CMD_MSG));
 				

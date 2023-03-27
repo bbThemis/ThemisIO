@@ -1,6 +1,6 @@
 default: all
 
-EXECS = rw_speed simple
+EXECS = rw_speed rw_speed_write rw_speed_read simple 
 # OPT = -g
 OPT = -O3 -march=native
 CC = gcc -Wall $(OPT)
@@ -13,6 +13,13 @@ simple: simple.c
 	$(CC) $< -o $@
 
 rw_speed: rw_speed.cpp
+	$(MPICXX) $< -o $@
+
+rw_speed_write: rw_speed_write.cpp
+	$(MPICXX) $< -o $@
+
+
+rw_speed_read: rw_speed_read.cpp
 	$(MPICXX) $< -o $@
 
 clean:

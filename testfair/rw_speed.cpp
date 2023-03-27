@@ -482,6 +482,8 @@ int main(int argc, char **argv) {
 			printf("[%d] %.6f read iteration %d of %s, open returned %d, error %s\n",
 						 rank, getTime(), iteration, filename, fd, strerror(errno));
 			break;
+		} else {
+			printf("open file 1 %s\n", nFileName);
 		}
 			
 		assert(fd >= 0);
@@ -495,32 +497,39 @@ int main(int argc, char **argv) {
 				done=true;
 				break;
       		}
+			// if(file_offset == 0) continue;
 
 			fillBuffer(expected_data, file_offset);
-			int bytes_read = read(fd, data.data(), opt.io_size);
+			int bytes_read = pread(fd, data.data(), opt.io_size, file_offset);
+			printf("read fd %d file_offset %ld\n", fd, file_offset);
 			if (bytes_read != opt.io_size) {
 				printf("[%d] %.6f read fail, %d of %d bytes\n", rank, getTime(), bytes_read, opt.io_size);
 				done = true;
 				break;
 			}
-			if (memcmp(expected_data.data(), data.data(), opt.io_size)) {
-				printf("[%d] %.6f data read back incorrectly at offset %ld\n", rank, getTime(), file_offset);
+			int wrong_byte_idx = -1;
+			if (wrong_byte_idx = memcmp(expected_data.data(), data.data(), opt.io_size)) {
+				printf("[%d] %.6f data read back incorrectly at offset %ld at idx %d\n", rank, getTime(), file_offset, wrong_byte_idx);
 				done = true;
+				
 				break;
 			}
 
 			io_bytes += opt.io_size;
 			io_over_time.inc();
+			printf("read finish file_offset:%ld\n", file_offset);
 		}
 
 		// XXX ThemisIO doesn't yet support seek
 		close(fd);
-		sprintf(nFileName, "%s%d", filename, iteration);
+		sprintf(nFileName, "%s%d", filename, iteration + 1);
 		fd = open(nFileName, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		if (fd < 0) {
 			printf("[%d] %.6f write iteration %d of %s, open returned %d error %s\n",
 						 rank, getTime(), iteration, nFileName, fd, strerror(errno));
 			break;
+		} else {
+			printf("open file 2 %s\n", nFileName);
 		}
 
 		assert(fd >= 0);

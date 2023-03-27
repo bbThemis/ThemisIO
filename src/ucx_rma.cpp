@@ -162,11 +162,14 @@ ucs_status_t SERVER_RDMA::server_create_ep(ucp_worker_h data_worker,
      * This is not the worker the listener was created on.
      * The client side should have initiated the connection, leading
      * to this ep's creation */
-    ep_params.field_mask      = UCP_EP_PARAM_FIELD_ERR_HANDLER |
-                                UCP_EP_PARAM_FIELD_REMOTE_ADDRESS;
+	memset(&ep_params, 0, sizeof(ucp_ep_params_t));
+    // ep_params.field_mask      = UCP_EP_PARAM_FIELD_ERR_HANDLER |
+    //                             UCP_EP_PARAM_FIELD_REMOTE_ADDRESS;
+    // ep_params.address    = peer_address;
+    // ep_params.err_handler.cb  = err_cb;
+    // ep_params.err_handler.arg = NULL;
+	ep_params.field_mask      = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS;
     ep_params.address    = peer_address;
-    ep_params.err_handler.cb  = err_cb;
-    ep_params.err_handler.arg = NULL;
 
     status = ucp_ep_create(data_worker, &ep_params, peer_ep);
     if (status != UCS_OK) {
@@ -548,11 +551,11 @@ void SERVER_RDMA::Drain_Client(const int fd)
             server_create_ep(pUCX_Data[idx].ucp_data_worker, (ucp_address_t*)pData_to_recv->ucx.peer_address, &pUCX_Data[idx].peer_ep);
             pUCX_Data[idx].nPut_Get = 0;
             pUCX_Data[idx].nPut_Get_Done = 0;
-
+			
             ucs_status_t status = ucp_ep_rkey_unpack(pUCX_Data[idx].peer_ep, pData_to_recv->ib_mem.rkey_buffer, &pUCX_Data[idx].rkey);
             assert(status == UCS_OK);
             pUCX_Data[idx].rem_addr = pData_to_recv->ib_mem.addr;
-
+			printf("DBG> Drain_Client ucp_ep_rkey_unpack idx %d rem_addr %p rkey %p\n", idx, pUCX_Data[idx].rem_addr, pUCX_Data[idx].rkey);
 
             pData_to_send->ucx.comm_tag = TAG_EXCH_UCX_INFO;
             memcpy(pData_to_send->ucx.peer_address, pUCX_Data[idx].address_p, pUCX_Data[idx].address_length);
@@ -707,6 +710,7 @@ ucs_status_t SERVER_RDMA::server_create_ep(ucp_worker_h data_worker,
      * This is not the worker the listener was created on.
      * The client side should have initiated the connection, leading
      * to this ep's creation */
+	memset(&ep_params, 0, sizeof(ucp_ep_params_t));
     ep_params.field_mask      = UCP_EP_PARAM_FIELD_ERR_HANDLER |
                                 UCP_EP_PARAM_FIELD_CONN_REQUEST;
     ep_params.conn_request    = conn_request;
@@ -894,13 +898,15 @@ void SERVER_RDMA::Init_Server_Memory(int max_num_qp, int port) {
 }
 
 ucs_status_t SERVER_RDMA::RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp_mem_h* memh) {
+	printf("DBG> RegisterBuf_RW_Local_Remote %p %d\n", buf, len);
     uct_allocated_memory_t alloc_mem;
     ucp_mem_map_params_t mem_map_params;
 	memset(&mem_map_params, 0, sizeof(mem_map_params));
-    mem_map_params.field_mask = UCP_MEM_MAP_PARAM_FIELD_ADDRESS | UCP_MEM_MAP_PARAM_FIELD_LENGTH;
+    mem_map_params.field_mask = UCP_MEM_MAP_PARAM_FIELD_ADDRESS | UCP_MEM_MAP_PARAM_FIELD_LENGTH | UCP_MEM_MAP_PARAM_FIELD_PROT;
     mem_map_params.length = len;
     mem_map_params.address = buf;
 	mem_map_params.flags      = UCP_MEM_MAP_FIXED;
+	mem_map_params.prot =  UCP_MEM_MAP_PROT_LOCAL_READ|UCP_MEM_MAP_PROT_LOCAL_WRITE| UCP_MEM_MAP_PROT_REMOTE_READ|UCP_MEM_MAP_PROT_REMOTE_WRITE;
     ucs_status_t status = ucp_mem_map(ucp_main_context, &mem_map_params, memh);
 	if(memh == NULL) {
 		perror("ucp_mem_map");
@@ -991,7 +997,7 @@ retry:
     pUCX_Data[idx].nPut_Get++;
 	if(req == NULL) {
 		pUCX_Data[idx].nPut_Get_Done += 1;
-		fprintf(stdout, "DBG> UCX_Put returns immediately loc %p rem %p\n", loc_buf, rem_buf);
+		fprintf(stdout, "DBG> UCX_Put returns immediately loc %p rem %p rkey %p size %d\n", loc_buf, rem_buf, rkey, len);
 	}
     if( (pUCX_Data[idx].nPut_Get - pUCX_Data[idx].nPut_Get_Done) >= UCX_QUEUE_SIZE ) {
         gettimeofday(&tm1, NULL);
@@ -1004,7 +1010,7 @@ retry:
             ucs_status_t status = ucp_request_check_status(req);
             if(status == UCS_OK) {
                 pUCX_Data[idx].nPut_Get_Done +=1;
-				fprintf(stdout, "DBG> UCX_Put UCS_OK loc %p rem %p\n", loc_buf, rem_buf);
+				fprintf(stdout, "DBG> UCX_Put UCS_OK  loc %p rem %p rkey %p size %d\n", loc_buf, rem_buf, rkey, len);
                 break;
             }
             else if(status == UCS_INPROGRESS) {
@@ -1087,7 +1093,7 @@ retry:
     pUCX_Data[idx].nPut_Get++;
 	if(req == NULL) {
 		pUCX_Data[idx].nPut_Get_Done += 1;
-		fprintf(stdout, "DBG> UCX_Get returns immediately loc %p rem %p\n", loc_buf, rem_buf);
+		fprintf(stdout, "DBG> UCX_Get returns immediately loc %p rem %p rkey %p size %d\n", loc_buf, rem_buf, rkey, len);
 	}
     if( (pUCX_Data[idx].nPut_Get - pUCX_Data[idx].nPut_Get_Done) >= UCX_QUEUE_SIZE ) {
         gettimeofday(&tm1, NULL);
@@ -1099,7 +1105,7 @@ retry:
             ucs_status_t status = ucp_request_check_status(req);
             if(status == UCS_OK) {
                 pUCX_Data[idx].nPut_Get_Done +=1;
-				fprintf(stdout, "DBG> UCX_Get UCS_OK loc %p rem %p\n", loc_buf, rem_buf);
+				fprintf(stdout, "DBG> UCX_Get UCS_OK loc %p rem %p rkey %p size %d\n", loc_buf, rem_buf, rkey, len);
                 break;
             }
             else if(status == UCS_INPROGRESS) {
