@@ -175,10 +175,11 @@ ucs_status_t SERVER_RDMA::server_create_ep(ucp_worker_h data_worker,
     if (status != UCS_OK) {
         fprintf(stderr, "mpi_rank %d failed to create an endpoint on the server: (%s)\n", mpi_rank,
                 ucs_status_string(status));
-    } else {
-        fprintf(stdout, "mpi_rank %d succeed to create an endpoint on the server with client: (%s)\n", mpi_rank,
-                peer_address);
-    }
+    } 
+	// else {
+    //     fprintf(stdout, "mpi_rank %d succeed to create an endpoint on the server with client: (%s)\n", mpi_rank,
+    //             peer_address);
+    // }
 
     return status;
 }
@@ -555,7 +556,7 @@ void SERVER_RDMA::Drain_Client(const int fd)
             ucs_status_t status = ucp_ep_rkey_unpack(pUCX_Data[idx].peer_ep, pData_to_recv->ib_mem.rkey_buffer, &pUCX_Data[idx].rkey);
             assert(status == UCS_OK);
             pUCX_Data[idx].rem_addr = pData_to_recv->ib_mem.addr;
-			printf("DBG> Drain_Client ucp_ep_rkey_unpack idx %d rem_addr %p rkey %p\n", idx, pUCX_Data[idx].rem_addr, pUCX_Data[idx].rkey);
+			// printf("DBG> Drain_Client ucp_ep_rkey_unpack idx %d rem_addr %p rkey %p\n", idx, pUCX_Data[idx].rem_addr, pUCX_Data[idx].rkey);
 
             pData_to_send->ucx.comm_tag = TAG_EXCH_UCX_INFO;
             memcpy(pData_to_send->ucx.peer_address, pUCX_Data[idx].address_p, pUCX_Data[idx].address_length);

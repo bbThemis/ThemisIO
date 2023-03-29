@@ -238,7 +238,7 @@ void CLIENT_UCX::Setup_Socket(char szServerIP[])
 	
 //	gettimeofday(&tm1, NULL);
     if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) { 
-        printf("\nConnection Failed \n"); 
+        printf("\nConnection Failed %s\n", szServerIP); 
         return;
     }
 //	gettimeofday(&tm2, NULL);
