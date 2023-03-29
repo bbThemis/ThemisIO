@@ -409,20 +409,21 @@ int main(int argc, char **argv) {
 	
 	string filename_str = opt.getFilename();
 	const char *filename = filename_str.c_str();
-	// printf("[%d] filename=\"%s\"\n", rank, filename);
+	printf("[%d] filename=\"%s\"\n", rank, filename);
+	char nFileName[100];
+	sprintf(nFileName, "%s1", filename);
+	int fd = open(nFileName, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
-	int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-
-  // make sure everyone was able to open their files
-  int min_fd;
-  MPI_Allreduce(&fd, &min_fd, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-  if (min_fd < 0) {
-    if (fd == -1) {
-      printf("[%d] Error creating %s: %s\n", rank, filename, strerror(errno));
-    }
-    MPI_Finalize();
-    return 1;
-  }
+	// make sure everyone was able to open their files
+	int min_fd;
+	MPI_Allreduce(&fd, &min_fd, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+	if (min_fd < 0) {
+	  if (fd == -1) {
+	    printf("[%d] Error creating %s: %s\n", rank, filename, strerror(errno));
+	  }
+	  MPI_Finalize();
+	  return 1;
+	}
 
 	vector<long> data(opt.io_size / sizeof(long));
 	vector<long> expected_data(opt.io_size / sizeof(long));
@@ -453,12 +454,13 @@ int main(int argc, char **argv) {
 
 			// out of time
 			if (getTime() > opt.run_time_sec) {
-        done=true;
-        break;
-      }
-
+       			done=true;
+       			break;
+      		}
+			// if(iteration == 2) break;
 			fillBuffer(data, file_offset);
 			int bytes_written = write(fd, data.data(), opt.io_size);
+			// printf("write fd %d\n", fd);
 			if (bytes_written != opt.io_size) {
 				printf("[%d] %.6f write fail, %d of %d bytes\n", rank, getTime(), bytes_written, opt.io_size);
 				done = true;
@@ -473,12 +475,17 @@ int main(int argc, char **argv) {
 
 		// XXX ThemisIO doesn't yet support seek
 		close(fd);
-		fd = open(filename, O_RDONLY);
+		char nFileName[100];
+		sprintf(nFileName, "%s%d", filename, iteration);
+		fd = open(nFileName, O_RDONLY);
 		if (fd < 0) {
 			printf("[%d] %.6f read iteration %d of %s, open returned %d, error %s\n",
 						 rank, getTime(), iteration, filename, fd, strerror(errno));
 			break;
 		}
+		// else {
+		// 	printf("open file 1 %s\n", nFileName);
+		// }
 			
 		assert(fd >= 0);
 		
@@ -488,35 +495,44 @@ int main(int argc, char **argv) {
 
 			// out of time
 			if (getTime() > opt.run_time_sec) {
-        done=true;
-        break;
-      }
+				done=true;
+				break;
+      		}
+			// if(file_offset == 0) continue;
 
 			fillBuffer(expected_data, file_offset);
-			int bytes_read = read(fd, data.data(), opt.io_size);
+			int bytes_read = pread(fd, data.data(), opt.io_size, file_offset);
+			// printf("read fd %d file_offset %ld\n", fd, file_offset);
 			if (bytes_read != opt.io_size) {
 				printf("[%d] %.6f read fail, %d of %d bytes\n", rank, getTime(), bytes_read, opt.io_size);
 				done = true;
 				break;
 			}
-			if (memcmp(expected_data.data(), data.data(), opt.io_size)) {
-				printf("[%d] %.6f data read back incorrectly at offset %ld\n", rank, getTime(), file_offset);
+			int wrong_byte_idx = -1;
+			if (wrong_byte_idx = memcmp(expected_data.data(), data.data(), opt.io_size)) {
+				printf("[%d] %.6f data read back incorrectly at offset %ld at idx %d\n", rank, getTime(), file_offset, wrong_byte_idx);
 				done = true;
+				
 				break;
 			}
 
 			io_bytes += opt.io_size;
 			io_over_time.inc();
+			// printf("read finish file_offset:%ld\n", file_offset);
 		}
 
 		// XXX ThemisIO doesn't yet support seek
 		close(fd);
-		fd = open(filename, O_WRONLY);
+		sprintf(nFileName, "%s%d", filename, iteration + 1);
+		fd = open(nFileName, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		if (fd < 0) {
 			printf("[%d] %.6f write iteration %d of %s, open returned %d error %s\n",
-						 rank, getTime(), iteration, filename, fd, strerror(errno));
+						 rank, getTime(), iteration, nFileName, fd, strerror(errno));
 			break;
-		}
+		} 
+		// else {
+		// 	printf("open file 2 %s\n", nFileName);
+		// }
 
 		assert(fd >= 0);
 	}
@@ -526,11 +542,11 @@ int main(int argc, char **argv) {
 
   // printf("[%d] %ld bytes\n", rank, io_bytes);
 	long total_io_bytes;
-  double rank_io_bytes_stddev;
-  gatherStats(io_bytes, total_io_bytes, rank_io_bytes_stddev);
+  	double rank_io_bytes_stddev;
+  	gatherStats(io_bytes, total_io_bytes, rank_io_bytes_stddev);
 
 	double total_mbps = total_io_bytes / ((1<<20) * elapsed_sec);
-  double mbps_rank_stddev = rank_io_bytes_stddev / ((1<<20) * elapsed_sec);
+  	double mbps_rank_stddev = rank_io_bytes_stddev / ((1<<20) * elapsed_sec);
 
 	io_over_time.gather();
 
@@ -563,7 +579,7 @@ int main(int argc, char **argv) {
 	if (opt.cleanup)
 		remove(filename);
 
-  MPI_Finalize();
+  	MPI_Finalize();
 
 	return 0;
 }

@@ -1595,7 +1595,7 @@ inline void my_Adaptive_Write(int idx_ucx, void *loc_buf, void *rem_buf, ucp_rke
 	// struct ibv_mr *mr_tmp;
 	ucp_mem_h mr_tmp = NULL;
 	char *pDest;
-	fprintf(stdout, "my_Adaptive_Write\n");
+	// fprintf(stdout, "my_Adaptive_Write\n");
 	if(count > MAX_SIZE_MR_BLOCK)	{	// multiple times RDMA
 		nBlocks = (count % MAX_SIZE_MR_BLOCK) ? ( (count / MAX_SIZE_MR_BLOCK) + 1) : (count / MAX_SIZE_MR_BLOCK);
 		nBlocksM1 = nBlocks - 1;
@@ -1717,7 +1717,7 @@ size_t my_write_stripe_RDMA(int fd, const char *szFileName, int server_shift, in
 	nBytes_Written = 0;
 	if(nExtraPointer == 0)	{	// a new file
 //		my_Adaptive_Write(idx_qp, loc_buf, lkey, rem_buf, rkey, count, (void*)((char*)pStripeDataLocal->pExtraData[idx_Block].AddressofData + (offset-pStripeDataLocal->pExtraData[idx_Block].FileOffset)));
-		fprintf(stdout, "nExtraPointer == 0 a new file\n");
+		// fprintf(stdout, "nExtraPointer == 0 a new file\n");
 		my_Adaptive_Write(idx_ucx, loc_buf, rem_buf, rkey, count, (void*)((char*)pStripeDataLocal->pExtraData[idx_Block].AddressofData + (offset-pStripeDataLocal->pExtraData[idx_Block].FileOffset)));
 //		pStripeDataLocal->MaxDataRange = MAX(pStripeDataLocal->MaxDataRange, offset_Loc+nBytes_Written_OneTime);
 //		Atomic_Increase(offset_Loc+nBytes_Written_OneTime, &(pStripeDataLocal->MaxDataRange));
@@ -1845,7 +1845,7 @@ inline void my_Adaptive_Read(int idx_ucx, void *loc_buf, void *rem_buf, ucp_rkey
 	// struct ibv_mr *mr_tmp;
 	ucp_mem_h mr_tmp = NULL;
 	char *pSrc;
-	printf("DBG> my_Adaptive_Read idx_ucx %d loc_buf %p rem_buff %p count %d\n", idx_ucx, loc_buf, rem_buf, count);
+	// printf("DBG> my_Adaptive_Read idx_ucx %d loc_buf %p rem_buff %p count %d\n", idx_ucx, loc_buf, rem_buf, count);
 	if(count > MAX_SIZE_MR_BLOCK)	{	// multiple times RDMA
 		nBlocks = (count % MAX_SIZE_MR_BLOCK) ? ( (count / MAX_SIZE_MR_BLOCK) + 1) : (count / MAX_SIZE_MR_BLOCK);
 		nBlocksM1 = nBlocks - 1;

@@ -291,7 +291,7 @@ void CLIENT_UCX::Init_UCX_Env() {
 }
 
 void CLIENT_UCX::Setup_UCP_Connection(int IdxServer, char loc_buff[], size_t size_loc_buff, char rem_buff[], size_t size_rem_buff) {
-	printf("Setup_UCP_Connection %d\n", IdxServer);
+	// printf("Setup_UCP_Connection %d\n", IdxServer);
 	int idx;
 //	GLOBAL_ADDR_DATA Global_Addr_Data;
 	unsigned long long t;
@@ -398,7 +398,7 @@ void CLIENT_UCX::Setup_UCP_Connection(int IdxServer, char loc_buff[], size_t siz
 }
 
 ucs_status_t CLIENT_UCX::RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp_mem_h* memh) {
-	printf("DBG> RegisterBuf_RW_Local_Remote %p %d\n", buf, len);
+	// printf("DBG> RegisterBuf_RW_Local_Remote %p %d\n", buf, len);
     uct_allocated_memory_t alloc_mem;
     ucp_mem_map_params_t mem_map_params;
 	memset(&mem_map_params, 9, sizeof(mem_map_params));
@@ -456,7 +456,7 @@ int CLIENT_UCX::UCX_Put(void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t le
     }
 	nPut++;
 	if(req == NULL) {
-		fprintf(stdout, "DBG> UCX_Put returns immediately loc %p rem %p\n", loc_buf, rem_buf);
+		// fprintf(stdout, "DBG> UCX_Put returns immediately loc %p rem %p\n", loc_buf, rem_buf);
 		nPut_Done +=1;
 	}
 	if( (nPut - nPut_Done) >= UCX_QUEUE_SIZE ) {
@@ -466,7 +466,7 @@ int CLIENT_UCX::UCX_Put(void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t le
             ucs_status_t status = ucp_request_check_status(req);
             if(status == UCS_OK) {
                 nPut_Done +=1;
-				fprintf(stdout, "DBG> UCX_Put UCS_OK loc %p rem %p\n", loc_buf, rem_buf);
+				// fprintf(stdout, "DBG> UCX_Put UCS_OK loc %p rem %p\n", loc_buf, rem_buf);
                 break;
             }
             else if(status == UCS_INPROGRESS) {
@@ -502,7 +502,7 @@ int CLIENT_UCX::UCX_Get(void* loc_buf, void* rem_buf, ucp_rkey_h rkey, size_t le
     }
 	nGet++;
 	if(req == NULL) {
-		fprintf(stdout, "DBG> UCX_Get returns immediately\n");
+		// fprintf(stdout, "DBG> UCX_Get returns immediately\n");
 		nGet_Done +=1;
 	}
 	if( (nGet - nGet_Done) >= UCX_QUEUE_SIZE ) {
@@ -556,7 +556,7 @@ static void Read_UCX_FS_Param(void) {
 	char szFileName[128], *szServerConf=NULL;
 	FILE *fIn;
 	int i, j, nItems;
-	printf("DBG> Read_UCX_FS_Param\n");
+	// printf("DBG> Read_UCX_FS_Param\n");
 	sprintf(szFileName, "/dev/shm/%s", UCX_FS_PARAM_FILE);
 	fIn = fopen(szFileName, "r");
 	if(fIn == NULL)	{
@@ -599,7 +599,7 @@ static void Read_UCX_FS_Param(void) {
 
 void Init_UCX_Client() 
 {
-	printf("DBG> Begin Init_UCX_Client()\n");
+	// printf("DBG> Begin Init_UCX_Client()\n");
 	int i, shm_fd, To_Init=0, nSizeHT_IO_Redirect, nSizeofShm;
 	char mutex_name[]="shm_ucx_myfs_paramhhh";
 	void *p_shm;

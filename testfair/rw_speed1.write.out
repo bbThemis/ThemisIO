@@ -1,347 +1,187 @@
-TACC:  Starting up job 5350083 
+TACC:  Starting up job 5356260 
 TACC:  Starting parallel tasks... 
 themis_client.sh: Failed to find myfs.param
-DBG> Begin Init_UCX_Client()
-[1679932630.783140] [c202-002:29257:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1679932630.786031] [c202-002:29257:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1679932630.805367] [c202-002:29257:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1680085502.219916] [c203-021:230680:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1680085502.222784] [c203-021:230680:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1680085502.242548] [c203-021:230680:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
 [0] filename="/myfs/rw_speed_test_file1"
-DBG> RegisterBuf_RW_Local_Remote 0x2afaa73ff040 2101248
-DBG> RegisterBuf_RW_Local_Remote 0x2afaa7600040 2101248
 Setup_UCP_Connection 0
-[1679932631.080871] [c202-002:29257:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1679932631.084601] [c202-002:29257:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-DBG> RegisterBuf_RW_Local_Remote 0x10e0050 1480
+[1680085502.519283] [c203-021:230680:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1680085502.523137] [c203-021:230680:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
 DBG> PrintIOType:RF_RW_OP_OPEN
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put UCS_OK loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 48 TagEnd -346647799 Tag_Magic 1281975113DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-rw_speed time=2023-03-27:10:57:11 np=1 nn=1 sim_nn=1 rank0host=c202-002.frontera.tacc.utexas.edu -prefix=/myfs/rw_speed -iosize=5242880 -filesize=10485760 -time=15.0 -tag=job1 -nodelete
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+rw_speed time=2023-03-29:05:25:02 np=1 nn=1 sim_nn=1 rank0host=c203-021.frontera.tacc.utexas.edu -prefix=/myfs/rw_speed -iosize=5242880 -filesize=10485760 -time=15.0 -tag=job1 -nodelete
 DBG> PrintIOType:RF_RW_OP_CLOSE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -869307443 Tag_Magic 1796250509DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 DBG> PrintIOType:RF_RW_OP_OPEN
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 48 TagEnd -1588587534 Tag_Magic 107996082DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 open file 2 /myfs/rw_speed_test_file1
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:0 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3a05010 2097152
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:0 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -1018337801 Tag_Magic 1894594023DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:2097152 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3c05010 2097152
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:2097152 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -569977737 Tag_Magic 1841726567DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:4194304 size:1048576
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3e05010 1048576
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:4194304 size:1048576
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -1582411929 Tag_Magic 307109751DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 write fd 536870912
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:0 size:1048576
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3a05010 1048576
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:0 size:1048576
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -573538904 Tag_Magic 1852845496DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:1048576 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3b05010 2097152
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:1048576 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -1281027626 Tag_Magic 1393094DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:3145728 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3d05010 2097152
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:3145728 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -2088345986 Tag_Magic 810946158DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 write fd 536870912
 DBG> PrintIOType:RF_RW_OP_CLOSE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -1009252263 Tag_Magic 1692923929DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 DBG> PrintIOType:RF_RW_OP_OPEN
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 48 TagEnd -452032990 Tag_Magic 1110537826DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 open file 2 /myfs/rw_speed_test_file2
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:0 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3a05010 2097152
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:0 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -2039174615 Tag_Magic 903150137DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:2097152 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3c05010 2097152
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:2097152 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -702079592 Tag_Magic 1709657480DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:4194304 size:1048576
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3e05010 1048576
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:4194304 size:1048576
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -990752223 Tag_Magic 1997668913DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 write fd 536870912
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:0 size:1048576
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3a05010 1048576
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:0 size:1048576
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -2082765979 Tag_Magic 813421429DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:1048576 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3b05010 2097152
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:1048576 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -925700742 Tag_Magic 2070068586DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:3145728 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3d05010 2097152
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:3145728 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -662451329 Tag_Magic 1800641391DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 write fd 536870912
 DBG> PrintIOType:RF_RW_OP_CLOSE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -1774667382 Tag_Magic 822561226DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 DBG> PrintIOType:RF_RW_OP_OPEN
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 48 TagEnd -880888907 Tag_Magic 1816216565DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 open file 2 /myfs/rw_speed_test_file3
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:0 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3a05010 2097152
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:0 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -479055524 Tag_Magic 1355964748DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:2097152 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3c05010 2097152
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:2097152 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -218101478 Tag_Magic 1086347530DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:4194304 size:1048576
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3e05010 1048576
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:4194304 size:1048576
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -1260160349 Tag_Magic 117648051DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 write fd 536870912
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:0 size:1048576
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3a05010 1048576
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:0 size:1048576
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -510299220 Tag_Magic 1379214268DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:1048576 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3b05010 2097152
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:1048576 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -1290358545 Tag_Magic 10936575DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:3145728 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3d05010 2097152
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:3145728 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -1374274509 Tag_Magic 499543075DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 write fd 536870912
 DBG> PrintIOType:RF_RW_OP_CLOSE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -1200992534 Tag_Magic 525713066DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 DBG> PrintIOType:RF_RW_OP_OPEN
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 48 TagEnd -778817846 Tag_Magic 1990975114DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 open file 2 /myfs/rw_speed_test_file4
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:0 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3a05010 2097152
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:0 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -772974298 Tag_Magic 1649215798DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:2097152 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3c05010 2097152
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:2097152 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -1939316777 Tag_Magic 1067978695DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:4194304 size:1048576
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3e05010 1048576
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:4194304 size:1048576
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -952906464 Tag_Magic 1960025392DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 write fd 536870912
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:0 size:1048576
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3a05010 1048576
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:0 size:1048576
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -1725939533 Tag_Magic 713035939DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:1048576 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3b05010 2097152
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:1048576 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -1079958784 Tag_Magic 202470160DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:3145728 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3d05010 2097152
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:3145728 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -332109651 Tag_Magic 1608792253DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 write fd 536870912
 DBG> PrintIOType:RF_RW_OP_CLOSE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -1747975147 Tag_Magic 821032021DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 DBG> PrintIOType:RF_RW_OP_OPEN
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 48 TagEnd -608085833 Tag_Magic 2097064183DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 open file 2 /myfs/rw_speed_test_file5
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:0 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3a05010 2097152
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:0 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -32838348 Tag_Magic 1303035172DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:2097152 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3c05010 2097152
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:2097152 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -251771939 Tag_Magic 1128141773DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:4194304 size:1048576
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3e05010 1048576
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:4194304 size:1048576
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -661748033 Tag_Magic 1802426031DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 write fd 536870912
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:0 size:1048576
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3a05010 1048576
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:0 size:1048576
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -31478022 Tag_Magic 1304428266DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:1048576 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3b05010 2097152
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:1048576 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -1071353301 Tag_Magic 1939087931DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2afab3a05010 offset:3145728 size:2097152
-DBG> RegisterBuf_RW_Local_Remote 0x2afab3d05010 2097152
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+stripe_write > DATA_COPY_THRESHOLD_SIZE buf:0x2ae9db8c2010 offset:3145728 size:2097152
 DBG> PrintIOType:RF_RW_OP_WRITE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -477716775 Tag_Magic 1347866313DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
 write fd 536870912
 DBG> PrintIOType:RF_RW_OP_CLOSE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2afaa7600040 rem 0x2afaa73ff040
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c64c0
-DBG> UCX_Put returns immediately loc 0x2afaa7600040 rem 0x2b5b606c1008
-Wait_For_IO_Request_Result 0x2afaa73ff040 data_worker 0x136b0a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd -1462860532 Tag_Magic 267482444DBG> Send_IO_Request finished loc 0x2afaa7600040 rem 0x2afaa73ff040
-rw_speed.job1 time=2023-03-27:10:57:11 nn=1 np=1 user=101 jobid=1001 mbps=1508.720 mbps_rank_stddev=-nan mbps_1sec_time_slices=(50.0)
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae9db323040 rem 0x2ae9db122040
+DBG> Send_IO_Request finished loc 0x2ae9db323040 rem 0x2ae9db122040
+rw_speed.job1 time=2023-03-29:05:25:02 nn=1 np=1 user=101 jobid=1001 mbps=1569.912 mbps_rank_stddev=-nan mbps_1sec_time_slices=(50.0)
 rw_speed_write: wrapper.cpp:951: int close(int): Assertion `fd_real >= 0' failed.
-/work2/08571/yhkan/frontera/ThemisIO/tests/themis_client.sh: line 126: 29257 Aborted                 "$@"
+/work2/08571/yhkan/frontera/ThemisIO/tests/themis_client.sh: line 126: 230680 Aborted                 "$@"
 TACC:  MPI job exited with code: 134 
 TACC:  Shutdown complete. Exiting. 

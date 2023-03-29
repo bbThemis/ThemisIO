@@ -1,60 +1,187 @@
-TACC:  Starting up job 5350083 
+TACC:  Starting up job 5356260 
 TACC:  Starting parallel tasks... 
 themis_client.sh: Failed to find myfs.param
-DBG> Begin Init_UCX_Client()
-[1679932632.016230] [c202-002:29343:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1679932632.018971] [c202-002:29343:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1679932632.037673] [c202-002:29343:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1680085504.755993] [c203-021:230767:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1680085504.758644] [c203-021:230767:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1680085504.777304] [c203-021:230767:0]          parser.c:1888 UCX  WARN  unused env variables: UCX_MYFS_CONF,UCX_WARN_UNUSED_ENV_VARS,UCX_LOG_LEVEL (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
 [0] filename="/myfs/rw_speed_test_file1"
-DBG> RegisterBuf_RW_Local_Remote 0x2ae24b191040 2101248
-DBG> RegisterBuf_RW_Local_Remote 0x2ae24b392040 2101248
 Setup_UCP_Connection 0
-[1679932632.313693] [c202-002:29343:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-[1679932632.317252] [c202-002:29343:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
-DBG> RegisterBuf_RW_Local_Remote 0x2787050 1480
+[1680085505.052819] [c203-021:230767:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
+[1680085505.056392] [c203-021:230767:0]        rc_iface.c:506  UCX  WARN  using maximal value for RETRY_COUNT (7) instead of 40
 DBG> PrintIOType:RF_RW_OP_OPEN
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae24b392040 rem 0x2ae24b191040
-DBG> UCX_Put UCS_OK loc 0x2ae24b392040 rem 0x2b5b606c6658
-DBG> UCX_Put returns immediately loc 0x2ae24b392040 rem 0x2b5b606c1009
-Wait_For_IO_Request_Result 0x2ae24b191040 data_worker 0x2a120a0
-Wait_For_IO_Request_Result nDataSize 48 TagEnd 2143493152 Tag_Magic 886705248DBG> Send_IO_Request finished loc 0x2ae24b392040 rem 0x2ae24b191040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
 DBG> PrintIOType:RF_RW_OP_CLOSE
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae24b392040 rem 0x2ae24b191040
-DBG> UCX_Put returns immediately loc 0x2ae24b392040 rem 0x2b5b606c6658
-DBG> UCX_Put returns immediately loc 0x2ae24b392040 rem 0x2b5b606c1009
-Wait_For_IO_Request_Result 0x2ae24b191040 data_worker 0x2a120a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd 1722299644 Tag_Magic 766583996DBG> Send_IO_Request finished loc 0x2ae24b392040 rem 0x2ae24b191040
-rw_speed time=2023-03-27:10:57:12 np=1 nn=1 sim_nn=1 rank0host=c202-002.frontera.tacc.utexas.edu -prefix=/myfs/rw_speed -iosize=5242880 -filesize=10485760 -time=15.0 -tag=job1 -nodelete
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+rw_speed time=2023-03-29:05:25:05 np=1 nn=1 sim_nn=1 rank0host=c203-021.frontera.tacc.utexas.edu -prefix=/myfs/rw_speed -iosize=5242880 -filesize=10485760 -time=15.0 -tag=job1 -nodelete
 DBG> PrintIOType:RF_RW_OP_OPEN
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae24b392040 rem 0x2ae24b191040
-DBG> UCX_Put returns immediately loc 0x2ae24b392040 rem 0x2b5b606c6658
-DBG> UCX_Put returns immediately loc 0x2ae24b392040 rem 0x2b5b606c1009
-Wait_For_IO_Request_Result 0x2ae24b191040 data_worker 0x2a120a0
-Wait_For_IO_Request_Result nDataSize 48 TagEnd 1111072174 Tag_Magic 153128430DBG> Send_IO_Request finished loc 0x2ae24b392040 rem 0x2ae24b191040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
 open file 1 /myfs/rw_speed_test_file1
 stripe_read > DATA_COPY_THRESHOLD_SIZE
-DBG> RegisterBuf_RW_Local_Remote 0x2ae24b931010 2097152
 DBG> PrintIOType:RF_RW_OP_READ
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae24b392040 rem 0x2ae24b191040
-DBG> UCX_Put returns immediately loc 0x2ae24b392040 rem 0x2b5b606c6658
-DBG> UCX_Put returns immediately loc 0x2ae24b392040 rem 0x2b5b606c1009
-Wait_For_IO_Request_Result 0x2ae24b191040 data_worker 0x2a120a0
-Wait_For_IO_Request_Result nDataSize 32 TagEnd 2029316177 Tag_Magic 871233553DBG> Send_IO_Request finished loc 0x2ae24b392040 rem 0x2ae24b191040
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
 stripe_read > DATA_COPY_THRESHOLD_SIZE
-DBG> RegisterBuf_RW_Local_Remote 0x2ae24bb31010 2097152
 DBG> PrintIOType:RF_RW_OP_READ
-DBG> Send_IO_Request idx_fs 0 begins loc 0x2ae24b392040 rem 0x2ae24b191040
-DBG> UCX_Put returns immediately loc 0x2ae24b392040 rem 0x2b5b606c6658
-DBG> UCX_Put returns immediately loc 0x2ae24b392040 rem 0x2b5b606c1009
-Wait_For_IO_Request_Result 0x2ae24b191040 data_worker 0x2a120a0
-DBG> Timeout[endTage]. pid = 29343 on c202-002.frontera.tacc.utexas.edu
-[mpiexec@c202-001.frontera.tacc.utexas.edu] Sending Ctrl-C to processes as requested
-[mpiexec@c202-001.frontera.tacc.utexas.edu] Press Ctrl-C again to force abort
-
-===================================================================================
-=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
-=   RANK 0 PID 29339 RUNNING AT c202-002
-=   KILLED BY SIGNAL: 2 (Interrupt)
-===================================================================================
-TACC:  MPI job exited with code: 255 
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+read finish file_offset:0
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+read finish file_offset:5242880
+DBG> PrintIOType:RF_RW_OP_CLOSE
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> PrintIOType:RF_RW_OP_OPEN
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+open file 1 /myfs/rw_speed_test_file2
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+read finish file_offset:0
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+read finish file_offset:5242880
+DBG> PrintIOType:RF_RW_OP_CLOSE
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> PrintIOType:RF_RW_OP_OPEN
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+open file 1 /myfs/rw_speed_test_file3
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+read finish file_offset:0
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+read finish file_offset:5242880
+DBG> PrintIOType:RF_RW_OP_CLOSE
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> PrintIOType:RF_RW_OP_OPEN
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+open file 1 /myfs/rw_speed_test_file4
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+read finish file_offset:0
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+read finish file_offset:5242880
+DBG> PrintIOType:RF_RW_OP_CLOSE
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> PrintIOType:RF_RW_OP_OPEN
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+open file 1 /myfs/rw_speed_test_file5
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+read finish file_offset:0
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+stripe_read > DATA_COPY_THRESHOLD_SIZE
+DBG> PrintIOType:RF_RW_OP_READ
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+read finish file_offset:5242880
+DBG> PrintIOType:RF_RW_OP_CLOSE
+DBG> Send_IO_Request idx_fs 0 begins loc 0x2b535b67d040 rem 0x2b535b47c040
+DBG> Send_IO_Request finished loc 0x2b535b67d040 rem 0x2b535b47c040
+rw_speed.job1 time=2023-03-29:05:25:05 nn=1 np=1 user=101 jobid=1001 mbps=3082.938 mbps_rank_stddev=-nan mbps_1sec_time_slices=(50.0)
+rw_speed_read: wrapper.cpp:951: int close(int): Assertion `fd_real >= 0' failed.
+/work2/08571/yhkan/frontera/ThemisIO/tests/themis_client.sh: line 126: 230767 Aborted                 "$@"
+TACC:  MPI job exited with code: 134 
 TACC:  Shutdown complete. Exiting. 

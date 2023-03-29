@@ -599,8 +599,8 @@ inline void Send_IO_Request(int idx_fs)
 	IO_CMD_MSG *pIO_Cmd = (IO_CMD_MSG *)ucx_loc_buff;
 	RW_FUNC_RETURN *pResult = (RW_FUNC_RETURN *)ucx_rem_buff;
 	int bTimeout;
-	PrintIOType(pIO_Cmd);
-	fprintf(stdout, "DBG> Send_IO_Request idx_fs %d begins loc %p rem %p\n", idx_fs, pIO_Cmd, pResult);
+	// PrintIOType(pIO_Cmd);
+	// fprintf(stdout, "DBG> Send_IO_Request idx_fs %d begins loc %p rem %p\n", idx_fs, pIO_Cmd, pResult);
 	while(1)	{
 		// send the IO request first
 		pIO_Cmd->tag_magic = rand();
@@ -620,7 +620,7 @@ inline void Send_IO_Request(int idx_fs)
 			break;	// NEVER send multiple RF_RW_OP_DISCONNECT command!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		}
 	}
-	fprintf(stdout, "DBG> Send_IO_Request finished loc %p rem %p\n", pIO_Cmd, pResult);
+	// fprintf(stdout, "DBG> Send_IO_Request finished loc %p rem %p\n", pIO_Cmd, pResult);
 }
 /*
 static inline int fetch_and_add(int* variable, int value)
@@ -1144,7 +1144,7 @@ ssize_t stripe_read(int fd, char *szFileName, void *buf, size_t size, off_t offs
 			// mr_loc_buf = CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote((char*)buf+nBytesRead, nBytesReadOneTime);
 			// pIO_Cmd->rkey = mr_loc_buf->rkey;
 			// pIO_Cmd->rem_buff = mr_loc_buf->addr;
-			printf("stripe_read > DATA_COPY_THRESHOLD_SIZE\n");
+			// printf("stripe_read > DATA_COPY_THRESHOLD_SIZE\n");
 			CLIENT_UCX::RegisterBuf_RW_Local_Remote((char*)buf+nBytesRead, nBytesReadOneTime, &mr_loc_buf);
 			CLIENT_UCX::UCX_Pack_Rkey(mr_loc_buf, pIO_Cmd->rkey_buffer);
 			pIO_Cmd->rem_buff = (void*)((char*)buf+nBytesRead);
@@ -1152,7 +1152,7 @@ ssize_t stripe_read(int fd, char *szFileName, void *buf, size_t size, off_t offs
 		else	{
 			// pIO_Cmd->rkey = mr_rem->rkey;
 			// pIO_Cmd->rem_buff = mr_rem->addr;
-			printf("stripe_read <= DATA_COPY_THRESHOLD_SIZE\n");
+			// printf("stripe_read <= DATA_COPY_THRESHOLD_SIZE\n");
 			CLIENT_UCX::UCX_Pack_Rkey(ucx_mr_rem, pIO_Cmd->rkey_buffer);
 			pIO_Cmd->rem_buff = ucx_rem_buff;
 		}
@@ -1348,7 +1348,7 @@ ssize_t stripe_write(int fd, char *szFileName, const void *buf, size_t size, off
 			// mr_loc_buf = CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote((char*)buf+nBytesWritten, nBytesWriteOneTime);
 			// pIO_Cmd->rkey = mr_loc_buf->rkey;
 			// pIO_Cmd->rem_buff = mr_loc_buf->addr;
-			printf("stripe_write > DATA_COPY_THRESHOLD_SIZE buf:%p offset:%d size:%d\n", buf, nBytesWritten, nBytesWriteOneTime);
+			// printf("stripe_write > DATA_COPY_THRESHOLD_SIZE buf:%p offset:%d size:%d\n", buf, nBytesWritten, nBytesWriteOneTime);
 			CLIENT_UCX::RegisterBuf_RW_Local_Remote((char*)buf+nBytesWritten, nBytesWriteOneTime, &mr_loc_buf);
 			CLIENT_UCX::UCX_Pack_Rkey(mr_loc_buf, pIO_Cmd->rkey_buffer);
 			pIO_Cmd->rem_buff = (void*)((char*)buf+nBytesWritten);
@@ -1356,7 +1356,7 @@ ssize_t stripe_write(int fd, char *szFileName, const void *buf, size_t size, off
 		}
 		else	{
 			// pIO_Cmd->rkey = mr_rem->rkey;
-			printf("stripe_write <= DATA_COPY_THRESHOLD_SIZE\n");
+			// printf("stripe_write <= DATA_COPY_THRESHOLD_SIZE\n");
 			CLIENT_UCX::UCX_Pack_Rkey(ucx_mr_rem, pIO_Cmd->rkey_buffer);
 			// pIO_Cmd->rem_buff = mr_rem->addr;
 			pIO_Cmd->rem_buff = ucx_rem_buff;
@@ -3529,7 +3529,7 @@ inline int Wait_For_IO_Request_Result(ucp_worker_h data_worker, int Tag_Magic)
 	struct timeval tm1, tm2;	// tm1.tv_sec
 	long int t1_ms, t2_ms;
 	char szHostName[128];
-	printf("Wait_For_IO_Request_Result %p data_worker %p\n", pResult, data_worker);
+	// printf("Wait_For_IO_Request_Result %p data_worker %p\n", pResult, data_worker);
 	gettimeofday(&tm1, NULL);
 	t1_ms = (tm1.tv_sec * 1000) + (tm1.tv_usec / 1000);
 	while(1)	{
@@ -3576,7 +3576,7 @@ inline int Wait_For_IO_Request_Result(ucp_worker_h data_worker, int Tag_Magic)
 			return 1;	// time out
 		}
 	}
-	printf("Wait_For_IO_Request_Result nDataSize %d TagEnd %d Tag_Magic %d\n", pResult->nDataSize, *pTag_End, Tag_Magic);
+	// printf("Wait_For_IO_Request_Result nDataSize %d TagEnd %d Tag_Magic %d\n", pResult->nDataSize, *pTag_End, Tag_Magic);
 	return 0;
 }
 
@@ -5135,7 +5135,7 @@ __attribute__((destructor)) void Finalize_Client()
 			if(pClient_ucx_List[i]->ucp_worker)	{	// to put a msg to let server close this associated QP
 				// pIO_Cmd = (IO_CMD_MSG *)(pClient_ucx_List[i]->mr_loc_thread_addr);
 				pIO_Cmd = (IO_CMD_MSG *)ucx_loc_buff;
-				printf("pClient_ucx_List %d pIO_Cmd %p", i, pIO_Cmd);
+				// printf("pClient_ucx_List %d pIO_Cmd %p", i, pIO_Cmd);
 				assert(pIO_Cmd != NULL);
 //				local_mr = CLIENT_QUEUEPAIR::IB_RegisterBuf_RW_Local_Remote((void*)pIO_Cmd, sizeof(IO_CMD_MSG));
 				

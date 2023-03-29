@@ -65,7 +65,7 @@ void RW_Open(IO_CMD_MSG *pRF_Op_Msg)
 	tag_magic = pRF_Op_Msg->tag_magic;
 	idx_ucx = pRF_Op_Msg->idx_qp;
 	mr_shm_global = Server_ucx.mr_shm_global;
-	fprintf(stdout, "DBG> RW_Open begin rem_buff %p idx_ucx %d\n", rem_buff, idx_ucx);
+	// fprintf(stdout, "DBG> RW_Open begin rem_buff %p idx_ucx %d\n", rem_buff, idx_ucx);
 	pResult = (RW_FUNC_RETURN *)( (char*)(Server_ucx.p_shm_IO_Result) + pRF_Op_Msg->tid*IO_RESULT_BUFFER_SIZE);
 	Server_ucx.UCX_Unpack_Rkey(idx_ucx, rkey_buffer, &rkey);
 	pResult->nDataSize = sizeof(RW_FUNC_RETURN) + 2*sizeof(size_t);	// add inode info and file size info!!!
@@ -81,7 +81,7 @@ void RW_Open(IO_CMD_MSG *pRF_Op_Msg)
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, pResult->nDataSize);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, pResult->nDataSize);
 	ucp_rkey_destroy(rkey);
-	fprintf(stdout, "DBG> RW_Open end rem_buff %p idx_ucx %d\n", rem_buff, idx_ucx);
+	// fprintf(stdout, "DBG> RW_Open end rem_buff %p idx_ucx %d\n", rem_buff, idx_ucx);
 }
 
 void RW_Close(IO_CMD_MSG *pRF_Op_Msg)
@@ -103,7 +103,7 @@ void RW_Close(IO_CMD_MSG *pRF_Op_Msg)
 	tag_magic = pRF_Op_Msg->tag_magic;
 	idx_ucx = pRF_Op_Msg->idx_qp;
 	mr_shm_global = Server_ucx.mr_shm_global;
-	fprintf(stdout, "DBG> RW_Close begin rem_buff %p idx_ucx %d\n", rem_buff, idx_ucx);
+	// fprintf(stdout, "DBG> RW_Close begin rem_buff %p idx_ucx %d\n", rem_buff, idx_ucx);
 	pResult = (RW_FUNC_RETURN *)( (char*)(Server_ucx.p_shm_IO_Result) + pRF_Op_Msg->tid*IO_RESULT_BUFFER_SIZE);
 	Server_ucx.UCX_Unpack_Rkey(idx_ucx, rkey_buffer, &rkey);
 	pResult->nDataSize = sizeof(RW_FUNC_RETURN);
@@ -117,7 +117,7 @@ void RW_Close(IO_CMD_MSG *pRF_Op_Msg)
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, rem_buff, rkey, sizeof(RW_FUNC_RETURN));
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, rem_buff, rkey, sizeof(RW_FUNC_RETURN));
 	ucp_rkey_destroy(rkey);
-	fprintf(stdout, "DBG> RW_Close end rem_buff %p idx_ucx %d\n", rem_buff, idx_ucx);
+	// fprintf(stdout, "DBG> RW_Close end rem_buff %p idx_ucx %d\n", rem_buff, idx_ucx);
 }
 
 void RW_Stat(IO_CMD_MSG *pRF_Op_Msg)
@@ -309,7 +309,7 @@ void RW_Read(IO_CMD_MSG *pRF_Op_Msg)
 	pResult = (RW_FUNC_RETURN *)( (char*)(Server_ucx.p_shm_IO_Result) + pRF_Op_Msg->tid*IO_RESULT_BUFFER_SIZE);
 	Server_ucx.UCX_Unpack_Rkey(idx_ucx, rkey_buffer, &rkey);
 //	Determine_Index_StorageBlock_for_Offset(pRF_Op_Msg->fd, pRF_Op_Msg->offset);
-	fprintf(stdout, "DBG> RW_Read begin rem_buff %p idx_ucx %d tid %d\n", rem_buff, idx_ucx, pRF_Op_Msg->tid);
+	// fprintf(stdout, "DBG> RW_Read begin rem_buff %p idx_ucx %d tid %d\n", rem_buff, idx_ucx, pRF_Op_Msg->tid);
 	if(pRF_Op_Msg->nLen <= DATA_COPY_THRESHOLD_SIZE)	{
 //		if(pRF_Op_Msg->offset >= pMetaData[fd_List[pRF_Op_Msg->fd].idx_file].st_size)	{	// out of range
 //			pResult->ret_value = 0;
@@ -352,10 +352,10 @@ void RW_Read(IO_CMD_MSG *pRF_Op_Msg)
 		*pTag_End = (pResult->Tag_Ini) ^ tag_magic;
 		// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].rem_addr), Server_qp.pQP_Data[idx_qp].rem_key, pResult->nDataSize);
 		Server_ucx.UCX_Put(idx_ucx, (void*)pResult, (void*)(Server_ucx.pUCX_Data[idx_ucx].rem_addr), Server_ucx.pUCX_Data[idx_ucx].rkey, pResult->nDataSize);
-		fprintf(stdout, "DBG> RW_Read > DATA_COPY_THRESHOLD_SIZE ret value %d myerrno %d rem_buff %p idx_ucx %d datasize %d Tag_End %d tag_magic %d\n", pResult->ret_value, pResult->myerrno, rem_buff, idx_ucx, pResult->nDataSize, *pTag_End, tag_magic);
+		// fprintf(stdout, "DBG> RW_Read > DATA_COPY_THRESHOLD_SIZE ret value %d myerrno %d rem_buff %p idx_ucx %d datasize %d Tag_End %d tag_magic %d\n", pResult->ret_value, pResult->myerrno, rem_buff, idx_ucx, pResult->nDataSize, *pTag_End, tag_magic);
 	}
 	// ucp_rkey_destroy(rkey);
-	fprintf(stdout, "DBG> RW_Read end rem_buff %p idx_ucx %d\n", rem_buff, idx_ucx);
+	// fprintf(stdout, "DBG> RW_Read end rem_buff %p idx_ucx %d\n", rem_buff, idx_ucx);
 }
 
 
@@ -377,11 +377,11 @@ void RW_Write(IO_CMD_MSG *pRF_Op_Msg)
 	idx_ucx = pRF_Op_Msg->idx_qp;
 	mr_shm_global = Server_ucx.mr_shm_global;
 	pResult = (RW_FUNC_RETURN *)( (char*)(Server_ucx.p_shm_IO_Result) + pRF_Op_Msg->tid*IO_RESULT_BUFFER_SIZE);
-	fprintf(stdout, "DBG> RW_Write begin rem_buff %p idx_ucx %d\n", rem_buff, idx_ucx);
+	// fprintf(stdout, "DBG> RW_Write begin rem_buff %p idx_ucx %d\n", rem_buff, idx_ucx);
 //	Determine_Index_StorageBlock_for_Offset(pRF_Op_Msg->fd, pRF_Op_Msg->offset);
 	Server_ucx.UCX_Unpack_Rkey(idx_ucx, rkey_buffer, &rkey);
 	if(pRF_Op_Msg->nLen <= DATA_COPY_THRESHOLD_SIZE)	{
-		fprintf(stdout,  "DBG> my_write_stripe\n");
+		// fprintf(stdout,  "DBG> my_write_stripe\n");
 		// Server_qp.IB_Get(idx_qp, (void*)((char*)pResult+sizeof(RW_FUNC_RETURN)), mr_shm_global->lkey, (void*)((char*)rem_buff+sizeof(RW_FUNC_RETURN)), rkey, pRF_Op_Msg->nLen);
 		Server_ucx.UCX_Get(idx_ucx, (void*)((char*)pResult+sizeof(RW_FUNC_RETURN)), (void*)((char*)rem_buff+sizeof(RW_FUNC_RETURN)), rkey, pRF_Op_Msg->nLen);
 		// pResult->ret_value = my_write_stripe(pRF_Op_Msg->fd, pRF_Op_Msg->szName, pRF_Op_Msg->mode, (const void *)((char*)pResult+sizeof(RW_FUNC_RETURN)), pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
@@ -389,7 +389,7 @@ void RW_Write(IO_CMD_MSG *pRF_Op_Msg)
 //		pResult->ret_value = my_write(pRF_Op_Msg->fd, (char*)pResult+sizeof(RW_FUNC_RETURN), pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
 	}
 	else	{
-		fprintf(stdout,  "DBG> my_write_stripe_RDMA\n");
+		// fprintf(stdout,  "DBG> my_write_stripe_RDMA\n");
 		// pResult->ret_value = my_write_stripe_RDMA(pRF_Op_Msg->fd, pRF_Op_Msg->szName, pRF_Op_Msg->mode, idx_ucx, (void*)((char*)pResult+sizeof(RW_FUNC_RETURN)), mr_shm_global->lkey, rem_buff, rkey, pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
 		pResult->ret_value = my_write_stripe_RDMA(pRF_Op_Msg->fd, pRF_Op_Msg->szName, pRF_Op_Msg->mode, idx_ucx, (void*)((char*)pResult+sizeof(RW_FUNC_RETURN)), rem_buff, rkey, pRF_Op_Msg->nLen, pRF_Op_Msg->offset);
 	}
@@ -403,7 +403,7 @@ void RW_Write(IO_CMD_MSG *pRF_Op_Msg)
 	// Server_qp.IB_Put(idx_qp, (void*)pResult, mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].rem_addr), Server_qp.pQP_Data[idx_qp].rem_key, pResult->nDataSize);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pResult, (void*)(Server_ucx.pUCX_Data[idx_ucx].rem_addr), Server_ucx.pUCX_Data[idx_ucx].rkey, pResult->nDataSize);
 	ucp_rkey_destroy(rkey);
-	fprintf(stdout, "DBG> RW_Write end rem_buff %p idx_ucx %d\n", rem_buff, idx_ucx);
+	// fprintf(stdout, "DBG> RW_Write end rem_buff %p idx_ucx %d\n", rem_buff, idx_ucx);
 }
 
 //void RW_PRead(IO_CMD_MSG *pRF_Op_Msg)

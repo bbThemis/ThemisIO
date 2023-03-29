@@ -445,10 +445,10 @@ void SERVER_RDMA::ScanNewMsg() {
 		p_shm_IO_Cmd_Msg[idx_ucx].T_Queued = T_Queued;
 		IO_Queue_List[idx_queue].Enqueue(&(p_shm_IO_Cmd_Msg[idx_ucx]));
 	}
-	pthread_mutex_lock(&process_lock);
-	nPreAllUCXNewMsg = nAllUCXNewMsg;
-	nAllUCXNewMsg += nUCXNewMsg;
-	pthread_mutex_unlock(&process_lock);
+	// pthread_mutex_lock(&process_lock);
+	// nPreAllUCXNewMsg = nAllUCXNewMsg;
+	// nAllUCXNewMsg += nUCXNewMsg;
+	// pthread_mutex_unlock(&process_lock);
 	nUCXNewMsg = 0;
 
 	if(IdxLastQP64 <=192)	{	// simple version
@@ -515,10 +515,10 @@ void SERVER_RDMA::ScanNewMsg() {
 		p_shm_IO_Cmd_Msg[idx_ucx].T_Queued = T_Queued;
 		IO_Queue_List[idx_queue].Enqueue(&(p_shm_IO_Cmd_Msg[idx_ucx]));
 	}
-	pthread_mutex_lock(&process_lock);
-	nAllUCXNewMsg += nUCXNewMsg;
-	if(nPreAllUCXNewMsg != nAllUCXNewMsg) fprintf(stdout, "nAllUCXNewMsg %d\n", nAllUCXNewMsg);
-	pthread_mutex_unlock(&process_lock);
+	// pthread_mutex_lock(&process_lock);
+	// nAllUCXNewMsg += nUCXNewMsg;
+	// if(nPreAllUCXNewMsg != nAllUCXNewMsg) fprintf(stdout, "nAllUCXNewMsg %d\n", nAllUCXNewMsg);
+	// pthread_mutex_unlock(&process_lock);
 
 	// while(!tmpV.empty()) {
 	// 	IO_CMD_MSG* cur = tmpV.back();
@@ -898,7 +898,7 @@ void SERVER_RDMA::Init_Server_Memory(int max_num_qp, int port) {
 }
 
 ucs_status_t SERVER_RDMA::RegisterBuf_RW_Local_Remote(void* buf, size_t len, ucp_mem_h* memh) {
-	printf("DBG> RegisterBuf_RW_Local_Remote %p %d\n", buf, len);
+	// printf("DBG> RegisterBuf_RW_Local_Remote %p %d\n", buf, len);
     uct_allocated_memory_t alloc_mem;
     ucp_mem_map_params_t mem_map_params;
 	memset(&mem_map_params, 0, sizeof(mem_map_params));
@@ -997,7 +997,7 @@ retry:
     pUCX_Data[idx].nPut_Get++;
 	if(req == NULL) {
 		pUCX_Data[idx].nPut_Get_Done += 1;
-		fprintf(stdout, "DBG> UCX_Put returns immediately loc %p rem %p rkey %p size %d\n", loc_buf, rem_buf, rkey, len);
+		// fprintf(stdout, "DBG> UCX_Put returns immediately loc %p rem %p rkey %p size %d\n", loc_buf, rem_buf, rkey, len);
 	}
     if( (pUCX_Data[idx].nPut_Get - pUCX_Data[idx].nPut_Get_Done) >= UCX_QUEUE_SIZE ) {
         gettimeofday(&tm1, NULL);
@@ -1010,7 +1010,7 @@ retry:
             ucs_status_t status = ucp_request_check_status(req);
             if(status == UCS_OK) {
                 pUCX_Data[idx].nPut_Get_Done +=1;
-				fprintf(stdout, "DBG> UCX_Put UCS_OK  loc %p rem %p rkey %p size %d\n", loc_buf, rem_buf, rkey, len);
+				// fprintf(stdout, "DBG> UCX_Put UCS_OK  loc %p rem %p rkey %p size %d\n", loc_buf, rem_buf, rkey, len);
                 break;
             }
             else if(status == UCS_INPROGRESS) {
@@ -1093,7 +1093,7 @@ retry:
     pUCX_Data[idx].nPut_Get++;
 	if(req == NULL) {
 		pUCX_Data[idx].nPut_Get_Done += 1;
-		fprintf(stdout, "DBG> UCX_Get returns immediately loc %p rem %p rkey %p size %d\n", loc_buf, rem_buf, rkey, len);
+		// fprintf(stdout, "DBG> UCX_Get returns immediately loc %p rem %p rkey %p size %d\n", loc_buf, rem_buf, rkey, len);
 	}
     if( (pUCX_Data[idx].nPut_Get - pUCX_Data[idx].nPut_Get_Done) >= UCX_QUEUE_SIZE ) {
         gettimeofday(&tm1, NULL);
@@ -1105,7 +1105,7 @@ retry:
             ucs_status_t status = ucp_request_check_status(req);
             if(status == UCS_OK) {
                 pUCX_Data[idx].nPut_Get_Done +=1;
-				fprintf(stdout, "DBG> UCX_Get UCS_OK loc %p rem %p rkey %p size %d\n", loc_buf, rem_buf, rkey, len);
+				// fprintf(stdout, "DBG> UCX_Get UCS_OK loc %p rem %p rkey %p size %d\n", loc_buf, rem_buf, rkey, len);
                 break;
             }
             else if(status == UCS_INPROGRESS) {
