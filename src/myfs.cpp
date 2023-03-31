@@ -395,7 +395,7 @@ inline int Wait_For_IO_Request_Result(ucp_worker_h data_worker, int Tag_Magic, R
 		gettimeofday(&tm2, NULL);
 		t2_ms = (tm2.tv_sec * 1000) + (tm2.tv_usec / 1000);
 		if( (t2_ms - t1_ms) > UCX_WAIT_RESULT_TIMEOUT_MS )	{
-			printf("DBG> Timeout[nDataSize]. pid = %d on %s\n", getpid());
+			printf("DBG> Timeout[nDataSize]. pid = %d\n", getpid());
 			return 1;	// time out
 		}
 	}
@@ -994,7 +994,7 @@ int my_close(int fd, META_DATA_ON_CLOSE *pMetaData_OnClose)
 	idx_file = fd_List[fd].idx_file;
 //	printf("DBG> my_close(%d)\n", fd);
 	if(idx_file < 0)	{
-		printf("ERROR> Fatal error. idx_file = %d\n", idx_file);
+		printf("ERROR> Fatal error. fd=%d idx_file = %d\n", fd, idx_file);
 	}
 	assert(idx_file >= 0);
 	
@@ -2350,7 +2350,7 @@ int Query_Index_StorageBlock_with_Offset_Stripe(STRIPE_DATA_INFO *pStripeData, o
 	else	{
 		left = 0;
 		right = nExtraPointer - 1;
-		mid = (left + right) >> 1;	// (left + right)/2
+		mid = left + (right - left) >> 1;	// (left + right)/2
 		Done = 0;
 		while(1)	{
 			if(offset < pExtraData[mid].FileOffset)	{

@@ -492,7 +492,7 @@ static void* Func_thread_ucx_server(void *pParam) {
 
 	pServer_ucx = (SERVER_RDMA *)pParam;
 	pServer_ucx->Init_Server_UCX_Env(DEFAULT_REM_BUFF_SIZE);
-	pServer_ucx->Init_Server_Memory(2048, ThisNode.ucx_port);
+	pServer_ucx->Init_Server_Memory(16384, ThisNode.ucx_port);
 	
 	Init_ActiveJobList();
 	Init_QueueList();
@@ -666,26 +666,26 @@ int main(int argc, char **argv)
 //	struct ibv_mr *mr_local;
 
 
-	struct sigaction act, old_action;
+	// struct sigaction act, old_action;
 	
-    // Set up sigsegv handler
-    memset (&act, 0, sizeof(act));
-    act.sa_flags = SA_SIGINFO;
+    // // Set up sigsegv handler
+    // memset (&act, 0, sizeof(act));
+    // act.sa_flags = SA_SIGINFO;
 	
-    act.sa_sigaction = sigsegv_handler;
-    if (sigaction(SIGSEGV, &act, &old_action) == -1) {
-        perror("Error: sigaction");
-        exit(1);
-    }
+    // act.sa_sigaction = sigsegv_handler;
+    // if (sigaction(SIGSEGV, &act, &old_action) == -1) {
+    //     perror("Error: sigaction");
+    //     exit(1);
+    // }
 
-    act.sa_sigaction = sigint_handler;
-    if (sigaction(SIGINT, &act, &old_action) == -1) {
-        perror("Error: sigaction");
-       exit(1);
-    }
-    if( (old_action.sa_handler != SIG_DFL) && (old_action.sa_handler != SIG_IGN) )  {
-            org_int = old_action.sa_sigaction;
-    }
+    // act.sa_sigaction = sigint_handler;
+    // if (sigaction(SIGINT, &act, &old_action) == -1) {
+    //     perror("Error: sigaction");
+    //    exit(1);
+    // }
+    // if( (old_action.sa_handler != SIG_DFL) && (old_action.sa_handler != SIG_IGN) )  {
+    //         org_int = old_action.sa_sigaction;
+    // }
 
 
 	CoreBinding.Init_Core_Binding();

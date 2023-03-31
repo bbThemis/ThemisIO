@@ -170,7 +170,7 @@ void CLIENT_UCX::server_create_ep() {
     ep_params.err_handler.arg = NULL;
 	status = ucp_ep_create(ucp_worker, &ep_params, &server_ep);
     if (status != UCS_OK) {
-        fprintf(stderr, "Error occured at %s:L%d. Failure: ucp_ep_create.\n", __FILE__, __LINE__);
+        fprintf(stderr, "Error occured at %s:L%d. Failure: ucp_ep_create (%s).\n", __FILE__, __LINE__, ucs_status_string(status));
 		exit(1);
     } /*else {
         fprintf(stdout, "mpi_rank %d succeed to create an endpoint on the server: (%s)\n", mpi_rank,

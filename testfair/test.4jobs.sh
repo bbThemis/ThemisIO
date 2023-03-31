@@ -1,5 +1,5 @@
 ppn=56
-nodes=4
+nodes=16
 iosize=1m
 filesize=100m
 
@@ -26,6 +26,8 @@ mpiexec.hydra -hostfile ../hostfile_client3 -np $(($ppn * $nodes)) -ppn $ppn \
 mpiexec.hydra -hostfile ../hostfile_client4 -np $(($ppn * $nodes)) -ppn $ppn \
    ../tests/themis_client.sh -u 104 -j 1004 -n $nodes \
    ./rw_speed -time=60 -iosize=$iosize -filesize=$filesize -tag=job4 &> rw_speed4.out &
+
+
 
 
 
