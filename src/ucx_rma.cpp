@@ -424,6 +424,7 @@ void SERVER_RDMA::ScanNewMsg() {
 	// for(i=0; i<NUM_THREAD_IO_WORKER; i++) {
 	// 	ucp_worker_progress(ucp_data_worker[i]);
 	// }
+	// printf("ScanNewMsg\n");
 	nUCXNewMsg = 0;
 	if(p_shm_NewMsgFlag == NULL)	return;
 	LastQPLocal = IdxLastQP + 1;
@@ -557,6 +558,7 @@ void SERVER_RDMA::Drain_Client(const int fd)
             assert(status == UCS_OK);
             pUCX_Data[idx].rem_addr = pData_to_recv->ib_mem.addr;
 			// printf("DBG> Drain_Client ucp_ep_rkey_unpack idx %d rem_addr %p rkey %p\n", idx, pUCX_Data[idx].rem_addr, pUCX_Data[idx].rkey);
+			fflush(stdout);
 
             pData_to_send->ucx.comm_tag = TAG_EXCH_UCX_INFO;
             memcpy(pData_to_send->ucx.peer_address, pUCX_Data[idx].address_p, pUCX_Data[idx].address_length);

@@ -243,7 +243,7 @@ void CLIENT_UCX::Setup_Socket(char szServerIP[])
     }
 //	gettimeofday(&tm2, NULL);
 //	t = 1000000 * (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec);
-//	printf("DBG> Rank = %d t_connect = %lld\n", mpi_rank, t);
+	printf("DBG> Connection Succeeded %s\n", szServerIP);
 
     if (setsockopt(sock, SOL_TCP, TCP_NODELAY, &one, sizeof(one)) < 0)	perror("setsockopt(2) error");
 }
@@ -550,6 +550,7 @@ void CLIENT_UCX::CloseUCPDataWorker() {
 		ucp_mem_unmap(ucp_main_context, mr_loc_thread);
 	}
 	ucp_mem_unmap(ucp_main_context, mr_loc_ucx_Obj);
+	// shm_unlink("shm_ucx_myfs_paramhhh");
 }
 
 static void Read_UCX_FS_Param(void) {
