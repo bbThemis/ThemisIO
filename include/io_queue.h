@@ -27,7 +27,7 @@
 // #define NUM_THREAD_IO_WORKER_INTER_SERVER  (1)
 // #define NUM_THREAD_IO_WORKER  (1+NUM_THREAD_IO_WORKER_INTER_SERVER)
 
-#define MAX_NUM_ACTIVE_JOB	(1024)	// max number of concurrent slurm job id
+#define MAX_NUM_ACTIVE_JOB	(4096)	// max number of concurrent slurm job id
 //#define MAX_NUM_QUEUE (1120 + NUM_THREAD_IO_WORKER_INTER_SERVER)
 #define MAX_NUM_QUEUE (640 + NUM_THREAD_IO_WORKER_INTER_SERVER)
 //#define MAX_NUM_QUEUE	(640 + NUM_THREAD_IO_WORKER_INTER_SERVER)	// The first queue is reserved for inter-server communications! 

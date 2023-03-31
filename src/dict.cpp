@@ -111,7 +111,7 @@ int CHASHTABLE_INT::DictInsert(const int key, const int value, struct elt_Int **
 	
     /* grow table if there is not enough room */
     if(n >= (size * MAX_LOAD_FACTOR) ) {
-		printf("Hash table is FULL.\nQuit.\n");
+		printf("CHASHTABLE_INT::DictInsert Hash table is FULL %d %d.\nQuit.\n", n, size);
 		exit(1);
 		//        grow(d);
     }
@@ -143,7 +143,7 @@ int CHASHTABLE_INT::DictInsertAuto(const int key, struct elt_Int ** p_elt_list, 
 	
     /* grow table if there is not enough room */
     if(n >= (size * MAX_LOAD_FACTOR) ) {
-		printf("Hash table is FULL.\nQuit.\n");
+		printf("CHASHTABLE_INT::DictInsertAuto Hash table is FULL %d %d.\nQuit.\n", n, size);
 		exit(1);
 		//        grow(d);
     }
@@ -313,7 +313,7 @@ int CHASHTABLE_MEMREG::DictInsert(const long int key, const int value, struct el
     n++;
 	
     if(n >= (size * MAX_LOAD_FACTOR) ) {
-		printf("Hash table is FULL.\nQuit.\n");
+		printf("CHASHTABLE_MEMREG::DictInsert Hash table is FULL %d %d. \nQuit.\n", n, size);
 		exit(1);
 		//        grow(d);
     }
@@ -769,7 +769,7 @@ int CHASHTABLE_DirEntry::DictInsert(const char *key, const int value, struct elt
 	
     /* grow table if there is not enough room */
     if(n >= (size * MAX_LOAD_FACTOR) ) {
-		printf("Hash table is FULL.\nQuit.\n");
+		printf("CHASHTABLE_DirEntry::DictInsert Hash table is FULL %d %d.\nQuit.\n", n, size);
 		exit(1);
 		//        grow(d);
     }
