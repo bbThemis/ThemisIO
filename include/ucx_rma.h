@@ -36,7 +36,7 @@
 
 
 extern CIO_QUEUE IO_Queue_List[MAX_NUM_QUEUE];
-#define MAX_UCX_NEW_MSG	(1024*16)
+#define MAX_UCX_NEW_MSG	(1024*32)
 typedef struct {
     ucp_worker_h ucp_data_worker;
     int nPut_Get, nPut_Get_Done;

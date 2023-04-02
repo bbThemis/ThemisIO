@@ -612,11 +612,14 @@ void Request_ParentDir_Remove_Entry(char szEntryName_ToRemove[], int idx_server,
 	int idx_ucx;
 
 	idx_ucx = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_ucx_server;
-        pMemAlloc = CFixedSizeMemAllcator.Allocate_a_Block();
+    pMemAlloc = CFixedSizeMemAllcator.Allocate_a_Block();
 //	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN));
 	pNewMsg_ToSend = (char*)pMemAlloc;
 	pIO_Cmd_ToSend_Other_Server = (IO_CMD_MSG *)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG);
-
+	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
+		perror("pthread_mutex_lock");
+		exit(2);
+	}
 	// pIO_Cmd_ToSend_Other_Server->rkey = Server_qp.mr_shm_global->rkey;
 	memcpy(pIO_Cmd_ToSend_Other_Server->rkey_buffer, Server_ucx.rkey_buffer, Server_ucx.rkey_buffer_size);
 	pIO_Cmd_ToSend_Other_Server->rem_buff = (void*)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG));
@@ -626,16 +629,17 @@ void Request_ParentDir_Remove_Entry(char szEntryName_ToRemove[], int idx_server,
 	pIntParam[1] = nLenParentDirName;
 	strcpy((char*)(&(pIntParam[2])), szEntryName_ToRemove);
 
+	if(pIntParam[0] >= MAX_NUM_DIR) {
+		printf("ERR > Request_ParentDir_Remove_Entry idx_Parent_Dir %d szEntryName_ToRemove %s\n", idx_Parent_Dir, szEntryName_ToRemove);
+	}
+
 	pIO_Cmd_ToSend_Other_Server->tag_magic = (int)(next(rseed) & 0xFFFFFFFF);
 	pIO_Cmd_ToSend_Other_Server->op = IO_OP_MAGIC | RF_RW_OP_REMOVEENTRY_PARENT_DIR;
 
 	pResult = (RW_FUNC_RETURN *)pIO_Cmd_ToSend_Other_Server->rem_buff;
 	pResult->nDataSize = 0; // init with an invalid tag. When return, this should be sizeof(RW_FUNC_RETURN) added with extra data.
 
-	if (pthread_mutex_lock(&(pAccess_qp0_lock[idx_ucx])) != 0) {
-		perror("pthread_mutex_lock");
-		exit(2);
-	}
+	
 //	Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, sizeof(IO_CMD_MSG));
 	// Server_qp.IB_Put(idx_qp, (void*)pIO_Cmd_ToSend_Other_Server, Server_qp.mr_shm_global->lkey, (void*)(Server_qp.pQP_Data[idx_qp].remote_addr_IO_CMD), Server_qp.pQP_Data[idx_qp].rem_key, IO_Msg_Size_op);
 	Server_ucx.UCX_Put(idx_ucx, (void*)pIO_Cmd_ToSend_Other_Server, (void*)(Server_ucx.pUCX_Data[idx_ucx].remote_addr_IO_CMD), Server_ucx.pUCX_Data[idx_ucx].rkey, IO_Msg_Size_op);
@@ -2429,7 +2433,9 @@ void my_RemoveEntryInfo_Remote_Request(char szEntryName_ToRemove[], int idx_Pare
 	int i, nMaxEntrySave;
 	CHASHTABLE_DirEntry *pHT_DirEntrySave;
 	struct elt_CharEntry *elt_list_DirEntry_Save;
-
+	if(idx_Parent_dir < 0 || idx_Parent_dir >= MAX_NUM_DIR) {
+		printf("ERR> my_RemoveEntryInfo_Remote_Request %d\n", idx_Parent_dir);
+	}
 	assert(idx_Parent_dir>=0);
 
 //	pDirMetaData[idx_Parent_dir].p_Hash_DirEntry->DictDelete(szEntryName_ToRemove, &(pDirMetaData[idx_Parent_dir].elt_list_DirEntry), &(pDirMetaData[idx_Parent_dir].ht_table_DirEntry));
@@ -2639,13 +2645,14 @@ int my_unlink(char szFileName[], size_t *nFileSize)	// remove a regular file!
 //	printf("DBG> unlink(%s)\n", szFileName);
 
 	fn_hash = XXH64(szFileName, strlen(szFileName), 0);
-	file_idx = p_Hash_File->DictSearch(szFileName, &elt_list_file, &ht_table_file, &fn_hash_2);
 	pthread_mutex_lock(&(unlink_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
+	file_idx = p_Hash_File->DictSearch(szFileName, &elt_list_file, &ht_table_file, &fn_hash_2);
+	
 	if(file_idx < 0)	{
 		*nFileSize = 0;
 		szFileName[0] = 0;
-		pthread_mutex_unlock(&(unlink_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 		errno = ENOENT;
+		pthread_mutex_unlock(&(unlink_lock[fn_hash & MAX_NUM_FILE_OP_LOCK_M1]));
 		return (-1);
 	}
 	else	{
@@ -2746,7 +2753,7 @@ int my_AddEntryInfo_Remote_Request(char *szFullName, int nLenParentDirName, int 
 
 	memcpy(szParentDirName, szFullName, nLenParentDirName);
 	szParentDirName[nLenParentDirName] = 0;
-
+	pthread_mutex_lock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
 	dir_idx = p_Hash_Dir->DictSearch(szParentDirName, &elt_list_dir, &ht_table_dir, &fn_hash);
 	*pIdx_Parent_Dir = dir_idx;
 
@@ -2755,7 +2762,7 @@ int my_AddEntryInfo_Remote_Request(char *szFullName, int nLenParentDirName, int 
 		return (-1);
 	}
 
-	pthread_mutex_lock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
+	
 	pEntryName = szFullName + nLenParentDirName + 1;
 	nLenEntryName = my_strlen(pEntryName);
 	// assume pEntryName DOES NOT exist in hashtable. This should be always true! 
@@ -2783,10 +2790,10 @@ int my_AddEntryInfo_Remote_Request(char *szFullName, int nLenParentDirName, int 
 				pDirMetaData[dir_idx].p_Hash_DirEntry->DictInsert(elt_list_DirEntry_Save[i].key, elt_list_DirEntry_Save[i].value, &(pDirMetaData[dir_idx].elt_list_DirEntry), &(pDirMetaData[dir_idx].ht_table_DirEntry) );
 			}
 		}
-
+		CQueue_Free_Mem.Enqueue_Dir_Entry((void*)pHT_DirEntrySave);
 		pthread_mutex_unlock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
 //		ncx_slab_free(sp_DirEntryHashTableBuff, pHT_DirEntrySave);	// free the old HT
-		CQueue_Free_Mem.Enqueue_Dir_Entry((void*)pHT_DirEntrySave);
+		
 	}
 	else	pthread_mutex_unlock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
 
