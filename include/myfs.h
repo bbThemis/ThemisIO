@@ -18,7 +18,7 @@ typedef unsigned int UInt;
 #define RATIO_DIRENTRY_HASHTABLE_EXPAND	(0.9)
 #define RATIO_DIRENTRY_HASHTABLE_SHRINK	(0.35)
 
-#define MAX_NUM_FILE_OP_LOCK	(1024 * 1024)
+#define MAX_NUM_FILE_OP_LOCK	(1024)
 #define MAX_NUM_FILE_OP_LOCK_M1	(MAX_NUM_FILE_OP_LOCK-1)
 
 #define NUM_DIRCT_PT	(8)
@@ -30,9 +30,9 @@ typedef unsigned int UInt;
 #define MAX_NUM_LARGE_FILE	(0x400000UL)	// per node
 
 #define MAX_NUM_FILE	(0x2000000UL)	// per node
-#define MAX_NUM_DIR		(0x2000000UL)	// per node
+#define MAX_NUM_DIR		(0x800000UL)	// per node
 
-#define MAX_FD_ACTIVE	(1024*1024*384)
+#define MAX_FD_ACTIVE	(1024*1024*128)
 #define INVALID_FILE_IDX	(-1)
 #define RESERVED_FILE_IDX	(-2)
 

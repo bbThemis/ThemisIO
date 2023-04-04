@@ -66,12 +66,14 @@ public:
 				break;
 			}
 		}
+		
+		char* returnPtr = NULL;
+		if(idx>=0)	returnPtr = (pBlockAddr + idx*nSizeofBlock);
 		if (pthread_mutex_unlock(&lock) != 0) {
 			perror("pthread_mutex_lock in Free_a_Block().");
 			exit(2);
 		}
-		if(idx>=0)	return (pBlockAddr + idx*nSizeofBlock);
-		else	return NULL;
+		return returnPtr;
 	};
 
 	void Free_a_Block(char *pBlock)	{

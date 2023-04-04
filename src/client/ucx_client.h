@@ -602,7 +602,7 @@ void Init_UCX_Client()
 {
 	// printf("DBG> Begin Init_UCX_Client()\n");
 	int i, shm_fd, To_Init=0, nSizeHT_IO_Redirect, nSizeofShm;
-	char mutex_name[]="shm_ucx_myfs_paramhhh";
+	char mutex_name[]="shm_ucx_myfs_paramhhhhhh";
 	void *p_shm;
 	char *szEnvJobID=NULL, *szEnvNNode=NULL, *szEnvDebug=NULL;
 	CLIENT_UCX::Init_UCX_Env();
