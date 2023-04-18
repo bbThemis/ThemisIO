@@ -77,3 +77,31 @@ Run on client side<br>
 There are still many bugs. You can "unset LD_PRELOAD" whenever you get issues. I normally add "LD_PRELOAD=xxxx" before the command I need to test. 
 
 
+## Run Client within a container
+Assume you are on a system with the server running already (see above for instructions of launching a server), you may run the client within our pre-built container. To pull the container with Docker, run:
+```
+docker pull ghcr.io/bbthemis/themisio:client
+```
+This can also be done with other container runtimes, for example the Apptainer:
+```
+apptainer pull themisio.sif docker://ghcr.io/bbthemis/themisio:client
+```
+
+Then, you may run a shell within the container (using apptainer as example here):
+```
+apptainer run themisio.sif bash
+```
+You can then access the filesystem with:
+```
+export MYFS_CONF="/full_path/ThemisIO/myfs.param"
+export LD_PRELOAD="/ThemisIO-client/wrapper.so"
+ls -l /myfs
+touch /myfs/a
+ls -l /myfs
+```
+You may also build a new container using our client container as the base to run any applications with ThemisIO support. 
+
+
+
+
+
