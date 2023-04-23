@@ -4,3 +4,4 @@ server
 *~
 *.log
 myfs.param
+ucx.debug

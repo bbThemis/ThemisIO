@@ -462,6 +462,8 @@ void Query_Other_Server(int idx_server)
 
 int Request_Is_ParentDIr_Existing(int idx_server, char szPath[], int *pIdx_Parent_Dir)	// return 1 if existing, 0 if non-existing
 {
+	fprintf(stdout, "idx_server %d Request_Is_ParentDIr_Existing %s\n", idx_server, szPath);
+	fflush(stdout);
 	int ret;
 	RW_FUNC_RETURN *pResult;
 	IO_CMD_MSG *pIO_Cmd_ToSend_Other_Server;
@@ -505,7 +507,7 @@ int Request_Is_ParentDIr_Existing(int idx_server, char szPath[], int *pIdx_Paren
 
 	ret = pResult->ret_value;
 //	ncx_slab_free(sp_CallReturnBuff, pMemAlloc);
-        CFixedSizeMemAllcator.Free_a_Block(pMemAlloc);
+    CFixedSizeMemAllcator.Free_a_Block(pMemAlloc);
 
 	return ret;
 }
@@ -549,6 +551,8 @@ void Request_Free_Stripe_Data(int idx_server, char szFileName[])
 // return 0 if succeed, -1 if fail
 int Request_ParentDir_Add_Entry(int idx_server, const char szPath[], int nLenParentDirName, int EntryType, int *pIdx_Parent_Dir)
 {
+	// fprintf(stdout, "idx_server %d Request_ParentDir_Add_Entry %s\n", idx_server, szPath);
+	// fflush(stdout);
 	int ret;
 	RW_FUNC_RETURN *pResult;
 	IO_CMD_MSG *pIO_Cmd_ToSend_Other_Server;
@@ -558,7 +562,7 @@ int Request_ParentDir_Add_Entry(int idx_server, const char szPath[], int nLenPar
 
 	idx_ucx = (idx_server * NUM_THREAD_IO_WORKER_INTER_SERVER) + idx_ucx_server;
 //	pMemAlloc = (char*)ncx_slab_alloc(sp_CallReturnBuff, SIZE_FOR_NEW_MSG + sizeof(IO_CMD_MSG) + sizeof(RW_FUNC_RETURN) + 1*sizeof(int));
-        pMemAlloc = CFixedSizeMemAllcator.Allocate_a_Block();
+    pMemAlloc = CFixedSizeMemAllcator.Allocate_a_Block();
 	pNewMsg_ToSend = (char*)pMemAlloc;
 	pIO_Cmd_ToSend_Other_Server = (IO_CMD_MSG *)(pNewMsg_ToSend + SIZE_FOR_NEW_MSG);
 
@@ -604,6 +608,8 @@ int Request_ParentDir_Add_Entry(int idx_server, const char szPath[], int nLenPar
 
 void Request_ParentDir_Remove_Entry(char szEntryName_ToRemove[], int idx_server, int idx_Parent_Dir, int nLenParentDirName)
 {
+	fprintf(stdout, "idx_server %d Request_ParentDir_Remove_Entry %s\n", idx_server, szEntryName_ToRemove);
+	fflush(stdout);
 	RW_FUNC_RETURN *pResult;
 	IO_CMD_MSG *pIO_Cmd_ToSend_Other_Server;
 	char *pNewMsg_ToSend, *pMemAlloc;
@@ -2743,6 +2749,8 @@ int my_AddEntryInfo(int my_file_idx, int dir_idx)
 
 int my_AddEntryInfo_Remote_Request(char *szFullName, int nLenParentDirName, int EntryType, int *pIdx_Parent_Dir)
 {
+	// fprintf(stdout, "my_AddEntryInfo_Remote_Request %s\n", szFullName);
+	fflush(stdout);
 	int i, nLenEntryName, dir_idx, nMaxEntrySave;
 //	int *p_nEntryNameOffset=NULL, *p_nEntryNameOffsetNew=NULL;
 	char *pEntryName;
@@ -2753,15 +2761,20 @@ int my_AddEntryInfo_Remote_Request(char *szFullName, int nLenParentDirName, int 
 
 	memcpy(szParentDirName, szFullName, nLenParentDirName);
 	szParentDirName[nLenParentDirName] = 0;
-	pthread_mutex_lock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
+	
+	
+
+	// fprintf(stdout, "my_AddEntryInfo_Remote_Request  %s DictSearch %d start\n", szFullName, dir_idx);
+	// fflush(stdout);
 	dir_idx = p_Hash_Dir->DictSearch(szParentDirName, &elt_list_dir, &ht_table_dir, &fn_hash);
 	*pIdx_Parent_Dir = dir_idx;
-
+	// fprintf(stdout, "my_AddEntryInfo_Remote_Request  %s DictSearch %d end\n", szFullName, dir_idx);
+	// fflush(stdout);
 	if(dir_idx < 0 )	{	// Parent dir does not exist!!!
 		errno = ENOENT;
 		return (-1);
 	}
-
+	pthread_mutex_lock(&(dir_entry_lock[dir_idx & MAX_NUM_FILE_OP_LOCK_M1]));
 	
 	pEntryName = szFullName + nLenParentDirName + 1;
 	nLenEntryName = my_strlen(pEntryName);
@@ -2770,7 +2783,7 @@ int my_AddEntryInfo_Remote_Request(char *szFullName, int nLenParentDirName, int 
 //	strcpy(p_DirEntryNameBuff+EntryNameAddrOffset + 1, pEntryName);
 //	p_DirEntryNameBuff[EntryNameAddrOffset] = char(EntryType & 0xFF);	// !!!!!!!!!!!!!!!!!!!!!!!!
 	pDirMetaData[dir_idx].p_Hash_DirEntry->DictInsert(pEntryName, EntryType, &(pDirMetaData[dir_idx].elt_list_DirEntry), &(pDirMetaData[dir_idx].ht_table_DirEntry));
-
+	// fprintf(stdout, "my_AddEntryInfo_Remote_Request  %s DictSearch %d\n", szFullName, dir_idx);
 	pDirMetaData[dir_idx].nEntries++;
 	pDirMetaData[dir_idx].nLenAllEntries += (nLenEntryName+2);
 	if( pDirMetaData[dir_idx].nEntries >= pDirMetaData[dir_idx].nEntryTriggerExpand )	{	// NEED to expand hashtable
@@ -2829,7 +2842,8 @@ int my_AddEntryInfo_Remote_Request(char *szFullName, int nLenParentDirName, int 
 */
 //	printf("DBG> my_AddEntryInfo_Remote_Request(%s). Dir %s nEntries = %d\n", 
 //		szFullName, pDirMetaData[*pIdx_Parent_Dir].szDirName, pDirMetaData[*pIdx_Parent_Dir].nEntries);
-
+	// fprintf(stdout, "my_AddEntryInfo_Remote_Request %s end\n", szFullName);
+	// fflush(stdout);
 	return 0;
 }
 
