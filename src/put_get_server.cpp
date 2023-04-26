@@ -492,8 +492,8 @@ static void* Func_thread_ucx_server(void *pParam) {
 
 	pServer_ucx = (SERVER_RDMA *)pParam;
 	pServer_ucx->Init_Server_UCX_Env(DEFAULT_REM_BUFF_SIZE);
-	pServer_ucx->Init_Server_Memory(16384, ThisNode.ucx_port);
-	
+	// pServer_ucx->Init_Server_Memory(16384, ThisNode.ucx_port);
+	pServer_ucx->Init_Server_Memory(8192, ThisNode.ucx_port);
 	Init_ActiveJobList();
 	Init_QueueList();
 
