@@ -38,6 +38,10 @@ public:
 		return ActiveJobList[jobKey(msg)].uid;
 	}
 
+    float getRate(const IO_CMD_MSG *msg) {
+        return ActiveJobList[jobKey(msg)].rate;
+    }
+
 private:
 	int jobKey(const IO_CMD_MSG *msg) {
 		int job_key = msg->idx_JobRec;
@@ -64,7 +68,7 @@ class FairQueue {
 		 max_idle_sec: deallocate queues that have been empty for at least this many seconds.
 	*/
 	FairQueue(FairnessMode mode, int mpi_rank, int thread_id,
-						JobInfoLookup &job_info_lookup, int max_idle_sec = 10);
+						JobInfoLookup &job_info_lookup, int max_idle_sec = 10, int tokens = 0);
 	~FairQueue();
 	
 	bool isEmpty();
@@ -75,46 +79,46 @@ class FairQueue {
 	// Add a message to the queue. The data is copied from 'msg'.
 	void putMessage(const IO_CMD_MSG *msg);
 
+	void putMessage_TimeSharing(const IO_CMD_MSG *msg);
+    void Update_Job_Weight(void);
+
 	// Selects a message to process. If there are no messages, this returns false.
 	// Otherwise this copies the message to 'msg' and returns true.
 	bool getMessage(IO_CMD_MSG *msg);
 
+	bool getMessage_FromActiveJob(IO_CMD_MSG *msg);
+
+	// recharge all jobs with designed time length
+	void reload();
+
 	// This will be called occasionally.
 	// It provides a way to print status output or perform garbage collection.
 	void housekeeping();
+
+	void SetFirstJobActive(void);
+
+	void SetNextJobActive(void);
 
 	// Returns the current time in microseconds since epoch.
 	static long unsigned getTime();
 
 	// Returns the number of seconds since the object was created.
 	double getElapsed();
-
-  // unused remnants of time-sharing version
-  /*
-	// Note: it is bad design to have multiple versions of putMessage and getMessage.
-	// The scheduling algorithm is set when the object is constructed.
-	// Once the algorithm is set, the user of this class shouldn't have to to
-	// anything different to use different scheduling algorithms.
-	void putMessage_TimeSharing(const IO_CMD_MSG *msg);
-	bool getMessage_FromActiveJob(IO_CMD_MSG *msg);
-	void Update_Job_Weight(void);
-	// recharge all jobs with designed time length
-	void reload();
-	void SetFirstJobActive(void);
-	void SetNextJobActive(void);
-  */
 	
 private:
-  // unused remnants of time-sharing version
-	/*
 	// the sum of weight of all jobs
 	float weight_sum;
+    double max_rate;
+    double total_rate;
 	int nJob;
 	int IdxActiveJob;
 	int pad;
-	// MessageQueue *q_ActiveJob;
+    int tokens;
+//	MessageQueue *q_ActiveJob;
+
+    
+
 	double T_ThisCycle;
-	*/
 
 	struct MessageContainer {
 		IO_CMD_MSG msg;
@@ -128,9 +132,11 @@ private:
 	};
 	
 	struct MessageQueue {
-		MessageQueue(int id_, int job_id_, int user_id_, long now, int weight_)
-			: id(id_), job_id(job_id_), user_id(user_id_), idle_timestamp(now), weight(weight_) {
-				// T_Create = now * 1.0;
+		MessageQueue(int id_, int job_id_, int user_id_, long now, int weight_, double rate_ = 200.0, bool htc_ = false)
+			: id(id_), job_id(job_id_), user_id(user_id_), idle_timestamp(now), weight(weight_), rate(rate_), htc(htc_) {
+				T_Create = now * 1.0;
+                deadline = 1.0/rate_;
+                prev_time = now;
 			}
 								 
 		std::queue<MessageContainer> messages;
@@ -138,16 +144,25 @@ private:
 		// id, either job id or user id, depending on fairness mode
 		int id;
 		float weight;	 // size-fair: node count. Otherwise 1.
+        double rate;
 
 		int job_id, user_id;
 
 		// timestamp this queue was most recently nonempty
 		long unsigned idle_timestamp;
 		
-		// unused remnants of time-sharing version
-		/*
+		// timestamp of the first item in the queue
+		long unsigned front_timestamp;
+
+        // timestamp of the last time a request dequeued
+        long unsigned prev_time;
+
 		// The time when current queue was create for current job
 		long int T_Create;
+
+        // Rule - Lustre 
+        double deadline;
+        bool htc;
 
 		// the time balance current queue has. It could be negative since one long OP could take long time. 
 		long int T_Balance;
@@ -163,9 +178,11 @@ private:
 
 		// accumulated time for idling
 		long int T_Accum_Idle;
-		*/
 
 		void add(const IO_CMD_MSG *msg) {
+			if (messages.empty())
+				front_timestamp = msg->T_Queued;
+			
 			MessageContainer *mc = (MessageContainer*) msg;
 			messages.push(*mc);
 		}
@@ -176,6 +193,9 @@ private:
 			memcpy(msg, &msg_c.msg, sizeof *msg);
 			messages.pop();
 
+			if (messages.empty())
+				front_timestamp = 0;
+
 			return true;
 		}
 
@@ -183,6 +203,16 @@ private:
 			 weight of the queue. For job-fair and user-fair queues it's 1,
 			 and for size-fair queues it's the node count of the job. */
 		double getPriority(long unsigned now) {
+			
+			/*
+				Weighting by age of the request ends up performing just like FIFO.
+
+			long usec_waiting = now - front_timestamp;
+			if (usec_waiting <= 0)
+				usec_waiting = 1;
+			return usec_waiting * weight;
+			*/
+
 			return weight;
 		}
 		
@@ -263,7 +293,7 @@ private:
 
 
 	// return index into nonempty_queues
-	int chooseRandomNonemptyQueue();
+	int chooseRandomNonemptyQueue(double &total_rate);
 
 	
 	int getKey(const IO_CMD_MSG *msg) {
@@ -285,6 +315,8 @@ private:
 	JobInfoLookup &job_info_lookup;
 	unsigned long start_time_usec;
 	int max_idle_sec;
+    std::vector<std::pair<MessageQueue*,double>> sorted_arr;
+    std::pair<MessageQueue*, double> currQ;
 
 	// total number messages in queue
 	int message_count;
@@ -295,9 +327,8 @@ private:
 	// key is job_id or user_id
 	std::unordered_map<int, MessageQueue*> indexed_queues;
 
-	// ??? misleading comment
 	// all nonempty message queues
-	// std::vector<MessageQueue*> all_queues;
+	std::vector<MessageQueue*> all_queues;
 
 	// all nonempty message queues
 	std::vector<MessageQueue*> nonempty_queues;

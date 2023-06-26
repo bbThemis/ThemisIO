@@ -37,7 +37,6 @@ int active_prob=0;	// the index of active probability set. Only can be 0 or 1. ^
 long int nOPs_Done[NUM_THREAD_IO_WORKER];
 
 // Hash table to query gid from uid
-// May be used in fair_queue.cpp
 std::unordered_map<int, int> uid_gid;
 
 // Current number of valid entries is nActiveJob (defined below).
@@ -328,7 +327,7 @@ void Scale_Probability_List(void)
 	active_prob ^= 1;
 }
 
-void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id)
+void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id, float rate)
 {
 	int i;
 	JOB_OP_SEND *pJob_OP = Server_qp.pJob_OP_Send;
@@ -338,6 +337,7 @@ void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id)
 	ActiveJobList[idx_rec].nnode = nnode;
 	ActiveJobList[idx_rec].nQP = 1;	// A new QP was just established. 
 	ActiveJobList[idx_rec].uid = user_id;
+    ActiveJobList[idx_rec].rate = rate;
 	ActiveJobList[idx_rec].nTokenAV = 0;
 	ActiveJobList[idx_rec].nTokenReload = 0;
 	ActiveJobList[idx_rec].nOps_Done = 0;
@@ -743,11 +743,12 @@ void fairQueueWorker(int thread_id) {
 		for (CIO_QUEUE *queue = IO_Queue_List + IdxMin;
 				 queue <= IO_Queue_List + IdxMax;
 				 queue++) {
-
-			while (!queue->isEmptyUnsafe())	{
+			// Move all queued msg to fair queue!!! Fast response to the new incoming requests from new jobs!
+			while(!queue->isEmptyUnsafe())	{
 				if (queue->Dequeue(&msg) == 0) {
 					msg.tid = thread_id;
 					// printMessage(&msg, "incomingMsg");
+                    //printf("PUTTING MESSAGE\n");
 					fair_queue.putMessage(&msg);
 					pending_count++;
 				}
@@ -790,11 +791,6 @@ void fairQueueWorker(int thread_id) {
 	}
 }
 
-// unused remnants of time-sharing version
-#if 0
-// This is a near-duplicate of fairQueueWorker() above.
-// Do not copy-and-paste code like this. 
-// https://en.wikipedia.org/wiki/Duplicate_code
 void fairQueueWorker_TimeSharing(int thread_id) {
 	int IdxMin, IdxMax, range;
 	long int nOp_Done=0;
@@ -884,7 +880,6 @@ void fairQueueWorker_TimeSharing(int thread_id) {
 		}
 	}
 }
-#endif
 
 // IO worker thread implementing fair queue
 
@@ -904,8 +899,8 @@ void* Func_thread_IO_Worker_FairQueue(void *pParam)
 		printf("DBG> FairQueue thread_id %d inter-server-queue %d\n", thread_id, thread_id);
 		Inter_server_communication_loop(thread_id, &(IO_Queue_List[thread_id]));
 	} else {
-    fairQueueWorker(thread_id);
-    // fairQueueWorker_TimeSharing(thread_id);
+//		fairQueueWorker(thread_id);
+		fairQueueWorker(thread_id);
 	}
 
 	return NULL;

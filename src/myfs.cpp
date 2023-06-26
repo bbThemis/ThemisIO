@@ -347,7 +347,7 @@ inline int Query_Server_Index_Dir_Index(char szPath[], int nLen, int *pIdx_Serve
 	return dir_idx;
 }
 
-int Query_Parent_Dir(const char szDirName[], char szParentDir[], int *nLenParentDirName, int *nLenFileName, int *pIdx_Server)
+int Query_Parent_Dir(char szDirName[], char szParentDir[], int *nLenParentDirName, int *nLenFileName, int *pIdx_Server)
 {
 	int i, dir_idx;
 
@@ -536,7 +536,7 @@ void Request_Free_Stripe_Data(int idx_server, char szFileName[])
 }
 
 // return 0 if succeed, -1 if fail
-int Request_ParentDir_Add_Entry(int idx_server, const char szPath[], int nLenParentDirName, int EntryType, int *pIdx_Parent_Dir)
+int Request_ParentDir_Add_Entry(int idx_server, char szPath[], int nLenParentDirName, int EntryType, int *pIdx_Parent_Dir)
 {
 	int ret;
 	RW_FUNC_RETURN *pResult;
@@ -639,7 +639,7 @@ void Request_ParentDir_Remove_Entry(char szEntryName_ToRemove[], int idx_server,
 }
 
 
-int my_mkdir(const char szDirName[], int mode, int uid, int gid)
+int my_mkdir(char szDirName[], int mode, int uid, int gid)
 {
 	char szParentDir[512];
 	int dir_idx, file_idx, Parent_dir_idx, nLenParentDirName, nLenFileName, idx_server_ParentDir, bParentDirExisting;
@@ -752,7 +752,7 @@ int my_mkdir(const char szDirName[], int mode, int uid, int gid)
 	}
 }
 
-int my_openfile(size_t DataReturn[], const char szFileName[], int oflags, ...)
+int my_openfile(size_t DataReturn[], char szFileName[], int oflags, ...)
 {
 	char szParentDir[512];
 	int file_idx, dir_idx, bFlagCreate=0, bFlagTrunc=0, bAppend=0, nLenParentDirName, nLenFileName, idx_server_ParentDir, bParentDirExisting, nEntryType;
@@ -2328,10 +2328,6 @@ int Query_Index_StorageBlock_with_Offset_Stripe(STRIPE_DATA_INFO *pStripeData, o
 			}
 		}
 	}
-
-	// shouldn't happen: something should have returned a value
-  printf("DBG> warning Query_Index_StorageBlock_with_Offset_Stripe failed to compute a value.\n");
-	return 0;
 }
 /*
 off_t my_lseek(int fd, off_t offset, int whence)
@@ -2540,7 +2536,7 @@ int my_rmdir(char szDirName[])
 }
 */
 
-int my_rmdir(const char szDirName[])
+int my_rmdir(char szDirName[])
 {
 	int dir_idx, file_idx;
 	unsigned long long fn_hash=0, fn_hash_2=0;
@@ -3340,10 +3336,9 @@ static void Readin_All_Dir(void)
 //	my_ls("/myfs");
 }
 
-ssize_t read_all(int fd, void *buf_v, size_t count)
+ssize_t read_all(int fd, void *buf, size_t count)
 {
 	ssize_t ret, nBytes=0;
-	char *buf = (char*) buf_v;
 
 	while (count != 0 && (ret = read(fd, buf, count)) != 0) {
 		if (ret == -1) {

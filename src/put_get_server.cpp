@@ -558,19 +558,13 @@ bool ServerOptions::parseCommandLineArgs(int argc, char **argv) {
 				fairness_mode = JOB_FAIR;
 			} else if (!strcmp(arg, "size-fair")) {
 				fairness_mode = SIZE_FAIR;
-
-			/* disabled */
-			/*
 			} else if (!strcmp(arg, "user-size-fair")) {
 				fairness_mode = USER_SIZE_FAIR;
 			} else if (!strcmp(arg, "user-job-fair")) {
 				fairness_mode = USER_JOB_FAIR;
 			} else if (!strcmp(arg, "group-user-size-fair")) {
 				fairness_mode = GROUP_USER_SIZE_FAIR;
-			*/
-
 			} else {
-				printf("Policy mode urecognized: %s\n", arg);
 				return false;
 			}
 		}
@@ -590,7 +584,7 @@ void ServerOptions::printHelp() {
 	printf("\n"
 				 "  server [<opts>]\n"
 				 "  opts:\n"
-				 "    --policy fifo|user-fair|job-fair|size-fair\n"
+				 "    --policy user-fair|job-fair|size-fair\n"
 				 "      Sets client throughput fairness policy. default=%s\n"
 				 "\n",
 				 fairnessModeToString(getDefaultFairnessMode()));

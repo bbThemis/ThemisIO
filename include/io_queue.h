@@ -43,7 +43,7 @@
 
 void Init_ActiveJobList(void);
 void Init_QueueList(void);
-void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id);
+void Init_NewActiveJobRecord(int idx_rec, int jobid, int nnode, int user_id, float rate);
 void* Func_thread_IO_Worker(void *pParam);	// process all IO wrok
 void* Func_thread_Global_Fair_Sharing(void *pParam);
 
@@ -59,6 +59,7 @@ typedef	struct	{
 	int nnode;	// the number of node of this job. nTokenPerReload will be calculated based on this number. 
 	int nQP;	// number of queue pairs are associated with this jobid.
 	int uid;  // user id
+    float rate; // job rate as defined in Rule_Lustre
 
 	long int Time;	// time stamp in seconds of last reload
 	long int nTokenAV;	// the number of token available

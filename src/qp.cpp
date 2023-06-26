@@ -724,7 +724,7 @@ void* Func_thread_Finish_QP_Setup(void *pParam)
 	idx_JobRec = pHT_ActiveJobs->DictSearch(pData_to_recv->JobInfo.jobid, &elt_list_ActiveJobs, &ht_table_ActiveJobs, &jobid_hash);
 	if(idx_JobRec < 0)	{	// Do not exist. Need to insert it into hash table. 
 		idx_JobRec = pHT_ActiveJobs->DictInsertAuto(pData_to_recv->JobInfo.jobid, &elt_list_ActiveJobs, &ht_table_ActiveJobs);
-		Init_NewActiveJobRecord(idx_JobRec, pData_to_recv->JobInfo.jobid, pData_to_recv->JobInfo.nnode, pData_to_recv->JobInfo.cuid);
+		Init_NewActiveJobRecord(idx_JobRec, pData_to_recv->JobInfo.jobid, pData_to_recv->JobInfo.nnode, pData_to_recv->JobInfo.cuid, pData_to_recv->JobInfo.rate);
 	}
 	else	{
 		fetch_and_add(&(ActiveJobList[idx_JobRec].nQP), 1);	// Increse the counter by 1
@@ -753,6 +753,8 @@ void* Func_thread_Finish_QP_Setup(void *pParam)
 	pServer_QP->pQP_Data[idx].cuid = pData_to_recv->JobInfo.cuid;
 	pServer_QP->pQP_Data[idx].cgid = pData_to_recv->JobInfo.cgid;
 	pServer_QP->pQP_Data[idx].ctid = pData_to_recv->JobInfo.ctid;
+    pServer_QP->pQP_Data[idx].rate = pData_to_recv->JobInfo.rate;
+
 	memcpy(pServer_QP->pQP_Data[idx].szClientHostName, pData_to_recv->JobInfo.szClientHostName, MAX_HOSTNAME_LEN);
 	memcpy(pServer_QP->pQP_Data[idx].szClientExeName, pData_to_recv->JobInfo.szClientExeName, MAX_EXENAME_LEN);
 	pServer_QP->pQP_Data[idx].bTimeout = 0;
